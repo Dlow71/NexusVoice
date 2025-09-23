@@ -20,7 +20,7 @@
   <properties>
     <java.version>21</java.version>
     <springdoc.version>2.6.0</springdoc.version>
-    <mybatis-plus.version>3.5.11</mybatis-plus.version>
+    <mybatis-plus.version>3.5.7</mybatis-plus.version>
     <hutool.version>5.8.26</hutool.version>
     <x-file-storage.version>2.2.0</x-file-storage.version>
     <mysql.version>8.0.33</mysql.version>
@@ -60,6 +60,18 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+    
+    <!-- AspectJ Runtime -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjrt</artifactId>
+    </dependency>
+    
+    <!-- AspectJ Weaver -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjweaver</artifactId>
     </dependency>
 
     <!-- Database -->
