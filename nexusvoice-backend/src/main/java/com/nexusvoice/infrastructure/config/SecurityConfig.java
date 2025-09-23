@@ -1,8 +1,8 @@
-package com.nexusvoice.config;
+package com.nexusvoice.infrastructure.config;
 
-import com.nexusvoice.security.JwtAccessDeniedHandler;
-import com.nexusvoice.security.JwtAuthenticationEntryPoint;
-import com.nexusvoice.security.JwtAuthenticationFilter;
+import com.nexusvoice.infrastructure.security.JwtAccessDeniedHandler;
+import com.nexusvoice.infrastructure.security.JwtAuthenticationEntryPoint;
+import com.nexusvoice.infrastructure.security.JwtAuthenticationFilter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -92,4 +92,3 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 }
-

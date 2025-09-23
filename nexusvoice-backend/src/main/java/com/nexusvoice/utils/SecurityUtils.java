@@ -1,7 +1,7 @@
 package com.nexusvoice.utils;
 
 import com.nexusvoice.domain.user.constant.UserType;
-import com.nexusvoice.security.JwtAuthenticationFilter.UserPrincipal;
+import com.nexusvoice.infrastructure.security.JwtAuthenticationFilter.UserPrincipal;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;

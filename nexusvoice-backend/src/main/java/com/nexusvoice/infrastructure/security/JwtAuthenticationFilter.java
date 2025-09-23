@@ -1,4 +1,4 @@
-package com.nexusvoice.security;
+package com.nexusvoice.infrastructure.security;
 
 import com.nexusvoice.utils.JwtUtils;
 import jakarta.servlet.FilterChain;

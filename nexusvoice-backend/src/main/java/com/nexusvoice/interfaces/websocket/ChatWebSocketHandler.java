@@ -1,4 +1,4 @@
-package com.nexusvoice.realtime;
+package com.nexusvoice.interfaces.websocket;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,4 +28,3 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         log.info("WS disconnected: {} ({})", session.getId(), status);
     }
 }
-

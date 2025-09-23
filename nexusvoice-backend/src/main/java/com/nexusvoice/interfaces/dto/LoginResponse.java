@@ -1,4 +1,4 @@
-package com.nexusvoice.dto;
+package com.nexusvoice.interfaces.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 

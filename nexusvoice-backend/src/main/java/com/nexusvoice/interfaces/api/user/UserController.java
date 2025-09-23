@@ -1,4 +1,4 @@
-package com.nexusvoice.api;
+package com.nexusvoice.interfaces.api.user;
 
 import com.nexusvoice.annotation.RequireAuth;
 import com.nexusvoice.application.user.dto.AuthResponse;

@@ -33,6 +33,9 @@ public class UpdateUserRequest {
     @Size(max = 500, message = "用户简介不能超过500个字符")
     private String profileBio;
 
+    @Schema(description = "邮箱是否已验证")
+    private Boolean emailVerified;
+
     // 构造函数
     public UpdateUserRequest() {}
 
@@ -75,6 +78,14 @@ public class UpdateUserRequest {
 
     public void setProfileBio(String profileBio) {
         this.profileBio = profileBio;
+    }
+
+    public Boolean getEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(Boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 
     @Override

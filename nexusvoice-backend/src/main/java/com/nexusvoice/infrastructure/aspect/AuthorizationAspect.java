@@ -1,4 +1,4 @@
-package com.nexusvoice.aspect;
+package com.nexusvoice.infrastructure.aspect;
 
 import com.nexusvoice.annotation.RequireAdmin;
 import com.nexusvoice.annotation.RequireAuth;

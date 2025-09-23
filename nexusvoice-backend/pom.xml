@@ -7,8 +7,8 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.5.3</version>
-    <relativePath/>
+    <version>3.3.5</version>
+    <relativePath/> <!-- lookup parent from repository -->
   </parent>
 
   <groupId>com.nexusvoice</groupId>
@@ -20,12 +20,10 @@
   <properties>
     <java.version>21</java.version>
     <springdoc.version>2.6.0</springdoc.version>
-    <mybatis-plus.version>3.5.7</mybatis-plus.version>
+    <mybatis-plus.version>3.5.11</mybatis-plus.version>
     <hutool.version>5.8.26</hutool.version>
     <x-file-storage.version>2.2.0</x-file-storage.version>
     <mysql.version>8.0.33</mysql.version>
-    <postgresql.version>42.7.4</postgresql.version>
-    <pgvector.version>0.1.6</pgvector.version>
     <druid.version>1.2.23</druid.version>
     <jjwt.version>0.12.6</jjwt.version>
     <langchain4j.version>0.35.0</langchain4j.version>
@@ -74,16 +72,19 @@
       <artifactId>aspectjweaver</artifactId>
     </dependency>
 
-    <!-- Database -->
-    <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jdbc</artifactId>
-    </dependency>
+    <!-- Database - 使用MyBatis-Plus，不需要spring-boot-starter-data-jdbc -->
 
-    <!-- MyBatis-Plus -->
+    <!-- MyBatis-Plus (Spring Boot 3 专用 Starter) -->
     <dependency>
       <groupId>com.baomidou</groupId>
-      <artifactId>mybatis-plus-boot-starter</artifactId>
+      <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+      <version>${mybatis-plus.version}</version>
+    </dependency>
+
+    <!-- MyBatis-Plus JSQLParser 支持 (JDK 11+) -->
+    <dependency>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-jsqlparser</artifactId>
       <version>${mybatis-plus.version}</version>
     </dependency>
 
@@ -94,14 +95,14 @@
       <version>${mysql.version}</version>
       <scope>runtime</scope>
     </dependency>
+    <!-- 暂时不使用 PostgreSQL 与 PGVector（保留坐标，后续需要可恢复） -->
+    <!--
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>${postgresql.version}</version>
       <scope>runtime</scope>
     </dependency>
-    
-    <!-- PGVector Support -->
     <dependency>
       <groupId>com.pgvector</groupId>
       <artifactId>pgvector</artifactId>
@@ -110,6 +111,19 @@
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-pgvector</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+    -->
+
+    <!-- LangChain4j（与MySQL并存，不依赖PG） -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai</artifactId>
       <version>${langchain4j.version}</version>
     </dependency>
 
@@ -161,28 +175,6 @@
       <groupId>cn.hutool</groupId>
       <artifactId>hutool-json</artifactId>
       <version>${hutool.version}</version>
-    </dependency>
-
-    <!-- LangChain4j Dependencies -->
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-spring-boot-starter</artifactId>
-      <version>${langchain4j.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
-      <version>${langchain4j.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
-      <version>${langchain4j.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-document-parser-apache-tika</artifactId>
-      <version>${langchain4j.version}</version>
     </dependency>
 
     <!-- Actuator -->
@@ -249,4 +241,3 @@
   </build>
 
 </project>
-

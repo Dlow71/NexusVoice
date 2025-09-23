@@ -1,4 +1,4 @@
-package com.nexusvoice.infrastructure.mapper;
+package com.nexusvoice.infrastructure.database.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.nexusvoice.domain.user.model.User;

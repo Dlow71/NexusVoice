@@ -1,12 +1,14 @@
 spring:
   application:
     name: nexusvoice-backend
+  profiles:
+    include: local  # 引入本地配置文件
+  sql:
+    init:
+      mode: never  # 禁用Spring Boot的SQL初始化，避免与MyBatis-Plus冲突
   threads:
     virtual:
       enabled: true
-  # 引入本地配置文件（包含敏感信息）
-  profiles:
-    include: local
   # 数据源配置 - 使用Druid连接池
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
@@ -76,7 +78,7 @@ mybatis-plus:
       where-strategy: NOT_EMPTY
 
 server:
-  port: 8080
+  port: 8081
 
 management:
   endpoints:
@@ -110,16 +112,6 @@ langchain4j:
       max-tokens: ${OPENAI_MAX_TOKENS:2000}
     embedding-model:
       model-name: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
-  # PGVector配置
-  pgvector:
-    host: ${PGVECTOR_HOST:localhost}
-    port: ${PGVECTOR_PORT:5432}
-    database: ${PGVECTOR_DATABASE:nexusvoice_dev}
-    user: ${PGVECTOR_USER:please-set-in-application-local-yml}
-    password: ${PGVECTOR_PASSWORD:please-set-in-application-local-yml}
-    dimension: ${PGVECTOR_DIMENSION:1536}
-    table: ${PGVECTOR_TABLE:embeddings}
-    index-list-size: ${PGVECTOR_INDEX_LIST_SIZE:1000}
 
 # JWT配置 - 敏感信息在 application-local.yml 中配置
 jwt:

@@ -2,7 +2,7 @@ package com.nexusvoice.infrastructure.config;
 
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
-import com.nexusvoice.security.JwtAuthenticationFilter;
+import com.nexusvoice.infrastructure.security.JwtAuthenticationFilter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 

@@ -4,6 +4,7 @@
 *.ipr
 *.iws
 .vscode/
+.windsurf/
 .DS_Store
 
 # 编译输出目录

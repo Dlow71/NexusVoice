@@ -1,4 +1,4 @@
-package com.nexusvoice.api;
+package com.nexusvoice.interfaces.api.common;
 
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -21,4 +21,3 @@ public class HealthController {
         return ResponseEntity.ok(body);
     }
 }
-

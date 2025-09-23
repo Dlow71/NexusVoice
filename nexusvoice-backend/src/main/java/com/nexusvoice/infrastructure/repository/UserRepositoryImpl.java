@@ -8,7 +8,7 @@ import com.nexusvoice.domain.user.constant.UserStatus;
 import com.nexusvoice.domain.user.constant.UserType;
 import com.nexusvoice.domain.user.model.User;
 import com.nexusvoice.domain.user.repository.UserRepository;
-import com.nexusvoice.infrastructure.mapper.UserMapper;
+import com.nexusvoice.infrastructure.database.mapper.UserMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
