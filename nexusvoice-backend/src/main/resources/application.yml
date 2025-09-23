@@ -4,6 +4,9 @@ spring:
   threads:
     virtual:
       enabled: true
+  # 引入本地配置文件（包含敏感信息）
+  profiles:
+    include: local
   # 数据源配置 - 使用Druid连接池
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
@@ -44,10 +47,9 @@ spring:
         deny: 192.168.1.73
         # 禁用HTML页面上的"Reset All"功能
         reset-enable: false
-        # 登录名
-        login-username: admin
-        # 登录密码
-        login-password: 123456
+        # 登录名和密码在 application-local.yml 中配置
+        # login-username: 请在 application-local.yml 中配置
+        # login-password: 请在 application-local.yml 中配置
 
 # MyBatis-Plus配置
 mybatis-plus:
@@ -96,10 +98,33 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
-# JWT配置
+# LangChain4j配置 - 敏感信息在 application-local.yml 中配置
+langchain4j:
+  open-ai:
+    # API密钥在 application-local.yml 中配置
+    api-key: ${OPENAI_API_KEY:please-set-in-application-local-yml}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    chat-model:
+      model-name: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+      temperature: ${OPENAI_TEMPERATURE:0.7}
+      max-tokens: ${OPENAI_MAX_TOKENS:2000}
+    embedding-model:
+      model-name: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+  # PGVector配置
+  pgvector:
+    host: ${PGVECTOR_HOST:localhost}
+    port: ${PGVECTOR_PORT:5432}
+    database: ${PGVECTOR_DATABASE:nexusvoice_dev}
+    user: ${PGVECTOR_USER:please-set-in-application-local-yml}
+    password: ${PGVECTOR_PASSWORD:please-set-in-application-local-yml}
+    dimension: ${PGVECTOR_DIMENSION:1536}
+    table: ${PGVECTOR_TABLE:embeddings}
+    index-list-size: ${PGVECTOR_INDEX_LIST_SIZE:1000}
+
+# JWT配置 - 敏感信息在 application-local.yml 中配置
 jwt:
   # JWT密钥（生产环境请使用环境变量）
-  secret: ${JWT_SECRET:nexusvoice-jwt-secret-key-for-authentication-and-authorization-system-2025}
+  secret: ${JWT_SECRET:please-set-in-application-local-yml}
   # 访问令牌过期时间（毫秒）- 24小时
   expiration: ${JWT_EXPIRATION:86400000}
   # 刷新令牌过期时间（毫秒）- 7天
@@ -114,10 +139,11 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:mysql://localhost:3306/nexusvoice_dev?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
-    username: root
-    password: root
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # PostgreSQL数据库连接信息在 application-local.yml 中配置
+    # url: 请在 application-local.yml 中配置
+    # username: 请在 application-local.yml 中配置
+    # password: 请在 application-local.yml 中配置
+    driver-class-name: org.postgresql.Driver
 
 # MyBatis-Plus开发环境配置
 mybatis-plus:
@@ -138,10 +164,11 @@ spring:
     activate:
       on-profile: test
   datasource:
-    url: jdbc:mysql://localhost:3306/nexusvoice_test?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
-    username: root
-    password: root
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 测试环境PostgreSQL数据库连接信息（可根据需要配置）
+    url: jdbc:postgresql://localhost:5432/nexusvoice_test?useUnicode=true&characterEncoding=utf8&useSSL=false
+    username: ${TEST_DB_USERNAME:postgres}
+    password: ${TEST_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
 
 mybatis-plus:
   configuration:
@@ -160,10 +187,10 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/nexusvoice_prod?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/nexusvoice_prod?useUnicode=true&characterEncoding=utf8&useSSL=true}
     username: ${DB_USERNAME:nexusvoice}
     password: ${DB_PASSWORD:}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
     druid:
       # 生产环境连接池配置
       initial-size: 10
