@@ -1,0 +1,72 @@
+# IDE相关文件
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.windsurf/
+.DS_Store
+
+# 编译输出目录
+target/
+build/
+out/
+bin/
+
+# 日志文件
+*.log
+logs/
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# Maven相关
+.mvn/
+mvnw
+mvnw.cmd
+
+# Gradle相关
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+
+# 敏感配置文件 - 包含数据库密码、JWT密钥等敏感信息
+**/application-local.yml
+**/application-local.yaml
+**/application-local.properties
+
+# 环境变量文件
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+
+# 其他敏感文件
+secrets/
+private/
+*.key
+*.pem
+*.p12
+*.jks
+
+# Node.js相关（如果有前端项目）
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 操作系统生成的文件
+Thumbs.db
+ehthumbs.db
+Desktop.ini

@@ -1,5 +1,6 @@
 package com.nexusvoice.utils;
 
+import com.nexusvoice.domain.user.constant.UserType;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import io.jsonwebtoken.*;
@@ -92,10 +93,11 @@ public class JwtUtils {
      * 
      * @param userId 用户ID
      * @param username 用户名
-     * @param roles 角色列表
+     * @param userType 用户类型
      * @return JWT令牌
      */
-    public String generateAccessToken(Long userId, String username, String roles) {
+    public String generateAccessToken(String userId, String username, UserType userType) {
+        String roles = "ROLE_" + userType.getCode();
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_USER_ID, userId);
         claims.put(CLAIM_USERNAME, username);
@@ -112,7 +114,7 @@ public class JwtUtils {
      * @param username 用户名
      * @return 刷新令牌
      */
-    public String generateRefreshToken(Long userId, String username) {
+    public String generateRefreshToken(String userId, String username) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_USER_ID, userId);
         claims.put(CLAIM_USERNAME, username);
@@ -198,13 +200,9 @@ public class JwtUtils {
      * @param token JWT令牌
      * @return 用户ID
      */
-    public Long getUserIdFromToken(String token) {
+    public String getUserIdFromToken(String token) {
         Claims claims = parseToken(token);
-        Object userId = claims.get(CLAIM_USER_ID);
-        if (userId instanceof Integer) {
-            return ((Integer) userId).longValue();
-        }
-        return (Long) userId;
+        return (String) claims.get(CLAIM_USER_ID);
     }
     
     /**
@@ -296,6 +294,21 @@ public class JwtUtils {
     }
     
     /**
+     * 从令牌中获取用户类型
+     * 
+     * @param token JWT令牌
+     * @return 用户类型
+     */
+    public UserType getUserTypeFromToken(String token) {
+        String roles = getRolesFromToken(token);
+        if (roles != null && roles.startsWith("ROLE_")) {
+            String userTypeCode = roles.substring(5); // 移除 "ROLE_" 前缀
+            return UserType.fromCode(userTypeCode);
+        }
+        return UserType.USER; // 默认为普通用户
+    }
+    
+    /**
      * 刷新访问令牌
      * 
      * @param refreshToken 刷新令牌
@@ -307,10 +320,10 @@ public class JwtUtils {
         }
         
         Claims claims = parseToken(refreshToken);
-        Long userId = getUserIdFromToken(refreshToken);
+        String userId = getUserIdFromToken(refreshToken);
         String username = claims.getSubject();
-        String roles = (String) claims.get(CLAIM_ROLES);
+        UserType userType = getUserTypeFromToken(refreshToken);
         
-        return generateAccessToken(userId, username, roles);
+        return generateAccessToken(userId, username, userType);
     }
 }

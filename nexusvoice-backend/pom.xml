@@ -7,8 +7,8 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.2</version>
-    <relativePath/>
+    <version>3.3.5</version>
+    <relativePath/> <!-- lookup parent from repository -->
   </parent>
 
   <groupId>com.nexusvoice</groupId>
@@ -20,12 +20,13 @@
   <properties>
     <java.version>21</java.version>
     <springdoc.version>2.6.0</springdoc.version>
-    <mybatis-plus.version>3.5.7</mybatis-plus.version>
+    <mybatis-plus.version>3.5.11</mybatis-plus.version>
+    <hutool.version>5.8.26</hutool.version>
+    <x-file-storage.version>2.2.0</x-file-storage.version>
     <mysql.version>8.0.33</mysql.version>
-    <postgresql.version>42.7.3</postgresql.version>
     <druid.version>1.2.23</druid.version>
     <jjwt.version>0.12.6</jjwt.version>
-    <spring-ai.version>1.0.0-M2</spring-ai.version>
+    <langchain4j.version>0.35.0</langchain4j.version>
   </properties>
 
   <dependencies>
@@ -53,16 +54,37 @@
       <artifactId>spring-boot-starter-validation</artifactId>
     </dependency>
 
-    <!-- Database -->
+    <!-- AOP Support -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter-data-jdbc</artifactId>
+      <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+    
+    <!-- AspectJ Runtime -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjrt</artifactId>
+    </dependency>
+    
+    <!-- AspectJ Weaver -->
+    <dependency>
+      <groupId>org.aspectj</groupId>
+      <artifactId>aspectjweaver</artifactId>
     </dependency>
 
-    <!-- MyBatis-Plus -->
+    <!-- Database - 使用MyBatis-Plus，不需要spring-boot-starter-data-jdbc -->
+
+    <!-- MyBatis-Plus (Spring Boot 3 专用 Starter) -->
     <dependency>
       <groupId>com.baomidou</groupId>
-      <artifactId>mybatis-plus-boot-starter</artifactId>
+      <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+      <version>${mybatis-plus.version}</version>
+    </dependency>
+
+    <!-- MyBatis-Plus JSQLParser 支持 (JDK 11+) -->
+    <dependency>
+      <groupId>com.baomidou</groupId>
+      <artifactId>mybatis-plus-jsqlparser</artifactId>
       <version>${mybatis-plus.version}</version>
     </dependency>
 
@@ -73,11 +95,36 @@
       <version>${mysql.version}</version>
       <scope>runtime</scope>
     </dependency>
+    <!-- 暂时不使用 PostgreSQL 与 PGVector（保留坐标，后续需要可恢复） -->
+    <!--
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>${postgresql.version}</version>
       <scope>runtime</scope>
+    </dependency>
+    <dependency>
+      <groupId>com.pgvector</groupId>
+      <artifactId>pgvector</artifactId>
+      <version>${pgvector.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-pgvector</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+    -->
+
+    <!-- LangChain4j（与MySQL并存，不依赖PG） -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai</artifactId>
+      <version>${langchain4j.version}</version>
     </dependency>
 
     <!-- Connection Pool - Druid -->
@@ -106,13 +153,29 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- Spring AI - Temporarily commented out for compilation
+    <!-- 文件存储服务 -->
     <dependency>
-      <groupId>org.springframework.ai</groupId>
-      <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
-      <version>${spring-ai.version}</version>
+      <groupId>org.dromara.x-file-storage</groupId>
+      <artifactId>x-file-storage-spring</artifactId>
+      <version>${x-file-storage.version}</version>
     </dependency>
-    -->
+
+    <!-- 工具库 -->
+    <dependency>
+      <groupId>cn.hutool</groupId>
+      <artifactId>hutool-crypto</artifactId>
+      <version>${hutool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>cn.hutool</groupId>
+      <artifactId>hutool-core</artifactId>
+      <version>${hutool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>cn.hutool</groupId>
+      <artifactId>hutool-json</artifactId>
+      <version>${hutool.version}</version>
+    </dependency>
 
     <!-- Actuator -->
     <dependency>
@@ -125,6 +188,13 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
     </dependency>
 
     <!-- Test -->
@@ -171,4 +241,3 @@
   </build>
 
 </project>
-

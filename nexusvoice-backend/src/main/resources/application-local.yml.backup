@@ -1,0 +1,67 @@
+# 本地开发环境配置文件
+# 注意：此文件包含敏感信息，不会被提交到Git
+
+spring:
+  profiles:
+    active: dev
+    include: local
+
+---
+# 本地开发环境数据库配置
+spring:
+  config:
+    activate:
+      on-profile: local
+  datasource:
+    # MySQL数据库连接信息
+    url: jdbc:mysql://www.dlow.top:3306/nexusvoice_dev?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
+    username: uv
+    password: uvaddd123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    druid:
+      # Druid监控页面登录信息
+      stat-view-servlet:
+        login-username: admin
+        login-password: admin123
+
+# JWT本地开发配置
+jwt:
+  # JWT密钥 - 开发环境使用的密钥
+  secret: nexusvoice-dev-jwt-secret-key-2025-please-change-in-production
+  # 访问令牌过期时间（毫秒）- 24小时
+  expiration: 86400000
+  # 刷新令牌过期时间（毫秒）- 7天  
+  refresh-expiration: 604800000
+  # JWT签发者
+  issuer: nexusvoice-dev
+
+# LangChain4j配置
+langchain4j:
+  open-ai:
+    # OpenAI API配置 - 开发环境可以先使用占位符
+    api-key: sk-your-openai-api-key-here
+    base-url: https://api.openai.com/v1
+    # 模型配置
+    chat-model:
+      model-name: gpt-4o-mini
+      temperature: 0.7
+      max-tokens: 2000
+    embedding-model:
+      model-name: text-embedding-3-small
+  # PGVector配置 - MySQL环境下暂时不使用
+  # pgvector:
+  #   host: localhost
+  #   port: 3306
+  #   database: nexusvoice_dev
+  #   user: root
+  #   password: root
+  #   dimension: 1536
+  #   table: embeddings
+  #   index-list-size: 1000
+
+# 开发环境日志配置
+logging:
+  level:
+    com.nexusvoice: DEBUG
+    org.springframework.security: DEBUG
+    com.baomidou.mybatisplus: DEBUG
