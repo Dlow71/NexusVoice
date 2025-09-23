@@ -139,11 +139,11 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    # PostgreSQL数据库连接信息在 application-local.yml 中配置
+    # MySQL数据库连接信息在 application-local.yml 中配置
     # url: 请在 application-local.yml 中配置
     # username: 请在 application-local.yml 中配置
     # password: 请在 application-local.yml 中配置
-    driver-class-name: org.postgresql.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
 # MyBatis-Plus开发环境配置
 mybatis-plus:
@@ -164,11 +164,11 @@ spring:
     activate:
       on-profile: test
   datasource:
-    # 测试环境PostgreSQL数据库连接信息（可根据需要配置）
-    url: jdbc:postgresql://localhost:5432/nexusvoice_test?useUnicode=true&characterEncoding=utf8&useSSL=false
-    username: ${TEST_DB_USERNAME:postgres}
-    password: ${TEST_DB_PASSWORD:postgres}
-    driver-class-name: org.postgresql.Driver
+    # 测试环境MySQL数据库连接信息（可根据需要配置）
+    url: jdbc:mysql://localhost:3306/nexusvoice_test?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
+    username: ${TEST_DB_USERNAME:root}
+    password: ${TEST_DB_PASSWORD:root}
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
 mybatis-plus:
   configuration:
@@ -187,10 +187,10 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/nexusvoice_prod?useUnicode=true&characterEncoding=utf8&useSSL=true}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/nexusvoice_prod?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true}
     username: ${DB_USERNAME:nexusvoice}
     password: ${DB_PASSWORD:}
-    driver-class-name: org.postgresql.Driver
+    driver-class-name: com.mysql.cj.jdbc.Driver
     druid:
       # 生产环境连接池配置
       initial-size: 10
