@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-parent</artifactId>
-    <version>3.3.2</version>
+    <version>3.5.3</version>
     <relativePath/>
   </parent>
 
@@ -22,10 +22,11 @@
     <springdoc.version>2.6.0</springdoc.version>
     <mybatis-plus.version>3.5.7</mybatis-plus.version>
     <mysql.version>8.0.33</mysql.version>
-    <postgresql.version>42.7.3</postgresql.version>
+    <postgresql.version>42.7.4</postgresql.version>
+    <pgvector.version>0.1.6</pgvector.version>
     <druid.version>1.2.23</druid.version>
     <jjwt.version>0.12.6</jjwt.version>
-    <spring-ai.version>1.0.0-M2</spring-ai.version>
+    <langchain4j.version>0.35.0</langchain4j.version>
   </properties>
 
   <dependencies>
@@ -79,6 +80,18 @@
       <version>${postgresql.version}</version>
       <scope>runtime</scope>
     </dependency>
+    
+    <!-- PGVector Support -->
+    <dependency>
+      <groupId>com.pgvector</groupId>
+      <artifactId>pgvector</artifactId>
+      <version>${pgvector.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-pgvector</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
 
     <!-- Connection Pool - Druid -->
     <dependency>
@@ -106,13 +119,27 @@
       <scope>runtime</scope>
     </dependency>
 
-    <!-- Spring AI - Temporarily commented out for compilation
+    <!-- LangChain4j Dependencies -->
     <dependency>
-      <groupId>org.springframework.ai</groupId>
-      <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
-      <version>${spring-ai.version}</version>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-spring-boot-starter</artifactId>
+      <version>${langchain4j.version}</version>
     </dependency>
-    -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-document-parser-apache-tika</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
 
     <!-- Actuator -->
     <dependency>
@@ -125,6 +152,13 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+
+    <!-- Lombok -->
+    <dependency>
+      <groupId>org.projectlombok</groupId>
+      <artifactId>lombok</artifactId>
+      <optional>true</optional>
     </dependency>
 
     <!-- Test -->
