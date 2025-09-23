@@ -55,7 +55,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 }
                 
                 // 从令牌中提取用户信息
-                Long userId = jwtUtils.getUserIdFromToken(token);
+                String userId = jwtUtils.getUserIdFromToken(token);
                 String username = jwtUtils.getUsernameFromToken(token);
                 String rolesStr = jwtUtils.getRolesFromToken(token);
                 
@@ -130,15 +130,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      * 用户主体类
      */
     public static class UserPrincipal {
-        private final Long userId;
+        private final String userId;
         private final String username;
         
-        public UserPrincipal(Long userId, String username) {
+        public UserPrincipal(String userId, String username) {
             this.userId = userId;
             this.username = username;
         }
         
-        public Long getUserId() {
+        public String getUserId() {
             return userId;
         }
         

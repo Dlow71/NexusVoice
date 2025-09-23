@@ -20,7 +20,9 @@
   <properties>
     <java.version>21</java.version>
     <springdoc.version>2.6.0</springdoc.version>
-    <mybatis-plus.version>3.5.7</mybatis-plus.version>
+    <mybatis-plus.version>3.5.11</mybatis-plus.version>
+    <hutool.version>5.8.26</hutool.version>
+    <x-file-storage.version>2.2.0</x-file-storage.version>
     <mysql.version>8.0.33</mysql.version>
     <postgresql.version>42.7.4</postgresql.version>
     <pgvector.version>0.1.6</pgvector.version>
@@ -52,6 +54,12 @@
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-validation</artifactId>
+    </dependency>
+
+    <!-- AOP Support -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-aop</artifactId>
     </dependency>
 
     <!-- Database -->
@@ -117,6 +125,30 @@
       <artifactId>jjwt-jackson</artifactId>
       <version>${jjwt.version}</version>
       <scope>runtime</scope>
+    </dependency>
+
+    <!-- 文件存储服务 -->
+    <dependency>
+      <groupId>org.dromara.x-file-storage</groupId>
+      <artifactId>x-file-storage-spring</artifactId>
+      <version>${x-file-storage.version}</version>
+    </dependency>
+
+    <!-- 工具库 -->
+    <dependency>
+      <groupId>cn.hutool</groupId>
+      <artifactId>hutool-crypto</artifactId>
+      <version>${hutool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>cn.hutool</groupId>
+      <artifactId>hutool-core</artifactId>
+      <version>${hutool.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>cn.hutool</groupId>
+      <artifactId>hutool-json</artifactId>
+      <version>${hutool.version}</version>
     </dependency>
 
     <!-- LangChain4j Dependencies -->

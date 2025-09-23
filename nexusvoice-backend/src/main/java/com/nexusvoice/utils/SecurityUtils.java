@@ -1,5 +1,6 @@
 package com.nexusvoice.utils;
 
+import com.nexusvoice.domain.user.constant.UserType;
 import com.nexusvoice.security.JwtAuthenticationFilter.UserPrincipal;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -42,7 +43,7 @@ public class SecurityUtils {
      * 
      * @return 用户ID
      */
-    public static Optional<Long> getCurrentUserId() {
+    public static Optional<String> getCurrentUserId() {
         return getCurrentUserPrincipal()
                 .map(UserPrincipal::getUserId);
     }
@@ -140,5 +141,49 @@ public class SecurityUtils {
             }
         }
         return false;
+    }
+    
+    /**
+     * 检查当前用户是否为管理员
+     * 
+     * @return 是否为管理员
+     */
+    public static boolean isAdmin() {
+        return hasRole("ROLE_" + UserType.ADMIN.getCode());
+    }
+    
+    /**
+     * 检查当前用户是否为普通用户
+     * 
+     * @return 是否为普通用户
+     */
+    public static boolean isUser() {
+        return hasRole("ROLE_" + UserType.USER.getCode());
+    }
+    
+    /**
+     * 获取当前用户类型
+     * 
+     * @return 用户类型
+     */
+    public static Optional<UserType> getCurrentUserType() {
+        Collection<? extends GrantedAuthority> authorities = getCurrentUserAuthorities();
+        if (authorities == null) {
+            return Optional.empty();
+        }
+        
+        return authorities.stream()
+                .map(GrantedAuthority::getAuthority)
+                .filter(auth -> auth.startsWith("ROLE_"))
+                .map(auth -> auth.substring(5)) // 移除 "ROLE_" 前缀
+                .map(code -> {
+                    try {
+                        return UserType.fromCode(code);
+                    } catch (IllegalArgumentException e) {
+                        return null;
+                    }
+                })
+                .filter(userType -> userType != null)
+                .findFirst();
     }
 }

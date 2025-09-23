@@ -39,6 +39,13 @@ public enum ErrorCodeEnum {
     USER_PASSWORD_ERROR(1003, "用户密码错误"),
     USER_ACCOUNT_DISABLED(1004, "用户账号已禁用"),
     USER_ACCOUNT_LOCKED(1005, "用户账号已锁定"),
+    USER_EMAIL_EXISTS(1006, "邮箱已被注册"),
+    USER_PHONE_EXISTS(1007, "手机号已被注册"),
+    USER_BANNED(1008, "用户已被封禁"),
+    USER_STATUS_ABNORMAL(1009, "用户状态异常"),
+    
+    // 参数相关 10xx
+    PARAM_ERROR(1010, "参数错误"),
     
     // 认证相关 11xx
     TOKEN_INVALID(1101, "令牌无效"),
