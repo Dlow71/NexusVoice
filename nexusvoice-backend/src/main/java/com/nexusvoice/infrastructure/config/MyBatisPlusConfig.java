@@ -1,8 +1,6 @@
 package com.nexusvoice.infrastructure.config;
 
-import com.baomidou.mybatisplus.annotation.DbType;
 import com.baomidou.mybatisplus.extension.plugins.MybatisPlusInterceptor;
-import com.baomidou.mybatisplus.extension.plugins.inner.PaginationInnerInterceptor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -22,14 +20,11 @@ public class MyBatisPlusConfig {
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
         
-        // 分页插件
-        PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor(DbType.POSTGRE_SQL);
-        // 设置请求的页面大于最大页后操作， true调回到首页，false 继续请求  默认false
-        paginationInnerInterceptor.setOverflow(false);
-        // 设置最大单页限制数量，默认 500 条，-1 不受限制
-        paginationInnerInterceptor.setMaxLimit(500L);
-        
-        interceptor.addInnerInterceptor(paginationInnerInterceptor);
+        // 分页插件 - 暂时注释掉，等依赖问题解决后再启用
+        // PaginationInnerInterceptor paginationInnerInterceptor = new PaginationInnerInterceptor(DbType.POSTGRE_SQL);
+        // paginationInnerInterceptor.setOverflow(false);
+        // paginationInnerInterceptor.setMaxLimit(500L);
+        // interceptor.addInnerInterceptor(paginationInnerInterceptor);
         
         return interceptor;
     }

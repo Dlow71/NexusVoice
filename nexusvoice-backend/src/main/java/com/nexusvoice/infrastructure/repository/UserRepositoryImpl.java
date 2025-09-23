@@ -3,13 +3,13 @@ package com.nexusvoice.infrastructure.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.nexusvoice.application.user.dto.PageResult;
 import com.nexusvoice.domain.user.constant.UserStatus;
 import com.nexusvoice.domain.user.constant.UserType;
 import com.nexusvoice.domain.user.model.User;
 import com.nexusvoice.domain.user.repository.UserRepository;
 import com.nexusvoice.infrastructure.mapper.UserMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
@@ -22,11 +22,14 @@ import java.util.Optional;
  * @since 2025-09-23
  */
 @Repository
-public class UserRepositoryImpl extends ServiceImpl<UserMapper, User> implements UserRepository {
+public class UserRepositoryImpl implements UserRepository {
+
+    @Autowired
+    private UserMapper userMapper;
 
     @Override
     public Optional<User> findById(String id) {
-        User user = getById(id);
+        User user = userMapper.selectById(id);
         return Optional.ofNullable(user);
     }
 
@@ -34,18 +37,15 @@ public class UserRepositoryImpl extends ServiceImpl<UserMapper, User> implements
     public Optional<User> findByEmail(String email) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getEmail, email);
-        User user = getOne(wrapper);
+        User user = userMapper.selectOne(wrapper);
         return Optional.ofNullable(user);
     }
 
     @Override
     public Optional<User> findByPhone(String phone) {
-        if (phone == null) {
-            return Optional.empty();
-        }
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getPhone, phone);
-        User user = getOne(wrapper);
+        User user = userMapper.selectOne(wrapper);
         return Optional.ofNullable(user);
     }
 
@@ -53,7 +53,7 @@ public class UserRepositoryImpl extends ServiceImpl<UserMapper, User> implements
     public boolean existsByEmail(String email) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getEmail, email);
-        return count(wrapper) > 0;
+        return userMapper.selectCount(wrapper) > 0;
     }
 
     @Override
@@ -63,29 +63,44 @@ public class UserRepositoryImpl extends ServiceImpl<UserMapper, User> implements
         }
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(User::getPhone, phone);
-        return count(wrapper) > 0;
+        return userMapper.selectCount(wrapper) > 0;
     }
 
     @Override
     public User save(User user) {
-        super.save(user);
+        if (user.getId() == null) {
+            // 新增
+            int result = userMapper.insert(user);
+            if (result <= 0) {
+                throw new RuntimeException("保存用户失败");
+            }
+        } else {
+            // 更新
+            int result = userMapper.updateById(user);
+            if (result <= 0) {
+                throw new RuntimeException("更新用户失败");
+            }
+        }
         return user;
     }
 
     @Override
     public User update(User user) {
-        super.updateById(user);
+        int result = userMapper.updateById(user);
+        if (result <= 0) {
+            throw new RuntimeException("更新用户失败");
+        }
         return user;
     }
 
     @Override
     public void deleteById(String id) {
-        super.removeById(id);
+        userMapper.deleteById(id);
     }
 
     @Override
     public long count() {
-        return super.count();
+        return userMapper.selectCount(null);
     }
 
     @Override
@@ -112,7 +127,7 @@ public class UserRepositoryImpl extends ServiceImpl<UserMapper, User> implements
         
         // 分页查询
         Page<User> pageParam = new Page<>(page, size);
-        IPage<User> pageResult = super.page(pageParam, wrapper);
+        IPage<User> pageResult = userMapper.selectPage(pageParam, wrapper);
         
         // 转换为自定义分页结果
         return new PageResult<>(
