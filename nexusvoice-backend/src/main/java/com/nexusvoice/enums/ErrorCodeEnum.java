@@ -95,7 +95,20 @@ public enum ErrorCodeEnum {
     // 缓存相关 19xx
     CACHE_ERROR(1901, "缓存错误"),
     CACHE_KEY_NOT_FOUND(1902, "缓存键不存在"),
-    CACHE_OPERATION_FAILED(1903, "缓存操作失败");
+    CACHE_OPERATION_FAILED(1903, "缓存操作失败"),
+    
+    // TTS相关 20xx
+    TTS_SERVICE_ERROR(2001, "TTS服务错误"),
+    TTS_TEXT_INVALID(2002, "TTS文本无效"),
+    TTS_VOICE_TYPE_NOT_SUPPORTED(2003, "TTS语音类型不支持"),
+    TTS_AUDIO_FORMAT_NOT_SUPPORTED(2004, "TTS音频格式不支持"),
+    TTS_SPEED_RATIO_INVALID(2005, "TTS语速比例无效"),
+    TTS_GENERATION_FAILED(2006, "TTS音频生成失败"),
+    TTS_CONNECTION_FAILED(2007, "TTS服务连接失败"),
+    TTS_TIMEOUT(2008, "TTS处理超时"),
+    
+    // 通用业务错误
+    BUSINESS_ERROR(9999, "业务处理失败");
     
     /**
      * 错误码
