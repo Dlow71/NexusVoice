@@ -65,7 +65,8 @@ public class SecurityConfig {
                     "/webjars/**",
                     "/druid/**",
                     "/ws/**",
-                    "/error"
+                    "/error",
+                        "/api/tts/**"
                 ).permitAll()
                 
                 // 需要认证的端点
