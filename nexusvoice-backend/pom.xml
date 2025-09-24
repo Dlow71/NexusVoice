@@ -235,6 +235,8 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <release>${java.version}</release>
+          <source>8</source>
+          <target>8</target>
         </configuration>
       </plugin>
     </plugins>

@@ -63,13 +63,11 @@ onMounted(() => {
     recognition.continuous = false;
     recognition.lang = 'zh-CN';
     recognition.interimResults = false;
-
     // --- STT 事件监听 ---
     recognition.onstart = () => {
       isRecording.value = true;
       systemMessage.value = '正在倾听...';
     };
-
     recognition.onend = () => {
       isRecording.value = false;
       // 只有在 AI 没有思考时，才重置提示文本
@@ -100,7 +98,6 @@ onMounted(() => {
   } else {
     systemMessage.value = "浏览器不支持语音识别功能";
   }
-
   // 组件加载时的初始逻辑
   const characterId = route.params.id;
   currentCharacter.value = allCharacters.value.find(c => c.id === characterId);
