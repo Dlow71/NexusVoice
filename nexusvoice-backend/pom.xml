@@ -166,6 +166,13 @@
       <version>${x-file-storage.version}</version>
     </dependency>
 
+    <!-- 七牛云SDK -->
+    <dependency>
+      <groupId>com.qiniu</groupId>
+      <artifactId>qiniu-java-sdk</artifactId>
+      <version>7.13.0</version>
+    </dependency>
+
     <!-- 工具库 -->
     <dependency>
       <groupId>cn.hutool</groupId>

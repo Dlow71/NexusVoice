@@ -1,12 +1,19 @@
 package com.nexusvoice.utils;
 
+import cn.hutool.core.io.IoUtil;
+import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusvoice.exception.TTSException;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.Base64;
@@ -145,12 +152,53 @@ public class TTSToolUtils {
     }
 
     /**
+     * 文本转音频文件（使用默认配置）
+     * 直接返回MultipartFile，便于上传到云存储
+     */
+    public MultipartFile textToAudioFile(String text) throws TTSException {
+        return textToAudioFile(text, defaultVoiceType, defaultEncoding, defaultSpeed);
+    }
+
+    /**
+     * 文本转音频文件（自定义配置）
+     * 直接返回MultipartFile，便于上传到云存储
+     */
+    public MultipartFile textToAudioFile(String text, String voiceType, String encoding, double speedRatio) throws TTSException {
+        // 生成音频字节数组
+        byte[] audioBytes = textToAudioBytes(text, voiceType, encoding, speedRatio);
+        
+        // 生成文件名
+        String fileName = "tts_audio_" + System.currentTimeMillis() + "." + encoding;
+        
+        // 创建MultipartFile
+        return new ByteArrayMultipartFile(
+            "audio",
+            fileName,
+            "audio/" + encoding,
+            audioBytes
+        );
+    }
+
+    /**
      * 文本转音频（异步）
      */
     public CompletableFuture<byte[]> textToAudioBytesAsync(String text) {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 return textToAudioBytes(text);
+            } catch (TTSException e) {
+                throw new RuntimeException(e);
+            }
+        });
+    }
+
+    /**
+     * 文本转音频文件（异步）
+     */
+    public CompletableFuture<MultipartFile> textToAudioFileAsync(String text) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return textToAudioFile(text);
             } catch (TTSException e) {
                 throw new RuntimeException(e);
             }
@@ -314,5 +362,62 @@ public class TTSToolUtils {
     static class AdditionModel {
         @JsonProperty("duration")
         public String duration;
+    }
+
+    /**
+     * 自定义的MultipartFile实现，用于包装字节数组
+     */
+    static class ByteArrayMultipartFile implements MultipartFile {
+        private final String name;
+        private final String originalFilename;
+        private final String contentType;
+        private final byte[] content;
+
+        public ByteArrayMultipartFile(String name, String originalFilename, String contentType, byte[] content) {
+            this.name = name;
+            this.originalFilename = originalFilename;
+            this.contentType = contentType;
+            this.content = content != null ? content : new byte[0];
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public String getOriginalFilename() {
+            return originalFilename;
+        }
+
+        @Override
+        public String getContentType() {
+            return contentType;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return content.length == 0;
+        }
+
+        @Override
+        public long getSize() {
+            return content.length;
+        }
+
+        @Override
+        public byte[] getBytes() throws IOException {
+            return content.clone();
+        }
+
+        @Override
+        public InputStream getInputStream() throws IOException {
+            return new ByteArrayInputStream(content);
+        }
+
+        @Override
+        public void transferTo(File dest) throws IOException, IllegalStateException {
+            throw new UnsupportedOperationException("transferTo not supported for ByteArrayMultipartFile");
+        }
     }
 }

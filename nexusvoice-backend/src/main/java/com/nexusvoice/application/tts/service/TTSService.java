@@ -3,11 +3,15 @@ package com.nexusvoice.application.tts.service;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 import com.nexusvoice.exception.TTSException;
+import com.nexusvoice.infrastructure.config.QiniuConfig;
 import com.nexusvoice.utils.TTSToolUtils;
+import jakarta.annotation.Resource;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
-import java.util.Base64;
+import java.io.IOException;
 
 /**
  * TTS应用服务
@@ -21,6 +25,12 @@ public class TTSService {
 
     @Value("${nexusvoice.tts.token}")
     private String qiniuToken;
+
+    @Autowired
+    private QiniuFileService qiniuFileService;
+
+    @Resource
+    private QiniuConfig qiniuConfig;
 
     /**
      * 文本转语音
@@ -36,37 +46,45 @@ public class TTSService {
         }
 
         try {
+            // 获取参数，设置默认值
+            String voiceType = requestDTO.getVoiceType() != null ? requestDTO.getVoiceType() : "qiniu_zh_female_wwxkjx";
+            String encoding = requestDTO.getEncoding() != null ? requestDTO.getEncoding() : "mp3";
+            Double speedRatio = requestDTO.getSpeedRatio() != null ? requestDTO.getSpeedRatio() : 1.0;
+
             // 创建TTS工具实例
             TTSToolUtils ttsToolUtils = TTSToolUtils.createWithDefaults(
                 qiniuToken,
-                requestDTO.getVoiceType() != null ? requestDTO.getVoiceType() : "qiniu_zh_female_wwxkjx",
-                requestDTO.getEncoding() != null ? requestDTO.getEncoding() : "mp3",
-                requestDTO.getSpeedRatio() != null ? requestDTO.getSpeedRatio() : 1.0
+                voiceType,
+                encoding,
+                speedRatio
             );
 
-            // 调用TTS服务生成音频
-            byte[] audioBytes = ttsToolUtils.textToAudioBytes(requestDTO.getText());
+            // 调用TTS服务生成音频文件
+            MultipartFile audioFile = ttsToolUtils.textToAudioFile(requestDTO.getText(), voiceType, encoding, speedRatio);
             
-            if (audioBytes == null || audioBytes.length == 0) {
-                throw new TTSException("音频生成失败，返回数据为空");
+            if (audioFile == null || audioFile.isEmpty()) {
+                throw new TTSException("音频生成失败，返回文件为空");
             }
 
-            // 将音频字节转换为Base64编码
-            String audioBase64 = Base64.getEncoder().encodeToString(audioBytes);
+            // 上传到七牛云并获取URL
+            String audioUrl = qiniuFileService.upload(audioFile);
+
 
             // 构建响应DTO
             TTSResponseDTO responseDTO = new TTSResponseDTO();
-            responseDTO.setAudioData(audioBase64);
-            responseDTO.setAudioFormat(requestDTO.getEncoding() != null ? requestDTO.getEncoding() : "mp3");
-            responseDTO.setAudioSize(audioBytes.length);
+            responseDTO.setAudioData(audioUrl);
+            responseDTO.setAudioFormat(encoding);
+            responseDTO.setAudioSize((int) audioFile.getSize());
             responseDTO.setText(requestDTO.getText());
-            responseDTO.setVoiceType(requestDTO.getVoiceType() != null ? requestDTO.getVoiceType() : "qiniu_zh_female_wwxkjx");
-            responseDTO.setSpeedRatio(requestDTO.getSpeedRatio() != null ? requestDTO.getSpeedRatio() : 1.0);
+            responseDTO.setVoiceType(voiceType);
+            responseDTO.setSpeedRatio(speedRatio);
 
             return responseDTO;
 
         } catch (TTSException e) {
             throw e;
+        } catch (IOException e) {
+            throw new TTSException("音频文件上传失败: " + e.getMessage(), e);
         } catch (Exception e) {
             throw new TTSException("TTS服务处理失败: " + e.getMessage(), e);
         }
