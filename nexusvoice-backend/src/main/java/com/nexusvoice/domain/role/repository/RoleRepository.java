@@ -17,7 +17,7 @@ public interface RoleRepository {
     /**
      * 根据ID查找角色
      */
-    Optional<Role> findById(String id);
+    Optional<Role> findById(Long id);
 
     /**
      * 保存角色（新增）
@@ -32,7 +32,7 @@ public interface RoleRepository {
     /**
      * 根据ID删除（逻辑删除）
      */
-    void deleteById(String id);
+    void deleteById(Long id);
 
     /**
      * 分页查询公共角色
@@ -43,10 +43,10 @@ public interface RoleRepository {
      * 分页查询所有用户的私人角色（管理端）
      * @param userId 可选的用户ID过滤
      */
-    PageResult<Role> pageAllPrivateRoles(Integer page, Integer size, String keyword, String userId);
+    PageResult<Role> pageAllPrivateRoles(Integer page, Integer size, String keyword, Long userId);
 
     /**
      * 分页查询当前用户的私人角色（用户端）
      */
-    PageResult<Role> pageUserPrivateRoles(Integer page, Integer size, String keyword, String ownerUserId);
+    PageResult<Role> pageUserPrivateRoles(Integer page, Integer size, String keyword, Long ownerUserId);
 }

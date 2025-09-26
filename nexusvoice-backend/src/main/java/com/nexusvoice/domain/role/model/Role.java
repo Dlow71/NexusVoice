@@ -26,10 +26,6 @@ public class Role extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "角色唯一ID")
-    @TableId(value = "id", type = IdType.ASSIGN_UUID)
-    private String id;
-
     @Schema(description = "角色名称")
     @TableField("name")
     private String name;
@@ -64,7 +60,7 @@ public class Role extends BaseEntity {
 
     @Schema(description = "创建者用户ID（私人角色）")
     @TableField("user_id")
-    private String userId;
+    private Long userId;
 
     // ============ 业务方法 ============
 
@@ -80,7 +76,7 @@ public class Role extends BaseEntity {
      * 设为私人角色
      * @param ownerUserId 创建者用户ID
      */
-    public void makePrivate(String ownerUserId) {
+    public void makePrivate(Long ownerUserId) {
         this.isPublic = false;
         this.userId = ownerUserId;
     }
@@ -88,19 +84,12 @@ public class Role extends BaseEntity {
     /**
      * 判断是否属于指定用户
      */
-    public boolean ownedBy(String uid) {
+    public boolean ownedBy(Long uid) {
         return uid != null && uid.equals(this.userId);
     }
 
     // ============ Getter / Setter ============
-
-    public String getId() {
-        return id;
-    }
-
-    public void setId(String id) {
-        this.id = id;
-    }
+    
 
     public String getName() {
         return name;
@@ -166,11 +155,11 @@ public class Role extends BaseEntity {
         isPublic = aPublic;
     }
 
-    public String getUserId() {
+    public Long getUserId() {
         return userId;
     }
 
-    public void setUserId(String userId) {
+    public void setUserId(Long userId) {
         this.userId = userId;
     }
 
@@ -193,7 +182,7 @@ public class Role extends BaseEntity {
                 "id='" + id + '\'' +
                 ", name='" + name + '\'' +
                 ", isPublic=" + isPublic +
-                ", userId='" + userId + '\'' +
+                ", userId=" + userId +
                 '}';
     }
 }
