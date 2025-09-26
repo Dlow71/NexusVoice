@@ -161,7 +161,7 @@ public class User extends BaseEntity {
      *
      * @return true-已验证, false-未验证
      */
-    public boolean isEmailVerified() {
+    public boolean hasEmailVerified() {
         return Boolean.TRUE.equals(this.emailVerified);
     }
 
