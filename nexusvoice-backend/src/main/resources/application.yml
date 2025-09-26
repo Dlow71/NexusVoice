@@ -129,6 +129,8 @@ jwt:
   # JWT签发者
   issuer: ${JWT_ISSUER:nexusvoice}
 
+
+
 ---
 # 开发环境配置
 spring:
