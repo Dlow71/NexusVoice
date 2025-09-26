@@ -156,14 +156,14 @@ public class User extends BaseEntity {
         return this.status != null && this.status.isBanned();
     }
 
-    /**
-     * 判断邮箱是否已验证
-     *
-     * @return true-已验证, false-未验证
-     */
-    public boolean isEmailVerified() {
-        return Boolean.TRUE.equals(this.emailVerified);
-    }
+//    /**
+//     * 判断邮箱是否已验证
+//     *
+//     * @return true-已验证, false-未验证
+//     */
+//    public boolean isEmailVerified() {
+//        return Boolean.TRUE.equals(this.emailVerified);
+//    }
 
     // Getter and Setter methods
     public String getId() {
