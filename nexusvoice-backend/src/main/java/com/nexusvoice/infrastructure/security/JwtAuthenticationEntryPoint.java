@@ -28,16 +28,9 @@ import java.nio.charset.StandardCharsets;
 public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     
     private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationEntryPoint.class);
-
-    // 1. 声明一个 final 的 ObjectMapper 字段，但不要在这里初始化
-    private final ObjectMapper objectMapper;
-
-    // 2. 创建一个构造函数，并通过 @Autowired 注解（在只有一个构造函数时可选）
-    //    让 Spring 将容器中已经配置好的 ObjectMapper 实例注入进来
+    
     @Autowired
-    public JwtAuthenticationEntryPoint(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
+    private ObjectMapper objectMapper;
     
     @Override
     public void commence(HttpServletRequest request, 

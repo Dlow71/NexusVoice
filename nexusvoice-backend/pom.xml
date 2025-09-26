@@ -30,6 +30,7 @@
   </properties>
 
   <dependencies>
+
     <!-- Web and JSON -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -42,10 +43,10 @@
       <artifactId>spring-boot-starter-websocket</artifactId>
     </dependency>
 
+    <!-- Reactor for reactive programming -->
     <dependency>
-      <groupId>org.java-websocket</groupId>
-      <artifactId>Java-WebSocket</artifactId>
-      <version>1.5.4</version>
+      <groupId>io.projectreactor</groupId>
+      <artifactId>reactor-core</artifactId>
     </dependency>
 
     <!-- Security (JWT to be added later) -->
@@ -132,6 +133,13 @@
       <artifactId>langchain4j-open-ai</artifactId>
       <version>${langchain4j.version}</version>
     </dependency>
+    
+    <!-- LangChain4j Spring Boot Starter -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-spring-boot-starter</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
 
     <!-- Connection Pool - Druid -->
     <dependency>
@@ -166,13 +174,6 @@
       <version>${x-file-storage.version}</version>
     </dependency>
 
-    <!-- 七牛云SDK -->
-    <dependency>
-      <groupId>com.qiniu</groupId>
-      <artifactId>qiniu-java-sdk</artifactId>
-      <version>7.13.0</version>
-    </dependency>
-
     <!-- 工具库 -->
     <dependency>
       <groupId>cn.hutool</groupId>
@@ -201,6 +202,12 @@
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
       <version>${springdoc.version}</version>
+    </dependency>
+
+    <!-- Jackson JSR310 (Java 8 Time) Support -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.datatype</groupId>
+      <artifactId>jackson-datatype-jsr310</artifactId>
     </dependency>
 
     <!-- Lombok -->
@@ -248,11 +255,46 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <release>${java.version}</release>
-          <source>8</source>
-          <target>8</target>
         </configuration>
       </plugin>
     </plugins>
   </build>
+
+  <!-- Optional toolchain enforcement profile. Enable with -Penforce-toolchain or -DenforceToolchain=true -->
+  <profiles>
+    <profile>
+      <id>enforce-toolchain</id>
+      <activation>
+        <property>
+          <name>enforceToolchain</name>
+          <value>true</value>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-toolchains-plugin</artifactId>
+            <version>3.0.0</version>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>toolchain</goal>
+                </goals>
+              </execution>
+            </executions>
+            <configuration>
+              <toolchains>
+                <jdk>
+                  <version>21</version>
+                  <vendor>any</vendor>
+                </jdk>
+              </toolchains>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 
 </project>

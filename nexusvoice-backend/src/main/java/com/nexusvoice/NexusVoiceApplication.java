@@ -11,4 +11,3 @@ public class NexusVoiceApplication {
         SpringApplication.run(NexusVoiceApplication.class, args);
     }
 }
-

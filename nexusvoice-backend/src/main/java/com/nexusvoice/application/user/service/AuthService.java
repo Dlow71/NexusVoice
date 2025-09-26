@@ -144,7 +144,7 @@ public class AuthService {
             }
 
             // 从令牌中获取用户信息
-            String userId = jwtUtils.getUserIdFromToken(refreshToken);
+            Long userId = jwtUtils.getUserIdFromToken(refreshToken);
             Optional<User> userOpt = userRepository.findById(userId);
 
             if (userOpt.isEmpty()) {

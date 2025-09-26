@@ -76,6 +76,20 @@ public enum ErrorCodeEnum {
     AI_MODEL_NOT_AVAILABLE(1502, "AI模型不可用"),
     AI_REQUEST_FAILED(1503, "AI请求失败"),
     AI_RESPONSE_INVALID(1504, "AI响应无效"),
+    AI_TOKEN_LIMIT_EXCEEDED(1505, "AI令牌数量超出限制"),
+    AI_RATE_LIMIT_EXCEEDED(1506, "AI请求频率超出限制"),
+    AI_API_KEY_INVALID(1507, "AI API密钥无效"),
+    AI_MODEL_CONFIG_ERROR(1508, "AI模型配置错误"),
+    
+    // 对话相关 20xx
+    CONVERSATION_NOT_FOUND(2001, "对话不存在"),
+    CONVERSATION_ACCESS_DENIED(2002, "无权访问此对话"),
+    CONVERSATION_MESSAGE_LIMIT_EXCEEDED(2003, "对话消息数量超出限制"),
+    CONVERSATION_TOKEN_LIMIT_EXCEEDED(2004, "对话令牌数量超出限制"),
+    CONVERSATION_STATUS_INVALID(2005, "对话状态无效"),
+    MESSAGE_NOT_FOUND(2006, "消息不存在"),
+    MESSAGE_CONTENT_EMPTY(2007, "消息内容不能为空"),
+    MESSAGE_CONTENT_TOO_LONG(2008, "消息内容过长"),
     
     // WebSocket相关 16xx
     WEBSOCKET_CONNECTION_FAILED(1601, "WebSocket连接失败"),

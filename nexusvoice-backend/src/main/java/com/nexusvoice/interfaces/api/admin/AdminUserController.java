@@ -88,7 +88,7 @@ public class AdminUserController {
     @Operation(summary = "获取用户详情", description = "根据用户ID获取用户详细信息")
     @GetMapping("/{userId}")
     public Result<UserDetailResponse> getUserDetail(
-            @Parameter(description = "用户ID") @PathVariable String userId) {
+            @Parameter(description = "用户ID") @PathVariable Long userId) {
         
         log.info("获取用户详情: userId={}", userId);
         
@@ -165,7 +165,7 @@ public class AdminUserController {
     @Operation(summary = "更新用户信息", description = "管理员更新用户信息")
     @PutMapping("/{userId}")
     public Result<Void> updateUser(
-            @Parameter(description = "用户ID") @PathVariable String userId,
+            @Parameter(description = "用户ID") @PathVariable Long userId,
             @Valid @RequestBody UpdateUserRequest request) {
         
         log.info("更新用户信息: userId={}, request={}", userId, request);
@@ -222,7 +222,7 @@ public class AdminUserController {
     @Operation(summary = "重置用户密码", description = "管理员重置用户密码")
     @PutMapping("/{userId}/password")
     public Result<Void> resetPassword(
-            @Parameter(description = "用户ID") @PathVariable String userId,
+            @Parameter(description = "用户ID") @PathVariable Long userId,
             @RequestBody Map<String, String> request) {
         
         log.info("重置用户密码: userId={}", userId);
@@ -254,7 +254,7 @@ public class AdminUserController {
      */
     @Operation(summary = "封禁用户", description = "封禁指定用户")
     @PutMapping("/{userId}/ban")
-    public Result<Void> banUser(@Parameter(description = "用户ID") @PathVariable String userId) {
+    public Result<Void> banUser(@Parameter(description = "用户ID") @PathVariable Long userId) {
         log.info("封禁用户: userId={}", userId);
         
         Optional<User> userOpt = userRepository.findById(userId);
@@ -275,7 +275,7 @@ public class AdminUserController {
      */
     @Operation(summary = "解封用户", description = "解封指定用户")
     @PutMapping("/{userId}/unban")
-    public Result<Void> unbanUser(@Parameter(description = "用户ID") @PathVariable String userId) {
+    public Result<Void> unbanUser(@Parameter(description = "用户ID") @PathVariable Long userId) {
         log.info("解封用户: userId={}", userId);
         
         Optional<User> userOpt = userRepository.findById(userId);
@@ -296,7 +296,7 @@ public class AdminUserController {
      */
     @Operation(summary = "删除用户", description = "软删除指定用户")
     @DeleteMapping("/{userId}")
-    public Result<Void> deleteUser(@Parameter(description = "用户ID") @PathVariable String userId) {
+    public Result<Void> deleteUser(@Parameter(description = "用户ID") @PathVariable Long userId) {
         log.info("删除用户: userId={}", userId);
         
         Optional<User> userOpt = userRepository.findById(userId);

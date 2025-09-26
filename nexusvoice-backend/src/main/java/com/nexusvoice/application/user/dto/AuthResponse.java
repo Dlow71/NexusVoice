@@ -45,7 +45,7 @@ public class AuthResponse {
     @Schema(description = "用户信息")
     public static class UserInfo {
         @Schema(description = "用户ID")
-        private String id;
+        private Long id;
 
         @Schema(description = "邮箱")
         private String email;
@@ -65,7 +65,7 @@ public class AuthResponse {
         // 构造函数
         public UserInfo() {}
 
-        public UserInfo(String id, String email, String nickname, String avatarUrl, 
+        public UserInfo(Long id, String email, String nickname, String avatarUrl, 
                        UserType userType, Boolean emailVerified) {
             this.id = id;
             this.email = email;
@@ -76,11 +76,11 @@ public class AuthResponse {
         }
 
         // Getter and Setter methods
-        public String getId() {
+        public Long getId() {
             return id;
         }
 
-        public void setId(String id) {
+        public void setId(Long id) {
             this.id = id;
         }
 
