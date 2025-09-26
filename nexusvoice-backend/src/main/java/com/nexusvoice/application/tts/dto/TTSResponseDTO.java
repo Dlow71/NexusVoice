@@ -13,7 +13,7 @@ import lombok.Data;
 @Schema(description = "TTS文本转语音响应")
 public class TTSResponseDTO {
 
-    @Schema(description = "音频数据(Base64编码)", example = "UklGRnoGAABXQVZFZm10...")
+    @Schema(description = "音频文件URL", example = "https://cdn.example.com/audio/tts_audio_1695552000000.mp3")
     private String audioData;
 
     @Schema(description = "音频格式", example = "mp3")
