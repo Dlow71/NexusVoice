@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -45,7 +44,7 @@ public class RoleApplicationService {
     /**
      * 获取公共角色详情
      */
-    public RoleDTO getPublicRoleDetail(String roleId) {
+    public RoleDTO getPublicRoleDetail(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
         if (!Boolean.TRUE.equals(role.getIsPublic())) {
@@ -73,7 +72,7 @@ public class RoleApplicationService {
      * 管理员编辑公共角色
      */
     @Transactional
-    public void updatePublicRole(String roleId, RoleUpdateRequest request) {
+    public void updatePublicRole(Long roleId, RoleUpdateRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
         if (!Boolean.TRUE.equals(role.getIsPublic())) {
@@ -88,7 +87,7 @@ public class RoleApplicationService {
      * 管理员删除公共角色（逻辑删除）
      */
     @Transactional
-    public void deletePublicRole(String roleId) {
+    public void deletePublicRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
         if (!Boolean.TRUE.equals(role.getIsPublic())) {
@@ -101,7 +100,7 @@ public class RoleApplicationService {
     /**
      * 管理员分页查看所有用户的私人角色，支持按用户过滤
      */
-    public PageResult<RoleDTO> pageAllPrivateRoles(Integer page, Integer size, String keyword, String userId) {
+    public PageResult<RoleDTO> pageAllPrivateRoles(Integer page, Integer size, String keyword, Long userId) {
         PageResult<Role> pageResult = roleRepository.pageAllPrivateRoles(page, size, keyword, userId);
         List<RoleDTO> list = RoleAssembler.toDTOList(pageResult.getRecords());
         return new PageResult<>(list, pageResult.getTotal(), pageResult.getCurrent(), pageResult.getSize());
@@ -113,8 +112,8 @@ public class RoleApplicationService {
      * 用户创建私人角色
      */
     @Transactional
-    public RoleDTO createPrivateRole(String currentUserId, RoleCreateRequest request) {
-        if (!StringUtils.hasText(currentUserId)) {
+    public RoleDTO createPrivateRole(Long currentUserId, RoleCreateRequest request) {
+        if (currentUserId == null) {
             throw BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录");
         }
         validateCreateRequest(request);
@@ -129,7 +128,7 @@ public class RoleApplicationService {
      * 用户编辑自己的私人角色
      */
     @Transactional
-    public void updatePrivateRole(String currentUserId, String roleId, RoleUpdateRequest request) {
+    public void updatePrivateRole(Long currentUserId, Long roleId, RoleUpdateRequest request) {
         Role role = ensureOwnedPrivateRole(currentUserId, roleId);
         RoleAssembler.copyToRole(request, role);
         roleRepository.update(role);
@@ -140,7 +139,7 @@ public class RoleApplicationService {
      * 用户删除自己的私人角色（逻辑删除）
      */
     @Transactional
-    public void deletePrivateRole(String currentUserId, String roleId) {
+    public void deletePrivateRole(Long currentUserId, Long roleId) {
         ensureOwnedPrivateRole(currentUserId, roleId);
         roleRepository.deleteById(roleId);
         log.info("用户 {} 删除私人角色成功: {}", currentUserId, roleId);
@@ -149,7 +148,7 @@ public class RoleApplicationService {
     /**
      * 用户分页查看自己的私人角色
      */
-    public PageResult<RoleDTO> pageMyPrivateRoles(String currentUserId, Integer page, Integer size, String keyword) {
+    public PageResult<RoleDTO> pageMyPrivateRoles(Long currentUserId, Integer page, Integer size, String keyword) {
         PageResult<Role> pageResult = roleRepository.pageUserPrivateRoles(page, size, keyword, currentUserId);
         List<RoleDTO> list = RoleAssembler.toDTOList(pageResult.getRecords());
         return new PageResult<>(list, pageResult.getTotal(), pageResult.getCurrent(), pageResult.getSize());
@@ -164,8 +163,8 @@ public class RoleApplicationService {
     /**
      * 确保是当前用户拥有的私人角色
      */
-    private Role ensureOwnedPrivateRole(String currentUserId, String roleId) {
-        if (!StringUtils.hasText(currentUserId)) {
+    private Role ensureOwnedPrivateRole(Long currentUserId, Long roleId) {
+        if (currentUserId == null) {
             throw BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录");
         }
         Optional<Role> roleOpt = roleRepository.findById(roleId);

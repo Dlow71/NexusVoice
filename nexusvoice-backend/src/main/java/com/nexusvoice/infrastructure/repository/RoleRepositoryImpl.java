@@ -26,7 +26,7 @@ public class RoleRepositoryImpl implements RoleRepository {
     private RoleMapper roleMapper;
 
     @Override
-    public Optional<Role> findById(String id) {
+    public Optional<Role> findById(Long id) {
         return Optional.ofNullable(roleMapper.selectById(id));
     }
 
@@ -56,7 +56,7 @@ public class RoleRepositoryImpl implements RoleRepository {
     }
 
     @Override
-    public void deleteById(String id) {
+    public void deleteById(Long id) {
         roleMapper.deleteById(id);
     }
 
@@ -75,13 +75,13 @@ public class RoleRepositoryImpl implements RoleRepository {
     }
 
     @Override
-    public PageResult<Role> pageAllPrivateRoles(Integer page, Integer size, String keyword, String userId) {
+    public PageResult<Role> pageAllPrivateRoles(Integer page, Integer size, String keyword, Long userId) {
         LambdaQueryWrapper<Role> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Role::getIsPublic, false);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(Role::getName, keyword).or().like(Role::getDescription, keyword));
         }
-        if (StringUtils.hasText(userId)) {
+        if (userId != null) {
             wrapper.eq(Role::getUserId, userId);
         }
         wrapper.orderByDesc(Role::getCreatedAt);
@@ -92,7 +92,7 @@ public class RoleRepositoryImpl implements RoleRepository {
     }
 
     @Override
-    public PageResult<Role> pageUserPrivateRoles(Integer page, Integer size, String keyword, String ownerUserId) {
+    public PageResult<Role> pageUserPrivateRoles(Integer page, Integer size, String keyword, Long ownerUserId) {
         LambdaQueryWrapper<Role> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Role::getIsPublic, false);
         wrapper.eq(Role::getUserId, ownerUserId);

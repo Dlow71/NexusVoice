@@ -56,14 +56,14 @@ public class AdminRoleController {
 
     @Operation(summary = "公共角色详情", description = "获取公共角色详情")
     @GetMapping("/public/{id}")
-    public Result<RoleDTO> getPublicRoleDetail(@PathVariable("id") String id) {
+    public Result<RoleDTO> getPublicRoleDetail(@PathVariable("id") Long id) {
         RoleDTO dto = roleApplicationService.getPublicRoleDetail(id);
         return Result.success("查询成功", dto);
     }
 
     @Operation(summary = "编辑公共角色", description = "管理员编辑公共角色")
     @PutMapping("/public/{id}")
-    public Result<Void> updatePublicRole(@PathVariable("id") String id,
+    public Result<Void> updatePublicRole(@PathVariable("id") Long id,
                                          @Valid @RequestBody RoleUpdateRequest request) {
         roleApplicationService.updatePublicRole(id, request);
         return Result.success("更新成功");
@@ -71,7 +71,7 @@ public class AdminRoleController {
 
     @Operation(summary = "删除公共角色", description = "管理员删除公共角色（逻辑删除）")
     @DeleteMapping("/public/{id}")
-    public Result<Void> deletePublicRole(@PathVariable("id") String id) {
+    public Result<Void> deletePublicRole(@PathVariable("id") Long id) {
         roleApplicationService.deletePublicRole(id);
         return Result.success("删除成功");
     }
@@ -84,7 +84,7 @@ public class AdminRoleController {
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "每页大小", example = "10") @RequestParam(defaultValue = "10") Integer size,
             @Parameter(description = "搜索关键字") @RequestParam(required = false) String keyword,
-            @Parameter(description = "用户ID过滤") @RequestParam(required = false) String userId) {
+            @Parameter(description = "用户ID过滤") @RequestParam(required = false) Long userId) {
         PageResult<RoleDTO> result = roleApplicationService.pageAllPrivateRoles(page, size, keyword, userId);
         return Result.success("查询成功", result);
     }

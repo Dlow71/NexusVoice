@@ -46,7 +46,7 @@ public class RoleController {
 
     @Operation(summary = "公共角色详情", description = "查看公共角色详情")
     @GetMapping("/public/{id}")
-    public Result<RoleDTO> getPublicRoleDetail(@PathVariable("id") String id) {
+    public Result<RoleDTO> getPublicRoleDetail(@PathVariable("id") Long id) {
         RoleDTO dto = roleApplicationService.getPublicRoleDetail(id);
         return Result.success("查询成功", dto);
     }
@@ -60,7 +60,7 @@ public class RoleController {
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "每页大小", example = "10") @RequestParam(defaultValue = "10") Integer size,
             @Parameter(description = "搜索关键字") @RequestParam(required = false) String keyword) {
-        String userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
+        Long userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         PageResult<RoleDTO> result = roleApplicationService.pageMyPrivateRoles(userId, page, size, keyword);
         return Result.success("查询成功", result);
     }
@@ -69,7 +69,7 @@ public class RoleController {
     @RequireUser
     @PostMapping("/private")
     public Result<RoleDTO> createPrivateRole(@Valid @RequestBody RoleCreateRequest request) {
-        String userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
+        Long userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         RoleDTO dto = roleApplicationService.createPrivateRole(userId, request);
         return Result.success("创建成功", dto);
     }
@@ -77,9 +77,9 @@ public class RoleController {
     @Operation(summary = "编辑私人角色", description = "编辑自己创建的私人角色")
     @RequireUser
     @PutMapping("/private/{id}")
-    public Result<Void> updatePrivateRole(@PathVariable("id") String id,
+    public Result<Void> updatePrivateRole(@PathVariable("id") Long id,
                                           @Valid @RequestBody RoleUpdateRequest request) {
-        String userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
+        Long userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         roleApplicationService.updatePrivateRole(userId, id, request);
         return Result.success("更新成功");
     }
@@ -87,8 +87,8 @@ public class RoleController {
     @Operation(summary = "删除私人角色", description = "删除自己创建的私人角色（逻辑删除）")
     @RequireUser
     @DeleteMapping("/private/{id}")
-    public Result<Void> deletePrivateRole(@PathVariable("id") String id) {
-        String userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
+    public Result<Void> deletePrivateRole(@PathVariable("id") Long id) {
+        Long userId = SecurityUtils.getCurrentUserId().orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         roleApplicationService.deletePrivateRole(userId, id);
         return Result.success("删除成功");
     }
