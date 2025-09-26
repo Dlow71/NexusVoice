@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 public class UserInfo {
 
     @Schema(description = "用户ID")
-    private String id;
+    private Long id;
 
     @Schema(description = "邮箱")
     private String email;
@@ -59,11 +59,11 @@ public class UserInfo {
     public UserInfo() {}
 
     // Getter and Setter methods
-    public String getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

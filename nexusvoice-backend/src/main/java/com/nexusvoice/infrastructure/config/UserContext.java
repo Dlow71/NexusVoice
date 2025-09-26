@@ -21,7 +21,7 @@ public class UserContext {
      * @return 用户ID
      * @throws BizException 如果用户未登录
      */
-    public static String getCurrentUserId() {
+    public static Long getCurrentUserId() {
         JwtAuthenticationFilter.UserPrincipal userPrincipal = getCurrentUserPrincipal();
         if (userPrincipal == null) {
             throw BizException.of(ErrorCodeEnum.UNAUTHORIZED, "用户未登录");
@@ -76,7 +76,7 @@ public class UserContext {
      * 
      * @return 用户ID，如果未登录返回null
      */
-    public static String getCurrentUserIdOptional() {
+    public static Long getCurrentUserIdOptional() {
         JwtAuthenticationFilter.UserPrincipal userPrincipal = getCurrentUserPrincipal();
         return userPrincipal != null ? userPrincipal.getUserId() : null;
     }

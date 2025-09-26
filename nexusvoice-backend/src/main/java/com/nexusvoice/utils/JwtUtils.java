@@ -96,7 +96,7 @@ public class JwtUtils {
      * @param userType 用户类型
      * @return JWT令牌
      */
-    public String generateAccessToken(String userId, String username, UserType userType) {
+    public String generateAccessToken(Long userId, String username, UserType userType) {
         String roles = "ROLE_" + userType.getCode();
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_USER_ID, userId);
@@ -114,7 +114,7 @@ public class JwtUtils {
      * @param username 用户名
      * @return 刷新令牌
      */
-    public String generateRefreshToken(String userId, String username) {
+    public String generateRefreshToken(Long userId, String username) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(CLAIM_USER_ID, userId);
         claims.put(CLAIM_USERNAME, username);
@@ -200,9 +200,19 @@ public class JwtUtils {
      * @param token JWT令牌
      * @return 用户ID
      */
-    public String getUserIdFromToken(String token) {
+    public Long getUserIdFromToken(String token) {
         Claims claims = parseToken(token);
-        return (String) claims.get(CLAIM_USER_ID);
+        Object userIdObj = claims.get(CLAIM_USER_ID);
+        if (userIdObj instanceof Long) {
+            return (Long) userIdObj;
+        } else if (userIdObj instanceof String) {
+            // 兼容旧版本的String类型ID
+            return Long.valueOf((String) userIdObj);
+        } else if (userIdObj instanceof Integer) {
+            // 兼容Integer类型
+            return ((Integer) userIdObj).longValue();
+        }
+        throw new IllegalArgumentException("无效的用户ID类型: " + userIdObj.getClass());
     }
     
     /**
@@ -320,7 +330,7 @@ public class JwtUtils {
         }
         
         Claims claims = parseToken(refreshToken);
-        String userId = getUserIdFromToken(refreshToken);
+        Long userId = getUserIdFromToken(refreshToken);
         String username = claims.getSubject();
         UserType userType = getUserTypeFromToken(refreshToken);
         

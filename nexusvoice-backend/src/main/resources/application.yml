@@ -9,6 +9,22 @@ spring:
   threads:
     virtual:
       enabled: true
+  # Jackson配置
+  jackson:
+    # 时区配置
+    time-zone: GMT+8
+    # 序列化配置
+    serialization:
+      # 禁用将日期写为时间戳
+      write-dates-as-timestamps: false
+      # 禁用将日期写为数组
+      write-date-timestamps-as-nanoseconds: false
+    # 反序列化配置
+    deserialization:
+      # 允许未知属性
+      fail-on-unknown-properties: false
+      # 允许空字符串转为null
+      accept-empty-string-as-null-object: true
   # 数据源配置 - 使用Druid连接池
   datasource:
     type: com.alibaba.druid.pool.DruidDataSource
@@ -100,18 +116,7 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
-# LangChain4j配置 - 敏感信息在 application-local.yml 中配置
-langchain4j:
-  open-ai:
-    # API密钥在 application-local.yml 中配置
-    api-key: ${OPENAI_API_KEY:please-set-in-application-local-yml}
-    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
-    chat-model:
-      model-name: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
-      temperature: ${OPENAI_TEMPERATURE:0.7}
-      max-tokens: ${OPENAI_MAX_TOKENS:2000}
-    embedding-model:
-      model-name: ${OPENAI_EMBEDDING_MODEL:text-embedding-3-small}
+
 
 # JWT配置 - 敏感信息在 application-local.yml 中配置
 jwt:

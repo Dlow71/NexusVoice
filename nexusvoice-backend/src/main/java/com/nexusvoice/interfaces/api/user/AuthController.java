@@ -1,3 +1,4 @@
+
 package com.nexusvoice.interfaces.api.user;
 
 import com.nexusvoice.annotation.RequireAuth;
@@ -133,7 +134,7 @@ public class AuthController {
     @GetMapping("/me")
     @RequireAuth
     public Result<AuthResponse.UserInfo> getCurrentUser() {
-        String userId = SecurityUtils.getCurrentUserId()
+        Long userId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         
         String username = SecurityUtils.getCurrentUsername().orElse("");

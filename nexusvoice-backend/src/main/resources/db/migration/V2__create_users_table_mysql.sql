@@ -5,8 +5,8 @@
 -- 日期: 2025-09-23
 
 CREATE TABLE users (
-    -- 主键ID，使用VARCHAR存储UUID
-    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    -- 主键ID，使用BIGINT存储雪花ID
+    id BIGINT NOT NULL PRIMARY KEY,
     
     -- 基本信息
     email VARCHAR(100) NOT NULL UNIQUE,
@@ -52,7 +52,7 @@ ALTER TABLE users COMMENT = '用户表';
 
 -- 添加字段注释
 ALTER TABLE users 
-MODIFY COLUMN id VARCHAR(36) NOT NULL COMMENT '用户唯一ID (UUID)',
+MODIFY COLUMN id BIGINT NOT NULL COMMENT '用户唯一ID (雪花ID)',
 MODIFY COLUMN email VARCHAR(100) NOT NULL COMMENT '用户登录邮箱',
 MODIFY COLUMN password_hash VARCHAR(255) NOT NULL COMMENT '加密后的用户密码',
 MODIFY COLUMN nickname VARCHAR(50) NOT NULL COMMENT '用户昵称',
@@ -79,7 +79,7 @@ INSERT INTO users (
     created_at,
     updated_at
 ) VALUES (
-    'admin-uuid-0000-0000-000000000001',
+    1,
     'admin@nexusvoice.com',
     '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iYqiSfFVMLVZqpjn/6M.ltU6Td4e', -- admin123
     '系统管理员',
