@@ -31,7 +31,7 @@ public class SearchTestController {
     }
     
     @GetMapping("/web")
-    @Operation(summary = "测试网页搜索", description = "测试DuckDuckGo网页搜索功能")
+    @Operation(summary = "测试网页搜索", description = "测试Tavily网页搜索功能")
     public Result<SearchResult> testWebSearch(
             @Parameter(description = "搜索查询", example = "人工智能最新发展")
             @RequestParam String query) {

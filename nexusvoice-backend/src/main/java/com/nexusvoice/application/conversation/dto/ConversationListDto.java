@@ -50,4 +50,11 @@ public class ConversationListDto {
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createdAt;
+
+    @Schema(description = "绑定的角色ID")
+    @JsonSerialize(using = ToStringSerializer.class)
+    private Long roleId;
+
+    @Schema(description = "角色信息")
+    private RoleInfoDto role;
 }
