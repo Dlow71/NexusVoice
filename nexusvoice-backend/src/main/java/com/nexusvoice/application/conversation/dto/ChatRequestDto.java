@@ -1,5 +1,7 @@
 package com.nexusvoice.application.conversation.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
@@ -43,5 +45,6 @@ public class ChatRequestDto {
     private Boolean enableWebSearch = false;
 
     @Schema(description = "角色ID，指定AI扮演的角色", example = "1")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long roleId;
 }

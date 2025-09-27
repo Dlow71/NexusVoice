@@ -29,6 +29,7 @@ public class ChatResponseDto {
     private Long conversationId;
 
     @Schema(description = "消息ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long messageId;
 
     @Schema(description = "AI回复内容")

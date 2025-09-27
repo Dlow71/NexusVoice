@@ -1,7 +1,10 @@
 package com.nexusvoice.domain.conversation.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.nexusvoice.domain.common.BaseEntity;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
 import lombok.Data;
@@ -73,6 +76,8 @@ public class ConversationMessage extends BaseEntity {
     /**
      * 消息发送时间
      */
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime sentAt;
 
     /**

@@ -246,6 +246,54 @@ public class ConversationApplicationService {
 
         Conversation conversation = conversationDomainService.createConversation(userId, title, modelName, systemPrompt, request.getRoleId());
 
+        // 如果绑定了角色且角色有开场白，将开场白作为第一条助手消息保存
+        if (request.getRoleId() != null) {
+            try {
+                Role role = roleApplicationService.getRoleForChat(request.getRoleId(), userId);
+                if (role != null && role.getGreetingMessage() != null && !role.getGreetingMessage().trim().isEmpty()) {
+                    // 如果角色未配置开场白音频，则尝试按角色语音类型生成
+                    String greetingAudioUrl = role.getGreetingAudioUrl();
+                    if (greetingAudioUrl == null || greetingAudioUrl.trim().isEmpty()) {
+                        try {
+                            TTSRequestDTO ttsReq = new TTSRequestDTO();
+                            ttsReq.setText(role.getGreetingMessage().trim());
+                            String selectedVoiceType = (role.getVoiceType() != null && !role.getVoiceType().trim().isEmpty())
+                                    ? role.getVoiceType().trim()
+                                    : "qiniu_zh_female_wwxkjx";
+                            ttsReq.setVoiceType(selectedVoiceType);
+                            ttsReq.setEncoding("mp3");
+                            ttsReq.setSpeedRatio(1.0);
+                            log.info("创建会话时为角色开场白生成TTS音频，使用语音类型：{}，角色ID：{}", selectedVoiceType, role.getId());
+                            TTSResponseDTO ttsRes = ttsService.textToSpeech(ttsReq);
+                            if (ttsRes != null && ttsRes.getAudioData() != null && !ttsRes.getAudioData().trim().isEmpty()) {
+                                greetingAudioUrl = ttsRes.getAudioData();
+                            }
+                        } catch (Exception ttsEx) {
+                            log.warn("创建会话时生成角色开场白音频失败，角色ID：{}，错误：{}", role.getId(), ttsEx.getMessage());
+                        }
+                    }
+
+                    // 创建开场白消息
+                    ConversationMessage greetingMessage = ConversationMessage.createAssistantMessage(
+                            conversation.getId(),
+                            role.getGreetingMessage().trim(),
+                            messageRepository.getNextSequenceByConversationId(conversation.getId()),
+                            greetingAudioUrl // 使用角色配置或生成的开场白音频URL
+                    );
+                    
+                    // 保存开场白消息
+                    conversationDomainService.addMessageToConversation(conversation.getId(), greetingMessage);
+                    
+                    log.info("为会话添加角色开场白消息，会话ID：{}，角色ID：{}，角色名称：{}", 
+                            conversation.getId(), role.getId(), role.getName());
+                }
+            } catch (Exception e) {
+                // 角色获取失败不影响会话创建，只记录日志
+                log.warn("获取角色开场白失败，角色ID：{}，用户ID：{}，错误：{}，会话创建继续", 
+                        request.getRoleId(), userId, e.getMessage());
+            }
+        }
+
         return ConversationCreateResponse.builder()
                 .conversationId(conversation.getId())
                 .title(conversation.getTitle())
