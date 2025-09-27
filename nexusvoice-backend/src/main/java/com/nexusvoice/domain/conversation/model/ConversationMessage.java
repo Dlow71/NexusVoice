@@ -1,5 +1,7 @@
 package com.nexusvoice.domain.conversation.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.nexusvoice.domain.common.BaseEntity;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
 import lombok.Data;

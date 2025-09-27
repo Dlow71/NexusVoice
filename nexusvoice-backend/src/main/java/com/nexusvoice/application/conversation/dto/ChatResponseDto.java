@@ -1,5 +1,7 @@
 package com.nexusvoice.application.conversation.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
@@ -19,6 +21,7 @@ import java.time.LocalDateTime;
 public class ChatResponseDto {
 
     @Schema(description = "对话ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
 
     @Schema(description = "消息ID")
