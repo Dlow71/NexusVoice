@@ -40,6 +40,11 @@ public class ConversationMessage extends BaseEntity {
     private String content;
 
     /**
+     * AI回复语音地址
+     */
+    private String audioUrl;
+
+    /**
      * 消息序号（在对话中的顺序）
      */
     private Integer sequence;
@@ -93,6 +98,21 @@ public class ConversationMessage extends BaseEntity {
         message.setRole(MessageRole.ASSISTANT);
         message.setContent(content);
         message.setSequence(sequence);
+        message.setStatus("sent");
+        message.setSentAt(LocalDateTime.now());
+        return message;
+    }
+
+    /**
+     * 创建AI回复消息（包含音频URL）
+     */
+    public static ConversationMessage createAssistantMessage(Long conversationId, String content, Integer sequence, String audioUrl) {
+        ConversationMessage message = new ConversationMessage();
+        message.setConversationId(conversationId);
+        message.setRole(MessageRole.ASSISTANT);
+        message.setContent(content);
+        message.setSequence(sequence);
+        message.setAudioUrl(audioUrl);
         message.setStatus("sent");
         message.setSentAt(LocalDateTime.now());
         return message;
