@@ -262,7 +262,7 @@ public class ChatStreamHandler implements WebSocketHandler {
      */
     private ChatRequest buildStreamAiRequest(Conversation conversation, ChatRequestDto requestDto) {
         // 获取对话历史（限制数量）
-        List<ConversationMessage> history = conversationApplicationService.getConversationHistory(
+        List<ConversationMessage> history = conversationApplicationService.getConversationHistoryForInternal(
                 conversation.getId(), conversation.getUserId());
         
         List<ChatMessage> messages = new ArrayList<>();

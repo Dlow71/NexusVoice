@@ -5,6 +5,8 @@ import com.nexusvoice.application.conversation.dto.ChatResponseDto;
 import com.nexusvoice.application.conversation.dto.ConversationListDto;
 import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
 import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
+import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
+import com.nexusvoice.application.conversation.assembler.ConversationAssembler;
 import com.nexusvoice.application.role.service.RoleApplicationService;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
@@ -15,12 +17,15 @@ import com.nexusvoice.domain.conversation.repository.ConversationRepository;
 import com.nexusvoice.domain.conversation.repository.ConversationMessageRepository;
 import com.nexusvoice.domain.conversation.service.ConversationDomainService;
 import com.nexusvoice.domain.role.model.Role;
+import com.nexusvoice.enums.ErrorCodeEnum;
+import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
-import com.nexusvoice.enums.ErrorCodeEnum;
-import com.nexusvoice.exception.BizException;
+import com.nexusvoice.utils.SecurityUtils;
+import com.nexusvoice.utils.JwtUtils;
+import com.nexusvoice.utils.MarkdownTextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -110,8 +115,11 @@ public class ConversationApplicationService {
                 // 8. 调用TTS服务生成音频
                 String audioUrl = null;
                 try {
+                    // 清理Markdown格式，使文本适合语音合成
+                    String cleanedText = MarkdownTextUtils.cleanForTTS(aiResponse.getContent());
+                    
                     TTSRequestDTO ttsRequest = new TTSRequestDTO();
-                    ttsRequest.setText(aiResponse.getContent());
+                    ttsRequest.setText(cleanedText);
                     // 优先使用角色的语音类型，其次使用默认
                     String selectedVoiceType = (role != null && role.getVoiceType() != null && !role.getVoiceType().trim().isEmpty())
                             ? role.getVoiceType().trim()
@@ -120,7 +128,8 @@ public class ConversationApplicationService {
                     ttsRequest.setEncoding("mp3"); // 默认音频格式
                     ttsRequest.setSpeedRatio(1.0); // 默认语速
                     
-                    log.info("使用TTS语音类型：{}，对话ID：{}", selectedVoiceType, conversation.getId());
+                    log.info("使用TTS语音类型：{}，对话ID：{}，{}", selectedVoiceType, conversation.getId(), 
+                            MarkdownTextUtils.getCleaningStats(aiResponse.getContent(), cleanedText));
                     TTSResponseDTO ttsResponse = ttsService.textToSpeech(ttsRequest);
                     audioUrl = ttsResponse.getAudioData(); // TTSService返回的是音频URL
                     
@@ -194,30 +203,68 @@ public class ConversationApplicationService {
             // 获取消息数量
             Long messageCount = messageRepository.countByConversationId(conversation.getId());
             
-            return ConversationListDto.builder()
-                    .id(conversation.getId())
-                    .title(conversation.getTitle())
-                    .modelName(conversation.getModelName())
-                    .status(conversation.getStatus().name())
-                    .lastMessage(lastMessage != null ? 
-                            (lastMessage.getContent().length() > 100 ? 
-                                    lastMessage.getContent().substring(0, 100) + "..." : 
-                                    lastMessage.getContent()) : 
-                            null)
-                    .messageCount(messageCount.intValue())
-                    .lastActiveAt(conversation.getLastActiveAt())
-                    .createdAt(conversation.getCreatedAt())
-                    .build();
+            // 获取绑定的角色信息
+            Role role = null;
+            if (conversation.getRoleId() != null) {
+                try {
+                    role = roleApplicationService.getRoleForChat(conversation.getRoleId(), userId);
+                } catch (Exception e) {
+                    log.warn("获取对话绑定角色失败，对话ID：{}，角色ID：{}，错误：{}", 
+                            conversation.getId(), conversation.getRoleId(), e.getMessage());
+                }
+            }
+            
+            // 构建最后消息预览
+            String lastMessageContent = null;
+            if (lastMessage != null) {
+                lastMessageContent = lastMessage.getContent().length() > 100 ? 
+                        lastMessage.getContent().substring(0, 100) + "..." : 
+                        lastMessage.getContent();
+            }
+            
+            // 使用转换器构建DTO
+            return ConversationAssembler.toConversationListDto(conversation, role, lastMessageContent, messageCount.intValue());
         }).collect(Collectors.toList());
     }
 
     /**
      * 获取对话历史
      */
-    public List<ConversationMessage> getConversationHistory(Long conversationId, Long userId) {
+    public List<ConversationMessageWithRoleDto> getConversationHistory(Long conversationId, Long userId) {
         // 验证权限
         conversationDomainService.validateConversationAccess(conversationId, userId);
         
+        // 获取对话信息
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.CONVERSATION_NOT_FOUND, "对话不存在"));
+        
+        // 获取绑定的角色信息
+        Role role = null;
+        if (conversation.getRoleId() != null) {
+            try {
+                role = roleApplicationService.getRoleForChat(conversation.getRoleId(), userId);
+            } catch (Exception e) {
+                log.warn("获取对话绑定角色失败，对话ID：{}，角色ID：{}，错误：{}", 
+                        conversationId, conversation.getRoleId(), e.getMessage());
+            }
+        }
+        
+        // 获取消息历史
+        List<ConversationMessage> messages = conversationDomainService.getConversationHistory(conversationId);
+        
+        // 转换为包含角色信息的DTO
+        return ConversationAssembler.toConversationMessageWithRoleDtoList(messages, role);
+    }
+
+    /**
+     * 获取对话历史（内部使用，返回原始ConversationMessage）
+     * 用于WebSocket等不需要Role信息的场景
+     */
+    public List<ConversationMessage> getConversationHistoryForInternal(Long conversationId, Long userId) {
+        // 验证权限
+        conversationDomainService.validateConversationAccess(conversationId, userId);
+        
+        // 获取消息历史
         return conversationDomainService.getConversationHistory(conversationId);
     }
 
@@ -255,15 +302,19 @@ public class ConversationApplicationService {
                     String greetingAudioUrl = role.getGreetingAudioUrl();
                     if (greetingAudioUrl == null || greetingAudioUrl.trim().isEmpty()) {
                         try {
+                            // 清理角色开场白的Markdown格式
+                            String cleanedGreeting = MarkdownTextUtils.cleanForTTS(role.getGreetingMessage().trim());
+                            
                             TTSRequestDTO ttsReq = new TTSRequestDTO();
-                            ttsReq.setText(role.getGreetingMessage().trim());
+                            ttsReq.setText(cleanedGreeting);
                             String selectedVoiceType = (role.getVoiceType() != null && !role.getVoiceType().trim().isEmpty())
                                     ? role.getVoiceType().trim()
                                     : "qiniu_zh_female_wwxkjx";
                             ttsReq.setVoiceType(selectedVoiceType);
                             ttsReq.setEncoding("mp3");
                             ttsReq.setSpeedRatio(1.0);
-                            log.info("创建会话时为角色开场白生成TTS音频，使用语音类型：{}，角色ID：{}", selectedVoiceType, role.getId());
+                            log.info("创建会话时为角色开场白生成TTS音频，使用语音类型：{}，角色ID：{}，{}", selectedVoiceType, role.getId(),
+                                    MarkdownTextUtils.getCleaningStats(role.getGreetingMessage().trim(), cleanedGreeting));
                             TTSResponseDTO ttsRes = ttsService.textToSpeech(ttsReq);
                             if (ttsRes != null && ttsRes.getAudioData() != null && !ttsRes.getAudioData().trim().isEmpty()) {
                                 greetingAudioUrl = ttsRes.getAudioData();
