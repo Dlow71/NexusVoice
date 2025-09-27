@@ -10,23 +10,14 @@
     <header class="header">
       <h1 class="title">Nexus Voice</h1>
       <p class="subtitle">选择一位角色，开启对话</p>
-      <!-- "创建新角色" 按钮 -->
+      <!-- "创建新角色" 按钮 (暂时保留UI，功能待开发) -->
       <button class="create-character-btn">+ 创建新角色</button>
     </header>
 
     <!-- 主内容区域 -->
     <main class="card-grid">
-      <!-- 加载状态 -->
-      <div v-if="isLoading" class="loading-state">
-        正在加载角色...
-      </div>
-      <!-- 错误状态 -->
-      <div v-else-if="error" class="error-state">
-        {{ error }}
-      </div>
-      <!-- 成功获取数据后，渲染角色卡片 -->
+      <!-- 直接循环渲染本地的模拟角色数据 -->
       <CharacterCard
-          v-else
           v-for="character in characters"
           :key="character.id"
           :character="character"
@@ -36,34 +27,21 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import CharacterCard from '../components/CharacterCard.vue';
-// 1. 导入创建的 character.js API 服务
-import characterApi from '../services/character.js';
 
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
 
-// 2. 定义新的状态来管理数据、加载和错误
-const characters = ref([]);
-const isLoading = ref(true);
-const error = ref(null);
+// 移除 isLoading 和 error 状态，并重新启用本地的模拟角色数据
+const characters = ref([
+  { id: 'harry_potter', name: '哈利·波特', description: '来自霍格沃茨的年轻巫师。', avatar: 'placeholder.svg' },
+  { id: 'socrates', name: '苏格拉底', description: '古希腊的哲学家。', avatar: 'placeholder.svg' },
+  { id: 'eva_explorer', name: '宇航员伊娃', description: '一位星际探险家。', avatar: 'placeholder.svg' },
+]);
 
-// 3. 在 onMounted 生命周期钩子中调用 API 获取数据
-onMounted(async () => {
-  try {
-    // 调用 API 获取公共角色列表 (假设第一页，每页10个)
-    const response = await characterApi.getPublicCharacters({ page: 1, size: 10 });
-    // 假设后端返回的数据在 response.data.data.records 中
-    characters.value = response.data.data.records;
-  } catch (err) {
-    console.error("获取角色列表失败:", err);
-    error.value = '无法加载角色列表，请稍后再试。';
-  } finally {
-    isLoading.value = false;
-  }
-});
+// 移除了 onMounted 中的所有 API 调用逻辑，确保页面加载时不会再向后端发送请求
 
 // 定义登出处理函数
 const handleLogout = () => {
@@ -130,7 +108,7 @@ const handleLogout = () => {
   margin-top: 0.5rem;
 }
 
-/* 创建新角色 按钮样式 */
+/* "创建新角色" 按钮样式 */
 .create-character-btn {
   margin-top: 1.5rem;
   background-color: #3b82f6;
@@ -155,19 +133,6 @@ const handleLogout = () => {
   width: 100%;
   max-width: 1200px;
 }
-
-/* 加载和错误状态的样式 */
-.loading-state, .error-state {
-  grid-column: 1 / -1; /* 让这个元素横跨整个网格 */
-  text-align: center;
-  padding: 3rem;
-  color: #9ca3af;
-  font-size: 1.1rem;
-}
-.error-state {
-  color: #f87171;
-}
-
 
 /* 响应式布局 */
 @media (max-width: 1024px) {

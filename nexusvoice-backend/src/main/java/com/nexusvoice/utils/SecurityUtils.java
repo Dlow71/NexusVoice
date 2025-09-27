@@ -43,7 +43,7 @@ public class SecurityUtils {
      * 
      * @return 用户ID
      */
-    public static Optional<String> getCurrentUserId() {
+    public static Optional<Long> getCurrentUserId() {
         return getCurrentUserPrincipal()
                 .map(UserPrincipal::getUserId);
     }

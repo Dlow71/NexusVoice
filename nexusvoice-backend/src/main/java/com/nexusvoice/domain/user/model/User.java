@@ -1,8 +1,6 @@
 package com.nexusvoice.domain.user.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -26,9 +24,7 @@ public class User extends BaseEntity {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "用户唯一ID")
-    @TableId(value = "id", type = IdType.ASSIGN_UUID)
-    private String id;
+    // ID字段继承自BaseEntity (Long类型)
 
     @Schema(description = "用户登录邮箱")
     @TableField("email")
@@ -156,24 +152,17 @@ public class User extends BaseEntity {
         return this.status != null && this.status.isBanned();
     }
 
-//    /**
-//     * 判断邮箱是否已验证
-//     *
-//     * @return true-已验证, false-未验证
-//     */
-//    public boolean isEmailVerified() {
-//        return Boolean.TRUE.equals(this.emailVerified);
-//    }
-
-    // Getter and Setter methods
-    public String getId() {
-        return id;
+    /**
+     * 判断邮箱是否已验证
+     *
+     * @return true-已验证, false-未验证
+     */
+    public boolean hasEmailVerified() {
+        return Boolean.TRUE.equals(this.emailVerified);
     }
 
-    public void setId(String id) {
-        this.id = id;
-    }
-
+    // Getter and Setter methods (ID方法继承自BaseEntity)
+    
     public String getEmail() {
         return email;
     }

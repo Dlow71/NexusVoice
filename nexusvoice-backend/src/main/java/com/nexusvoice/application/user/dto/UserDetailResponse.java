@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 public class UserDetailResponse {
 
     @Schema(description = "用户ID")
-    private String id;
+    private Long id;
 
     @Schema(description = "邮箱")
     private String email;
@@ -58,7 +58,7 @@ public class UserDetailResponse {
     // 构造函数
     public UserDetailResponse() {}
 
-    public UserDetailResponse(String id, String email, String nickname, String avatarUrl,
+    public UserDetailResponse(Long id, String email, String nickname, String avatarUrl,
                              String phone, UserType userType, UserStatus status,
                              Boolean emailVerified, String profileBio,
                              LocalDateTime lastLoginAt, LocalDateTime createdAt,
@@ -78,11 +78,11 @@ public class UserDetailResponse {
     }
 
     // Getter and Setter methods
-    public String getId() {
+    public Long getId() {
         return id;
     }
 
-    public void setId(String id) {
+    public void setId(Long id) {
         this.id = id;
     }
 

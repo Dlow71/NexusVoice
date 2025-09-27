@@ -19,7 +19,7 @@ public interface UserRepository {
      * @param id 用户ID
      * @return 用户信息
      */
-    Optional<User> findById(String id);
+    Optional<User> findById(Long id);
 
     /**
      * 根据邮箱查找用户
@@ -74,7 +74,7 @@ public interface UserRepository {
      *
      * @param id 用户ID
      */
-    void deleteById(String id);
+    void deleteById(Long id);
 
     /**
      * 统计用户总数

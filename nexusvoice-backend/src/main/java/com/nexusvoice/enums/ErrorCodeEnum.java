@@ -76,6 +76,20 @@ public enum ErrorCodeEnum {
     AI_MODEL_NOT_AVAILABLE(1502, "AI模型不可用"),
     AI_REQUEST_FAILED(1503, "AI请求失败"),
     AI_RESPONSE_INVALID(1504, "AI响应无效"),
+    AI_TOKEN_LIMIT_EXCEEDED(1505, "AI令牌数量超出限制"),
+    AI_RATE_LIMIT_EXCEEDED(1506, "AI请求频率超出限制"),
+    AI_API_KEY_INVALID(1507, "AI API密钥无效"),
+    AI_MODEL_CONFIG_ERROR(1508, "AI模型配置错误"),
+    
+    // 对话相关 20xx
+    CONVERSATION_NOT_FOUND(2001, "对话不存在"),
+    CONVERSATION_ACCESS_DENIED(2002, "无权访问此对话"),
+    CONVERSATION_MESSAGE_LIMIT_EXCEEDED(2003, "对话消息数量超出限制"),
+    CONVERSATION_TOKEN_LIMIT_EXCEEDED(2004, "对话令牌数量超出限制"),
+    CONVERSATION_STATUS_INVALID(2005, "对话状态无效"),
+    MESSAGE_NOT_FOUND(2006, "消息不存在"),
+    MESSAGE_CONTENT_EMPTY(2007, "消息内容不能为空"),
+    MESSAGE_CONTENT_TOO_LONG(2008, "消息内容过长"),
     
     // WebSocket相关 16xx
     WEBSOCKET_CONNECTION_FAILED(1601, "WebSocket连接失败"),
@@ -95,7 +109,20 @@ public enum ErrorCodeEnum {
     // 缓存相关 19xx
     CACHE_ERROR(1901, "缓存错误"),
     CACHE_KEY_NOT_FOUND(1902, "缓存键不存在"),
-    CACHE_OPERATION_FAILED(1903, "缓存操作失败");
+    CACHE_OPERATION_FAILED(1903, "缓存操作失败"),
+    
+    // TTS相关 20xx
+    TTS_SERVICE_ERROR(2001, "TTS服务错误"),
+    TTS_TEXT_INVALID(2002, "TTS文本无效"),
+    TTS_VOICE_TYPE_NOT_SUPPORTED(2003, "TTS语音类型不支持"),
+    TTS_AUDIO_FORMAT_NOT_SUPPORTED(2004, "TTS音频格式不支持"),
+    TTS_SPEED_RATIO_INVALID(2005, "TTS语速比例无效"),
+    TTS_GENERATION_FAILED(2006, "TTS音频生成失败"),
+    TTS_CONNECTION_FAILED(2007, "TTS服务连接失败"),
+    TTS_TIMEOUT(2008, "TTS处理超时"),
+    
+    // 通用业务错误
+    BUSINESS_ERROR(9999, "业务处理失败");
     
     /**
      * 错误码

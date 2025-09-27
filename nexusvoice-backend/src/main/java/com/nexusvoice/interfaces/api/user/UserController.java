@@ -52,7 +52,7 @@ public class UserController {
     @Operation(summary = "获取个人信息", description = "获取当前登录用户的详细信息")
     @GetMapping("/profile")
     public Result<AuthResponse.UserInfo> getProfile() {
-        String userId = SecurityUtils.getCurrentUserId()
+        Long userId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         
         log.info("获取用户信息: userId={}", userId);
@@ -81,7 +81,7 @@ public class UserController {
     @Operation(summary = "更新个人信息", description = "更新当前用户的基本信息")
     @PutMapping("/profile")
     public Result<Void> updateProfile(@Valid @RequestBody UpdateProfileRequest request) {
-        String userId = SecurityUtils.getCurrentUserId()
+        Long userId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         
         log.info("更新用户信息: userId={}, request={}", userId, request);
@@ -128,7 +128,7 @@ public class UserController {
     @Operation(summary = "修改密码", description = "修改当前用户的登录密码")
     @PutMapping("/password")
     public Result<Void> changePassword(@Valid @RequestBody ChangePasswordRequest request) {
-        String userId = SecurityUtils.getCurrentUserId()
+        Long userId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         
         log.info("修改密码: userId={}", userId);
@@ -166,7 +166,7 @@ public class UserController {
     public Result<Map<String, String>> uploadAvatar(
             @Parameter(description = "头像文件URL") @RequestParam String avatarUrl) {
         
-        String userId = SecurityUtils.getCurrentUserId()
+        Long userId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
         
         log.info("上传头像: userId={}, avatarUrl={}", userId, avatarUrl);

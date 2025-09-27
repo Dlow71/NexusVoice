@@ -28,7 +28,7 @@ public class UserRepositoryImpl implements UserRepository {
     private UserMapper userMapper;
 
     @Override
-    public Optional<User> findById(String id) {
+    public Optional<User> findById(Long id) {
         User user = userMapper.selectById(id);
         return Optional.ofNullable(user);
     }
@@ -94,7 +94,7 @@ public class UserRepositoryImpl implements UserRepository {
     }
 
     @Override
-    public void deleteById(String id) {
+    public void deleteById(Long id) {
         userMapper.deleteById(id);
     }
 
