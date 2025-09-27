@@ -4,6 +4,9 @@ import com.nexusvoice.application.role.assembler.RoleAssembler;
 import com.nexusvoice.application.role.dto.RoleCreateRequest;
 import com.nexusvoice.application.role.dto.RoleDTO;
 import com.nexusvoice.application.role.dto.RoleUpdateRequest;
+import com.nexusvoice.application.tts.dto.TTSRequestDTO;
+import com.nexusvoice.application.tts.dto.TTSResponseDTO;
+import com.nexusvoice.application.tts.service.TTSService;
 import com.nexusvoice.application.user.dto.PageResult;
 import com.nexusvoice.domain.role.model.Role;
 import com.nexusvoice.domain.role.repository.RoleRepository;
@@ -29,6 +32,9 @@ public class RoleApplicationService {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private TTSService ttsService;
 
     // ======================= 公共方法（公共角色浏览） =======================
 
@@ -83,6 +89,10 @@ public class RoleApplicationService {
         validateCreateRequest(request);
         Role role = RoleAssembler.fromCreateRequest(request);
         role.makePublic();
+        
+        // 如果有开场白文本，生成对应的音频
+        generateGreetingAudio(role);
+        
         Role saved = roleRepository.save(role);
         log.info("创建公共角色成功: {} - {}", saved.getId(), saved.getName());
         return RoleAssembler.toDTO(saved);
@@ -139,6 +149,10 @@ public class RoleApplicationService {
         validateCreateRequest(request);
         Role role = RoleAssembler.fromCreateRequest(request);
         role.makePrivate(currentUserId);
+        
+        // 如果有开场白文本，生成对应的音频
+        generateGreetingAudio(role);
+        
         Role saved = roleRepository.save(role);
         log.info("用户 {} 创建私人角色成功: {} - {}", currentUserId, saved.getId(), saved.getName());
         return RoleAssembler.toDTO(saved);
@@ -180,6 +194,48 @@ public class RoleApplicationService {
         // 目前依赖于注解校验，预留扩展点
     }
 
+    /**
+     * 生成开场白音频
+     * 如果角色有开场白文本且没有音频URL，则调用TTS服务生成音频
+     */
+    private void generateGreetingAudio(Role role) {
+        // 如果没有开场白文本，跳过
+        if (role.getGreetingMessage() == null || role.getGreetingMessage().trim().isEmpty()) {
+            log.debug("角色 {} 没有开场白文本，跳过TTS生成", role.getName());
+            return;
+        }
+        
+        // 如果已经有音频URL，跳过
+        if (role.getGreetingAudioUrl() != null && !role.getGreetingAudioUrl().trim().isEmpty()) {
+            log.debug("角色 {} 已有开场白音频URL，跳过TTS生成", role.getName());
+            return;
+        }
+        
+        try {
+            // 构建TTS请求
+            TTSRequestDTO ttsRequest = new TTSRequestDTO();
+            ttsRequest.setText(role.getGreetingMessage());
+            ttsRequest.setVoiceType(role.getVoiceType());
+            ttsRequest.setEncoding("mp3");
+            ttsRequest.setSpeedRatio(1.0);
+            
+            // 调用TTS服务
+            TTSResponseDTO ttsResponse = ttsService.textToSpeech(ttsRequest);
+            
+            // 设置生成的音频URL
+            if (ttsResponse != null && ttsResponse.getAudioData() != null) {
+                role.setGreetingAudioUrl(ttsResponse.getAudioData());
+                log.info("角色 {} 开场白TTS生成成功，音频URL: {}", role.getName(), ttsResponse.getAudioData());
+            } else {
+                log.warn("角色 {} 开场白TTS生成失败，返回结果为空", role.getName());
+            }
+            
+        } catch (Exception e) {
+            // TTS失败不影响角色创建，只记录日志
+            log.warn("角色 {} 开场白TTS生成失败: {}", role.getName(), e.getMessage(), e);
+        }
+    }
+    
     /**
      * 确保是当前用户拥有的私人角色
      */

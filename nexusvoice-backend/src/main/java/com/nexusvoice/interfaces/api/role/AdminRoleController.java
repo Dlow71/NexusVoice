@@ -36,7 +36,7 @@ public class AdminRoleController {
 
     // ===================== 公共角色管理 =====================
 
-    @Operation(summary = "创建公共角色", description = "管理员创建平台级公共角色")
+    @Operation(summary = "创建公共角色", description = "管理员创建平台级公共角色。后端会根据 greetingMessage 自动进行文本转语音（TTS），并将音频上传到七牛云，返回的 URL 会写入 greetingAudioUrl 字段，无需前端传入 greetingAudioUrl。")
     @PostMapping
     public Result<RoleDTO> createPublicRole(@Valid @RequestBody RoleCreateRequest request) {
         log.info("管理员创建公共角色: name={}", request.getName());

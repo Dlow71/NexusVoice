@@ -34,6 +34,11 @@ public class Conversation extends BaseEntity {
     private Long userId;
 
     /**
+     * 角色ID（可为空）
+     */
+    private Long roleId;
+
+    /**
      * AI模型名称
      */
     private String modelName;

@@ -253,7 +253,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : "gpt-4o-mini";
             String systemPrompt = requestDto.getSystemPrompt() != null ? requestDto.getSystemPrompt() : "你是一个有用的AI助手";
             
-            return conversationDomainService.createConversation(userId, title, modelName, systemPrompt);
+            return conversationDomainService.createConversation(userId, title, modelName, systemPrompt, requestDto.getRoleId());
         }
     }
 
