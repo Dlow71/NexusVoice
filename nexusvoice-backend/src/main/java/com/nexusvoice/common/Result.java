@@ -1,5 +1,9 @@
 package com.nexusvoice.common;
 
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -30,6 +34,8 @@ public class Result<T> implements Serializable {
     private T data;
     
     @Schema(description = "响应时间", example = "2025-09-22T15:30:00")
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime timestamp;
     
     @Schema(description = "请求追踪ID", example = "abc123")
