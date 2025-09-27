@@ -1,47 +1,78 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+// 导入 API 调用函数
+import userApi from '../services/user';
 import router from '../router';
 
-//用户状态管理
-// 'defineStore' 的第一个参数是这个 store 的唯一 ID
-export const useAuthStore = defineStore('auth', () => {
-    //存储用户信息
-    const user = ref(JSON.parse(localStorage.getItem('user')));
+export const useAuthStore = defineStore('auth', {
+    state: () => ({
+        token: localStorage.getItem('user-token') || null,
+        user: JSON.parse(localStorage.getItem('user-info')) || null,
+        refreshToken: localStorage.getItem('user-refresh-token') || null,
+    }),
 
-    // --- Getters ---
-    // 通过计算属性来判断用户是否已登录
-    const isLoggedIn = computed(() => !!user.value);
+    getters: {
+        isLoggedIn: (state) => !!state.token,
+    },
 
-    // 这是处理登录逻辑的函数
-    function login(userData) {
-        //模拟数据
-        const fakeUser = { name: userData.email, email: userData.email };
+    actions: {
+        // 注册方法
+        async register(userData) {
+            const response = await userApi.register(userData);
 
-        // 登录成功后，把用户信息保存到 state 和 localStorage 里
-        user.value = fakeUser;
-        localStorage.setItem('user', JSON.stringify(fakeUser));
 
-        // 登录成功后，需要跳转到主页（角色选择页）
-        router.push('/');
-    }
+            if (!response.data.success) {
+                // 如果 success 为 false，说明业务上出错了，主动抛出错误
+                throw new Error(response.data.message || '注册失败');
+            }
 
-    // 这是处理注册逻辑的函数
-    function register(userData) {
-        // 同样，这里也是模拟
-        console.log('正在注册:', userData);
-        login(userData);
-    }
+            // 只有在 success 为 true 时，才执行成功逻辑
+            this.setAuthData(response.data.data);
+            router.push('/');
+        },
 
-    // 这是处理登出逻辑的函数
-    function logout() {
-        // 我需要清空 state 和 localStorage
-        user.value = null;
-        localStorage.removeItem('user');
+        // 登录方法
+        async login(credentials) {
+            const response = await userApi.login(credentials);
 
-        // 登出后，我需要跳转回登录页面
-        router.push('/login');
-    }
+            if (!response.data.success) {
+                // 如果 success 为 false，说明业务上出错了，主动抛出错误
+                throw new Error(response.data.message || '登录失败');
+            }
 
-    // 最后，我需要把这些 state, getters, 和 actions return 出去，这样组件才能使用它们
-    return { user, isLoggedIn, login, register, logout };
+            // 只有在 success 为 true 时，才执行成功逻辑
+            this.setAuthData(response.data.data);
+            router.push('/');
+        },
+        //用户登出
+        async logout() {
+            try {
+                // 首先尝试调用后端的登出接口
+                await userApi.logout();
+            } catch (error) {
+                // 即使后端接口调用失败 (例如网络错误或token已失效)，
+                // 仍然要继续执行前端的登出流程，以确保用户界面恢复到未登录状态。
+                console.error("调用登出接口失败:", error);
+            } finally {
+                // 无论后端调用是否成功，都必须执行以下清理操作
+                this.token = null;
+                this.refreshToken = null;
+                this.user = null;
+                localStorage.removeItem('user-token');
+                localStorage.removeItem('user-refresh-token');
+                localStorage.removeItem('user-info');
+                // 跳转回登录页
+                router.push('/login');
+            }
+        },
+
+        setAuthData(data) {
+            this.token = data.accessToken;
+            this.user = data.userInfo;
+            this.refreshToken = data.refreshToken;
+            localStorage.setItem('user-refresh-token', data.refreshToken);
+            localStorage.setItem('user-token', data.accessToken);
+            localStorage.setItem('user-info', JSON.stringify(data.userInfo));
+        }
+    },
 });
+
