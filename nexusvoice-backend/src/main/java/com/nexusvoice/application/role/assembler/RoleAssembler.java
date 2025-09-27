@@ -43,7 +43,7 @@ public class RoleAssembler {
         role.setDescription(req.getDescription());
         role.setPersonaPrompt(req.getPersonaPrompt());
         role.setGreetingMessage(req.getGreetingMessage());
-        role.setGreetingAudioUrl(req.getGreetingAudioUrl());
+        // greetingAudioUrl将由TTS服务生成，不从请求中直接设置
         role.setAvatarUrl(req.getAvatarUrl());
         role.setVoiceType(req.getVoiceType());
         return role;

@@ -65,7 +65,7 @@ public class RoleController {
         return Result.success("查询成功", result);
     }
 
-    @Operation(summary = "创建私人角色", description = "创建仅自己可见的私人角色")
+    @Operation(summary = "创建私人角色", description = "创建仅自己可见的私人角色。后端会根据 greetingMessage 自动进行文本转语音（TTS），并将音频上传到七牛云，返回的 URL 会写入 greetingAudioUrl 字段，无需前端传入 greetingAudioUrl。")
     @RequireUser
     @PostMapping("/private")
     public Result<RoleDTO> createPrivateRole(@Valid @RequestBody RoleCreateRequest request) {

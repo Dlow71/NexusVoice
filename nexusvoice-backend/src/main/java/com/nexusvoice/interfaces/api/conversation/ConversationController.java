@@ -4,6 +4,8 @@ import com.nexusvoice.annotation.RequireAuth;
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
 import com.nexusvoice.application.conversation.dto.ConversationListDto;
+import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
+import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
@@ -40,6 +42,17 @@ public class ConversationController {
     public ConversationController(ConversationApplicationService conversationApplicationService, JwtUtils jwtUtils) {
         this.conversationApplicationService = conversationApplicationService;
         this.jwtUtils = jwtUtils;
+    }
+
+    @PostMapping
+    @RequireAuth
+    @Operation(summary = "创建新对话", description = "创建一个新的对话并返回对话ID。后续发送消息时传入conversationId即可继续该会话，不会重复创建。")
+    public Result<ConversationCreateResponse> createConversation(@Valid @RequestBody ConversationCreateRequest request) {
+        Long userId = SecurityUtils.getCurrentUserId().get();
+        log.info("创建新对话请求，用户ID：{}，标题：{}，模型：{}", userId, request.getTitle(), request.getModelName());
+
+        ConversationCreateResponse response = conversationApplicationService.createConversation(request, userId);
+        return Result.success(response);
     }
 
 

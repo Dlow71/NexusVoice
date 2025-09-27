@@ -32,6 +32,12 @@ public class ConversationEntity extends BaseEntity {
     private Long userId;
 
     /**
+     * 角色ID（可为空）
+     */
+    @TableField("role_id")
+    private Long roleId;
+
+    /**
      * AI模型名称
      */
     @TableField("model_name")

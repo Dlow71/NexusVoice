@@ -23,7 +23,7 @@ public class RoleCreateRequest {
     @Size(max = 255, message = "开场白文本不能超过255个字符")
     private String greetingMessage;
 
-    @Schema(description = "开场白音频URL")
+    @Schema(description = "开场白音频URL（可选，如果不提供将根据greetingMessage自动生成）")
     @Size(max = 255, message = "开场白音频URL不能超过255个字符")
     private String greetingAudioUrl;
 
