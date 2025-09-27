@@ -70,6 +70,21 @@ langchain4j:
 #   password: your-redis-password
 #   database: 0
 
+# NexusVoice配置
+nexusvoice:
+  # TTS文本转语音配置
+  tts:
+    # 七牛云TTS API Token - 请填入你的实际token
+    token: your-qiniu-tts-token-here
+    # 默认音色（可选配置）
+    voice-type: qiniu_zh_female_wwxkjx
+    # 默认编码格式（可选配置）
+    encoding: mp3
+    # 默认语速比例（可选配置）
+    speed-ratio: 1.0
+    # 连接超时时间（秒）（可选配置）
+    timeout-seconds: 30
+
 # 第三方API密钥
 # third-party:
 #   api-key: your-api-key

@@ -1,5 +1,8 @@
 package com.nexusvoice.application.conversation.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
@@ -22,6 +25,7 @@ import java.time.LocalDateTime;
 public class ChatResponseDto {
 
     @Schema(description = "对话ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
 
     @Schema(description = "消息ID")
@@ -53,6 +57,9 @@ public class ChatResponseDto {
     @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createdAt;
 
+    @Schema(description = "AI回复语音地址")
+    private String audioUrl;
+
     @Data
     @Builder
     @Schema(description = "令牌使用统计")
@@ -79,6 +86,25 @@ public class ChatResponseDto {
                 .model(model)
                 .usage(usage)
                 .responseTimeMs(responseTime)
+                .success(true)
+                .finishReason("stop")
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * 创建成功响应（包含音频URL）
+     */
+    public static ChatResponseDto success(Long conversationId, Long messageId, String content,
+                                        String model, TokenUsageDto usage, Long responseTime, String audioUrl) {
+        return ChatResponseDto.builder()
+                .conversationId(conversationId)
+                .messageId(messageId)
+                .content(content)
+                .model(model)
+                .usage(usage)
+                .responseTimeMs(responseTime)
+                .audioUrl(audioUrl)
                 .success(true)
                 .finishReason("stop")
                 .createdAt(LocalDateTime.now())

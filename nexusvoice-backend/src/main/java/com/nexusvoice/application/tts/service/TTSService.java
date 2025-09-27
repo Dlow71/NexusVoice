@@ -1,7 +1,9 @@
 package com.nexusvoice.application.tts.service;
 
+import com.nexusvoice.application.file.service.FileUploadService;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
+import com.nexusvoice.enums.FileTypeEnum;
 import com.nexusvoice.exception.TTSException;
 import com.nexusvoice.infrastructure.config.QiniuConfig;
 import com.nexusvoice.utils.TTSToolUtils;
@@ -26,8 +28,8 @@ public class TTSService {
     @Value("${nexusvoice.tts.token}")
     private String qiniuToken;
 
-    @Autowired
-    private QiniuFileService qiniuFileService;
+    @Resource
+    private FileUploadService fileUploadService;
 
     @Resource
     private QiniuConfig qiniuConfig;
@@ -67,7 +69,7 @@ public class TTSService {
             }
 
             // 上传到七牛云并获取URL
-            String audioUrl = qiniuFileService.upload(audioFile);
+            String audioUrl = fileUploadService.upload(audioFile, FileTypeEnum.AUDIO);
 
 
             // 构建响应DTO

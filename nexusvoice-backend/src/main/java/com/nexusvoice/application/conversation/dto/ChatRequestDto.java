@@ -41,4 +41,7 @@ public class ChatRequestDto {
 
     @Schema(description = "是否启用联网搜索", example = "false")
     private Boolean enableWebSearch = false;
+
+    @Schema(description = "角色ID，指定AI扮演的角色", example = "1")
+    private Long roleId;
 }

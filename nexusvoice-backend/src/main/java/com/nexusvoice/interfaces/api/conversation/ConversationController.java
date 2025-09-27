@@ -8,13 +8,16 @@ import com.nexusvoice.application.conversation.service.ConversationApplicationSe
 import com.nexusvoice.common.Result;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
 import com.nexusvoice.utils.SecurityUtils;
+import com.nexusvoice.utils.JwtUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.List;
 
@@ -32,10 +35,14 @@ import java.util.List;
 public class ConversationController {
 
     private final ConversationApplicationService conversationApplicationService;
+    private final JwtUtils jwtUtils;
 
-    public ConversationController(ConversationApplicationService conversationApplicationService) {
+    public ConversationController(ConversationApplicationService conversationApplicationService, JwtUtils jwtUtils) {
         this.conversationApplicationService = conversationApplicationService;
+        this.jwtUtils = jwtUtils;
     }
+
+
 
     @PostMapping("/chat")
     @RequireAuth
@@ -43,8 +50,8 @@ public class ConversationController {
     public Result<ChatResponseDto> chat(@Valid @RequestBody ChatRequestDto request) {
         // 获取用户ID
         Long currentUserId = SecurityUtils.getCurrentUserId().get();
-        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}，联网搜索：{}", 
-                currentUserId, request.getConversationId(), 
+        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}，联网搜索：{}",
+                currentUserId, request.getConversationId(),
                 request.getEnableWebSearch() != null ? request.getEnableWebSearch() : false);
         
         ChatResponseDto response = conversationApplicationService.chat(request, currentUserId);
@@ -60,7 +67,7 @@ public class ConversationController {
     }
 
     @GetMapping("/list")
-    // @RequireLogin  // 暂时注释，等待安全模块完善
+    @RequireAuth
     @Operation(summary = "获取对话列表", description = "获取当前用户的对话列表，按最后活跃时间倒序")
     public Result<List<ConversationListDto>> getConversationList(
             @Parameter(description = "返回数量限制", example = "20")
@@ -74,7 +81,7 @@ public class ConversationController {
     }
 
     @GetMapping("/{conversationId}/history")
-    // @RequireLogin  // 暂时注释，等待安全模块完善
+    @RequireAuth
     @Operation(summary = "获取对话历史", description = "获取指定对话的完整消息历史")
     public Result<List<ConversationMessage>> getConversationHistory(
             @Parameter(description = "对话ID", example = "1")
@@ -89,12 +96,14 @@ public class ConversationController {
     }
 
     @DeleteMapping("/{conversationId}")
-    // @RequireLogin  // 暂时注释，等待安全模块完善
+    @RequireAuth
     @Operation(summary = "删除对话", description = "删除指定的对话（逻辑删除）")
     public Result<Void> deleteConversation(
             @Parameter(description = "对话ID", example = "1")
-            @PathVariable Long conversationId) {
+            @PathVariable Long conversationId,
+            HttpServletRequest request) {
         
+        // 从JWT中获取当前用户ID
         Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("删除对话，用户ID：{}，对话ID：{}", userId, conversationId);
         

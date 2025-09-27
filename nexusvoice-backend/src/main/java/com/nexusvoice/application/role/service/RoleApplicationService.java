@@ -53,6 +53,26 @@ public class RoleApplicationService {
         return RoleAssembler.toDTO(role);
     }
 
+    /**
+     * 获取角色信息用于聊天（支持公共角色和用户自己的私人角色）
+     */
+    public Role getRoleForChat(Long roleId, Long currentUserId) {
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
+        
+        // 如果是公共角色，任何人都可以使用
+        if (Boolean.TRUE.equals(role.getIsPublic())) {
+            return role;
+        }
+        
+        // 如果是私人角色，只有创建者可以使用
+        if (role.ownedBy(currentUserId)) {
+            return role;
+        }
+        
+        throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, "无权使用该角色");
+    }
+
     // ======================= 管理端 - 公共角色管理 =======================
 
     /**
