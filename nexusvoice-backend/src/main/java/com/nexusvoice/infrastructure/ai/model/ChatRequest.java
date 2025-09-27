@@ -76,6 +76,11 @@ public class ChatRequest {
     private Long conversationId;
 
     /**
+     * 是否启用联网搜索
+     */
+    private Boolean enableWebSearch;
+
+    /**
      * 创建默认配置的请求
      */
     public static ChatRequest defaultRequest(List<ChatMessage> messages) {

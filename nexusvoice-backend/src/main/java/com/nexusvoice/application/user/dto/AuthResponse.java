@@ -1,6 +1,10 @@
 package com.nexusvoice.application.user.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.nexusvoice.domain.user.constant.UserType;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -26,6 +30,8 @@ public class AuthResponse {
 
     @Schema(description = "令牌过期时间")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime expiresAt;
 
     @Schema(description = "用户信息")

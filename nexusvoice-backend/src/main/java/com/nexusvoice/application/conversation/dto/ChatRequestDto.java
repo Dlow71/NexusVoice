@@ -38,4 +38,7 @@ public class ChatRequestDto {
 
     @Schema(description = "对话标题", example = "关于AI的讨论")
     private String title;
+
+    @Schema(description = "是否启用联网搜索", example = "false")
+    private Boolean enableWebSearch = false;
 }

@@ -2,7 +2,6 @@ package com.nexusvoice.infrastructure.ai.config;
 
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.service.impl.DefaultAiChatService;
-import com.nexusvoice.infrastructure.ai.service.impl.OpenAiChatServiceImpl;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

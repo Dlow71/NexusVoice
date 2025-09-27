@@ -7,6 +7,7 @@ import com.nexusvoice.application.conversation.dto.ConversationListDto;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
+import com.nexusvoice.utils.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,11 +39,13 @@ public class ConversationController {
 
     @PostMapping("/chat")
     @RequireAuth
-    @Operation(summary = "发送聊天消息", description = "向AI发送消息并获取回复，支持新建对话或在现有对话中继续")
+    @Operation(summary = "发送聊天消息", description = "向AI发送消息并获取回复，支持新建对话或在现有对话中继续。可通过enableWebSearch参数控制是否启用联网搜索功能（默认为false）")
     public Result<ChatResponseDto> chat(@Valid @RequestBody ChatRequestDto request) {
-        // 临时写死用户ID，实际应该从JWT或Session中获取
-        Long currentUserId = 1L;
-        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}", currentUserId, request.getConversationId());
+        // 获取用户ID
+        Long currentUserId = SecurityUtils.getCurrentUserId().get();
+        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}，联网搜索：{}", 
+                currentUserId, request.getConversationId(), 
+                request.getEnableWebSearch() != null ? request.getEnableWebSearch() : false);
         
         ChatResponseDto response = conversationApplicationService.chat(request, currentUserId);
         
@@ -62,8 +65,7 @@ public class ConversationController {
     public Result<List<ConversationListDto>> getConversationList(
             @Parameter(description = "返回数量限制", example = "20")
             @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
-        
-        Long userId = 1L;  // 临时写死
+        Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("获取对话列表，用户ID：{}，限制数量：{}", userId, limit);
         
         List<ConversationListDto> conversations = conversationApplicationService.getUserConversations(userId, limit);
@@ -77,8 +79,8 @@ public class ConversationController {
     public Result<List<ConversationMessage>> getConversationHistory(
             @Parameter(description = "对话ID", example = "1")
             @PathVariable Long conversationId) {
-        
-        Long userId = 1L;  // 临时写死
+
+        Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("获取对话历史，用户ID：{}，对话ID：{}", userId, conversationId);
         
         List<ConversationMessage> history = conversationApplicationService.getConversationHistory(conversationId, userId);
@@ -93,7 +95,7 @@ public class ConversationController {
             @Parameter(description = "对话ID", example = "1")
             @PathVariable Long conversationId) {
         
-        Long userId = 1L;  // 临时写死
+        Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("删除对话，用户ID：{}，对话ID：{}", userId, conversationId);
         
         conversationApplicationService.deleteConversation(conversationId, userId);
