@@ -290,6 +290,7 @@ public class ConversationApplicationService {
                 .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
                 .userId(conversation.getUserId())
                 .conversationId(conversation.getId())
+                .enableWebSearch(requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : false)
                 .build();
     }
 

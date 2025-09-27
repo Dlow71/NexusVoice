@@ -3,6 +3,10 @@ package com.nexusvoice.application.conversation.dto;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
+import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.Builder;
@@ -49,6 +53,8 @@ public class ChatResponseDto {
     private String errorMessage;
 
     @Schema(description = "消息创建时间")
+    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
+    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime createdAt;
 
     @Schema(description = "AI回复语音地址")
@@ -89,7 +95,7 @@ public class ChatResponseDto {
     /**
      * 创建成功响应（包含音频URL）
      */
-    public static ChatResponseDto success(Long conversationId, Long messageId, String content, 
+    public static ChatResponseDto success(Long conversationId, Long messageId, String content,
                                         String model, TokenUsageDto usage, Long responseTime, String audioUrl) {
         return ChatResponseDto.builder()
                 .conversationId(conversationId)
