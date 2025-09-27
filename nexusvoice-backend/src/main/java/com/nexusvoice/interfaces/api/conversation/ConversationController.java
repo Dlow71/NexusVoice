@@ -4,9 +4,12 @@ import com.nexusvoice.annotation.RequireAuth;
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
 import com.nexusvoice.application.conversation.dto.ConversationListDto;
+import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
+import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
+import com.nexusvoice.utils.SecurityUtils;
 import com.nexusvoice.utils.JwtUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -41,15 +44,28 @@ public class ConversationController {
         this.jwtUtils = jwtUtils;
     }
 
+    @PostMapping
+    @RequireAuth
+    @Operation(summary = "创建新对话", description = "创建一个新的对话并返回对话ID。后续发送消息时传入conversationId即可继续该会话，不会重复创建。")
+    public Result<ConversationCreateResponse> createConversation(@Valid @RequestBody ConversationCreateRequest request) {
+        Long userId = SecurityUtils.getCurrentUserId().get();
+        log.info("创建新对话请求，用户ID：{}，标题：{}，模型：{}", userId, request.getTitle(), request.getModelName());
+
+        ConversationCreateResponse response = conversationApplicationService.createConversation(request, userId);
+        return Result.success(response);
+    }
+
 
 
     @PostMapping("/chat")
     @RequireAuth
-    @Operation(summary = "发送聊天消息", description = "向AI发送消息并获取回复，支持新建对话或在现有对话中继续。可选传入 roleId，若找到可用角色则将其人设(personaPrompt)与描述(description)注入系统提示词；未查到或无权限则忽略，不影响聊天流程。")
-    public Result<ChatResponseDto> chat(@Valid @RequestBody ChatRequestDto request, HttpServletRequest httpRequest) {
-        // 从JWT中获取当前用户ID
-        Long currentUserId = getCurrentUserId(httpRequest);
-        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}", currentUserId, request.getConversationId());
+    @Operation(summary = "发送聊天消息", description = "向AI发送消息并获取回复，支持新建对话或在现有对话中继续。可通过enableWebSearch参数控制是否启用联网搜索功能（默认为false）")
+    public Result<ChatResponseDto> chat(@Valid @RequestBody ChatRequestDto request) {
+        // 获取用户ID
+        Long currentUserId = SecurityUtils.getCurrentUserId().get();
+        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}，联网搜索：{}",
+                currentUserId, request.getConversationId(),
+                request.getEnableWebSearch() != null ? request.getEnableWebSearch() : false);
         
         ChatResponseDto response = conversationApplicationService.chat(request, currentUserId);
         
@@ -68,11 +84,8 @@ public class ConversationController {
     @Operation(summary = "获取对话列表", description = "获取当前用户的对话列表，按最后活跃时间倒序")
     public Result<List<ConversationListDto>> getConversationList(
             @Parameter(description = "返回数量限制", example = "20")
-            @RequestParam(value = "limit", defaultValue = "20") Integer limit,
-            HttpServletRequest request) {
-        
-        // 从JWT中获取当前用户ID
-        Long userId = getCurrentUserId(request);
+            @RequestParam(value = "limit", defaultValue = "20") Integer limit) {
+        Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("获取对话列表，用户ID：{}，限制数量：{}", userId, limit);
         
         List<ConversationListDto> conversations = conversationApplicationService.getUserConversations(userId, limit);
@@ -85,11 +98,9 @@ public class ConversationController {
     @Operation(summary = "获取对话历史", description = "获取指定对话的完整消息历史")
     public Result<List<ConversationMessage>> getConversationHistory(
             @Parameter(description = "对话ID", example = "1")
-            @PathVariable Long conversationId,
-            HttpServletRequest request) {
-        
-        // 从JWT中获取当前用户ID
-        Long userId = getCurrentUserId(request);
+            @PathVariable Long conversationId) {
+
+        Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("获取对话历史，用户ID：{}，对话ID：{}", userId, conversationId);
         
         List<ConversationMessage> history = conversationApplicationService.getConversationHistory(conversationId, userId);
@@ -106,7 +117,7 @@ public class ConversationController {
             HttpServletRequest request) {
         
         // 从JWT中获取当前用户ID
-        Long userId = getCurrentUserId(request);
+        Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("删除对话，用户ID：{}，对话ID：{}", userId, conversationId);
         
         conversationApplicationService.deleteConversation(conversationId, userId);
@@ -126,44 +137,5 @@ public class ConversationController {
         );
         
         return Result.success(models);
-    }
-
-    /**
-     * 从HTTP请求中提取JWT token
-     *
-     * @param request HTTP请求
-     * @return JWT token
-     */
-    private String extractTokenFromRequest(HttpServletRequest request) {
-        String authHeader = request.getHeader("Authorization");
-        if (StringUtils.hasText(authHeader)) {
-            if (authHeader.startsWith("Bearer ")) {
-                return authHeader.substring(7);
-            } else {
-                return authHeader.trim();
-            }
-        }
-
-        // 从查询参数中提取（用于WebSocket等场景）
-        String tokenParam = request.getParameter("token");
-        if (StringUtils.hasText(tokenParam)) {
-            return tokenParam;
-        }
-
-        return null;
-    }
-
-    /**
-     * 获取当前登录用户的ID
-     *
-     * @param request HTTP请求
-     * @return 用户ID
-     */
-    private Long getCurrentUserId(HttpServletRequest request) {
-        String token = extractTokenFromRequest(request);
-        if (token != null) {
-            return jwtUtils.getUserIdFromToken(token);
-        }
-        throw new RuntimeException("无法获取JWT token，请确保已正确登录");
     }
 }
