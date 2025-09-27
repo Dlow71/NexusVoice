@@ -32,9 +32,10 @@ public class ConversationDomainService {
     /**
      * 创建新对话
      */
-    public Conversation createConversation(Long userId, String title, String modelName, String systemPrompt) {
+    public Conversation createConversation(Long userId, String title, String modelName, String systemPrompt, Long roleId) {
         Conversation conversation = new Conversation();
         conversation.setUserId(userId);
+        conversation.setRoleId(roleId);
         conversation.setTitle(title);
         conversation.setModelName(modelName);
         conversation.setSystemPrompt(systemPrompt);

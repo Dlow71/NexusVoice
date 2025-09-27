@@ -3,6 +3,8 @@ package com.nexusvoice.application.conversation.service;
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
 import com.nexusvoice.application.conversation.dto.ConversationListDto;
+import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
+import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.role.service.RoleApplicationService;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
@@ -77,14 +79,15 @@ public class ConversationApplicationService {
 
             // 4. 查询角色信息（如果指定了角色ID）
             Role role = null;
-            if (requestDto.getRoleId() != null) {
+            Long effectiveRoleId = requestDto.getRoleId() != null ? requestDto.getRoleId() : conversation.getRoleId();
+            if (effectiveRoleId != null) {
                 try {
                     // 尝试获取角色信息，如果角色不存在或无权访问，不报错，继续正常聊天
-                    role = roleApplicationService.getRoleForChat(requestDto.getRoleId(), userId);
+                    role = roleApplicationService.getRoleForChat(effectiveRoleId, userId);
                     log.info("使用角色进行聊天，角色ID：{}，角色名称：{}", role.getId(), role.getName());
                 } catch (Exception e) {
                     log.warn("获取角色信息失败，角色ID：{}，用户ID：{}，错误：{}，将继续正常聊天", 
-                            requestDto.getRoleId(), userId, e.getMessage());
+                            effectiveRoleId, userId, e.getMessage());
                     // 不抛出异常，继续正常聊天流程
                 }
             }
@@ -109,10 +112,15 @@ public class ConversationApplicationService {
                 try {
                     TTSRequestDTO ttsRequest = new TTSRequestDTO();
                     ttsRequest.setText(aiResponse.getContent());
-                    ttsRequest.setVoiceType("qiniu_zh_female_wwxkjx"); // 默认语音类型
+                    // 优先使用角色的语音类型，其次使用默认
+                    String selectedVoiceType = (role != null && role.getVoiceType() != null && !role.getVoiceType().trim().isEmpty())
+                            ? role.getVoiceType().trim()
+                            : "qiniu_zh_female_wwxkjx";
+                    ttsRequest.setVoiceType(selectedVoiceType);
                     ttsRequest.setEncoding("mp3"); // 默认音频格式
                     ttsRequest.setSpeedRatio(1.0); // 默认语速
                     
+                    log.info("使用TTS语音类型：{}，对话ID：{}", selectedVoiceType, conversation.getId());
                     TTSResponseDTO ttsResponse = ttsService.textToSpeech(ttsRequest);
                     audioUrl = ttsResponse.getAudioData(); // TTSService返回的是音频URL
                     
@@ -228,6 +236,27 @@ public class ConversationApplicationService {
     }
 
     /**
+     * 创建新对话
+     */
+    @Transactional
+    public ConversationCreateResponse createConversation(ConversationCreateRequest request, Long userId) {
+        String title = request.getTitle() != null && !request.getTitle().trim().isEmpty() ? request.getTitle().trim() : "新对话";
+        String modelName = request.getModelName() != null && !request.getModelName().trim().isEmpty() ? request.getModelName().trim() : "gpt-4o-mini";
+        String systemPrompt = request.getSystemPrompt() != null && !request.getSystemPrompt().trim().isEmpty() ? request.getSystemPrompt().trim() : "你是一个有用的AI助手";
+
+        Conversation conversation = conversationDomainService.createConversation(userId, title, modelName, systemPrompt, request.getRoleId());
+
+        return ConversationCreateResponse.builder()
+                .conversationId(conversation.getId())
+                .title(conversation.getTitle())
+                .modelName(conversation.getModelName())
+                .systemPrompt(conversation.getSystemPrompt())
+                .roleId(conversation.getRoleId())
+                .createdAt(conversation.getCreatedAt())
+                .build();
+    }
+
+    /**
      * 获取或创建对话
      */
     private Conversation getOrCreateConversation(ChatRequestDto requestDto, Long userId) {
@@ -241,7 +270,7 @@ public class ConversationApplicationService {
             String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : "gpt-4o-mini";
             String systemPrompt = requestDto.getSystemPrompt() != null ? requestDto.getSystemPrompt() : "你是一个有用的AI助手";
             
-            return conversationDomainService.createConversation(userId, title, modelName, systemPrompt);
+            return conversationDomainService.createConversation(userId, title, modelName, systemPrompt, requestDto.getRoleId());
         }
     }
 
