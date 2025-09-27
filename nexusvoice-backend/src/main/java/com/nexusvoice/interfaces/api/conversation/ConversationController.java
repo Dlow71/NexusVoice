@@ -6,16 +6,15 @@ import com.nexusvoice.application.conversation.dto.ChatResponseDto;
 import com.nexusvoice.application.conversation.dto.ConversationListDto;
 import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
 import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
+import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
 import com.nexusvoice.common.Result;
-import com.nexusvoice.domain.conversation.model.ConversationMessage;
 import com.nexusvoice.utils.SecurityUtils;
 import com.nexusvoice.utils.JwtUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -96,14 +95,14 @@ public class ConversationController {
     @GetMapping("/{conversationId}/history")
     @RequireAuth
     @Operation(summary = "获取对话历史", description = "获取指定对话的完整消息历史")
-    public Result<List<ConversationMessage>> getConversationHistory(
+    public Result<List<ConversationMessageWithRoleDto>> getConversationHistory(
             @Parameter(description = "对话ID", example = "1")
             @PathVariable Long conversationId) {
 
         Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("获取对话历史，用户ID：{}，对话ID：{}", userId, conversationId);
         
-        List<ConversationMessage> history = conversationApplicationService.getConversationHistory(conversationId, userId);
+        List<ConversationMessageWithRoleDto> history = conversationApplicationService.getConversationHistory(conversationId, userId);
         
         return Result.success(history);
     }

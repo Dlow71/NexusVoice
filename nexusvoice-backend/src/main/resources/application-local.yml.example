@@ -72,6 +72,14 @@ langchain4j:
 
 # NexusVoice配置
 nexusvoice:
+  # 搜索服务配置
+  search:
+    # 搜索提供商：duckduckgo, tavily
+    provider: tavily
+    # Tavily搜索API配置
+    tavily:
+      # Tavily API密钥 - 请填入你的实际API密钥
+      api-key: tvly-123123213
   # TTS文本转语音配置
   tts:
     # 七牛云TTS API Token - 请填入你的实际token
