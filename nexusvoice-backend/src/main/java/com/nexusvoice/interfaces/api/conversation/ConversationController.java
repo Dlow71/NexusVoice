@@ -45,7 +45,7 @@ public class ConversationController {
 
     @PostMapping
     @RequireAuth
-    @Operation(summary = "创建新对话", description = "创建一个新的对话并返回对话ID。后续发送消息时传入conversationId即可继续该会话，不会重复创建。")
+    @Operation(summary = "创建新对话", description = "创建一个新的对话并返回对话ID。后续发送消息时传入conversationId即可继续该会话，不会重复创建。可通过enableAudio参数控制是否生成角色开场白音频（默认为false）")
     public Result<ConversationCreateResponse> createConversation(@Valid @RequestBody ConversationCreateRequest request) {
         Long userId = SecurityUtils.getCurrentUserId().get();
         log.info("创建新对话请求，用户ID：{}，标题：{}，模型：{}", userId, request.getTitle(), request.getModelName());
@@ -58,13 +58,14 @@ public class ConversationController {
 
     @PostMapping("/chat")
     @RequireAuth
-    @Operation(summary = "发送聊天消息", description = "向AI发送消息并获取回复，支持新建对话或在现有对话中继续。可通过enableWebSearch参数控制是否启用联网搜索功能（默认为false）")
+    @Operation(summary = "发送聊天消息", description = "向AI发送消息并获取回复，支持新建对话或在现有对话中继续。可通过enableWebSearch参数控制是否启用联网搜索功能（默认为false），可通过enableAudio参数控制是否生成回复音频（默认为false）")
     public Result<ChatResponseDto> chat(@Valid @RequestBody ChatRequestDto request) {
         // 获取用户ID
         Long currentUserId = SecurityUtils.getCurrentUserId().get();
-        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}，联网搜索：{}",
+        log.info("用户发起聊天请求，用户ID：{}，对话ID：{}，联网搜索：{}，语音合成：{}",
                 currentUserId, request.getConversationId(),
-                request.getEnableWebSearch() != null ? request.getEnableWebSearch() : false);
+                request.getEnableWebSearch() != null ? request.getEnableWebSearch() : false,
+                request.getEnableAudio() != null ? request.getEnableAudio() : false);
         
         ChatResponseDto response = conversationApplicationService.chat(request, currentUserId);
         

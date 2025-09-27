@@ -112,31 +112,36 @@ public class ConversationApplicationService {
             ChatResponse aiResponse = aiChatService.chat(aiRequest);
 
             if (aiResponse.getSuccess()) {
-                // 8. 调用TTS服务生成音频
+                // 8. 根据enableAudio参数决定是否调用TTS服务生成音频
                 String audioUrl = null;
-                try {
-                    // 清理Markdown格式，使文本适合语音合成
-                    String cleanedText = MarkdownTextUtils.cleanForTTS(aiResponse.getContent());
-                    
-                    TTSRequestDTO ttsRequest = new TTSRequestDTO();
-                    ttsRequest.setText(cleanedText);
-                    // 优先使用角色的语音类型，其次使用默认
-                    String selectedVoiceType = (role != null && role.getVoiceType() != null && !role.getVoiceType().trim().isEmpty())
-                            ? role.getVoiceType().trim()
-                            : "qiniu_zh_female_wwxkjx";
-                    ttsRequest.setVoiceType(selectedVoiceType);
-                    ttsRequest.setEncoding("mp3"); // 默认音频格式
-                    ttsRequest.setSpeedRatio(1.0); // 默认语速
-                    
-                    log.info("使用TTS语音类型：{}，对话ID：{}，{}", selectedVoiceType, conversation.getId(), 
-                            MarkdownTextUtils.getCleaningStats(aiResponse.getContent(), cleanedText));
-                    TTSResponseDTO ttsResponse = ttsService.textToSpeech(ttsRequest);
-                    audioUrl = ttsResponse.getAudioData(); // TTSService返回的是音频URL
-                    
-                    log.info("TTS转换成功，对话ID：{}，音频URL：{}", conversation.getId(), audioUrl);
-                } catch (Exception e) {
-                    log.error("TTS转换失败，对话ID：{}，错误：{}", conversation.getId(), e.getMessage(), e);
-                    // TTS失败不影响正常聊天流程，继续保存文本消息
+                boolean shouldGenerateAudio = requestDto.getEnableAudio() != null && requestDto.getEnableAudio();
+                if (shouldGenerateAudio) {
+                    try {
+                        // 清理Markdown格式，使文本适合语音合成
+                        String cleanedText = MarkdownTextUtils.cleanForTTS(aiResponse.getContent());
+                        
+                        TTSRequestDTO ttsRequest = new TTSRequestDTO();
+                        ttsRequest.setText(cleanedText);
+                        // 优先使用角色的语音类型，其次使用默认
+                        String selectedVoiceType = (role != null && role.getVoiceType() != null && !role.getVoiceType().trim().isEmpty())
+                                ? role.getVoiceType().trim()
+                                : "qiniu_zh_female_wwxkjx";
+                        ttsRequest.setVoiceType(selectedVoiceType);
+                        ttsRequest.setEncoding("mp3"); // 默认音频格式
+                        ttsRequest.setSpeedRatio(1.0); // 默认语速
+                        
+                        log.info("使用TTS语音类型：{}，对话ID：{}，{}", selectedVoiceType, conversation.getId(), 
+                                MarkdownTextUtils.getCleaningStats(aiResponse.getContent(), cleanedText));
+                        TTSResponseDTO ttsResponse = ttsService.textToSpeech(ttsRequest);
+                        audioUrl = ttsResponse.getAudioData(); // TTSService返回的是音频URL
+                        
+                        log.info("TTS转换成功，对话ID：{}，音频URL：{}", conversation.getId(), audioUrl);
+                    } catch (Exception e) {
+                        log.error("TTS转换失败，对话ID：{}，错误：{}", conversation.getId(), e.getMessage(), e);
+                        // TTS失败不影响正常聊天流程，继续保存文本消息
+                    }
+                } else {
+                    log.debug("跳过TTS音频生成，enableAudio=false，对话ID：{}", conversation.getId());
                 }
 
                 // 9. 保存AI回复（包含音频URL）
@@ -298,9 +303,11 @@ public class ConversationApplicationService {
             try {
                 Role role = roleApplicationService.getRoleForChat(request.getRoleId(), userId);
                 if (role != null && role.getGreetingMessage() != null && !role.getGreetingMessage().trim().isEmpty()) {
-                    // 如果角色未配置开场白音频，则尝试按角色语音类型生成
+                    // 根据enableAudio参数决定是否生成开场白音频
                     String greetingAudioUrl = role.getGreetingAudioUrl();
-                    if (greetingAudioUrl == null || greetingAudioUrl.trim().isEmpty()) {
+                    boolean shouldGenerateAudio = request.getEnableAudio() != null && request.getEnableAudio();
+                    
+                    if (shouldGenerateAudio && (greetingAudioUrl == null || greetingAudioUrl.trim().isEmpty())) {
                         try {
                             // 清理角色开场白的Markdown格式
                             String cleanedGreeting = MarkdownTextUtils.cleanForTTS(role.getGreetingMessage().trim());
@@ -322,6 +329,10 @@ public class ConversationApplicationService {
                         } catch (Exception ttsEx) {
                             log.warn("创建会话时生成角色开场白音频失败，角色ID：{}，错误：{}", role.getId(), ttsEx.getMessage());
                         }
+                    } else if (!shouldGenerateAudio) {
+                        // 如果不生成音频，清空音频URL
+                        greetingAudioUrl = null;
+                        log.debug("跳过角色开场白TTS生成，enableAudio=false，角色ID：{}", role.getId());
                     }
 
                     // 创建开场白消息
