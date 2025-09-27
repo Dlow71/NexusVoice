@@ -48,6 +48,7 @@ public class RoleAssistantService {
     private final ConversationDomainService conversationDomainService;
     private final AiChatService aiChatService;
     private final RoleApplicationService roleApplicationService;
+    private final com.nexusvoice.application.tts.service.TTSService ttsService;
     private final SearchRepository searchRepository;
     private final ObjectMapper objectMapper;
 
@@ -56,6 +57,7 @@ public class RoleAssistantService {
                                 ConversationDomainService conversationDomainService,
                                 AiChatService aiChatService,
                                 RoleApplicationService roleApplicationService,
+                                com.nexusvoice.application.tts.service.TTSService ttsService,
                                 SearchRepository searchRepository,
                                 ObjectMapper objectMapper) {
         this.conversationRepository = conversationRepository;
@@ -63,6 +65,7 @@ public class RoleAssistantService {
         this.conversationDomainService = conversationDomainService;
         this.aiChatService = aiChatService;
         this.roleApplicationService = roleApplicationService;
+        this.ttsService = ttsService;
         this.searchRepository = searchRepository;
         this.objectMapper = objectMapper;
     }
@@ -82,7 +85,7 @@ public class RoleAssistantService {
         String system = "你是资深AI角色设定助手。基于用户与AI的对话内容，总结出一个可用的’角色草稿’。" +
                 "务必原创，避免复刻具体IP设定、名称、台词或标识。" +
                 "输出严格为一个JSON对象，不要包含多余文字。字段：" +
-                "name(<=20汉字)、description、personaPrompt、greetingMessage、avatarUrl(可空)、voiceType(默认default)、" +
+                "name(<=20汉字)、description、personaPrompt、greetingMessage、avatarUrl(可空)、voiceType(如未给出，后端将使用默认音色)、" +
                 "sources(数组，元素含title/url/snippet，可为空)、disclaimers(数组)。" +
                 "整体语气与要求：中文，信息完整、具体、可直接用于人设。";
 
@@ -162,7 +165,10 @@ public class RoleAssistantService {
         if (request.getOverrideName() != null && !request.getOverrideName().isEmpty()) {
             draft.setName(request.getOverrideName());
         }
-        if (request.getOverrideVoiceType() != null && !request.getOverrideVoiceType().isEmpty()) {
+        // 新参数：voiceType（前端直传，优先级最高）
+        if (request.getVoiceType() != null && !request.getVoiceType().isEmpty()) {
+            draft.setVoiceType(request.getVoiceType());
+        } else if (request.getOverrideVoiceType() != null && !request.getOverrideVoiceType().isEmpty()) {
             draft.setVoiceType(request.getOverrideVoiceType());
         }
 
@@ -185,9 +191,38 @@ public class RoleAssistantService {
         createReq.setGreetingMessage(safeStr(finalBrief.getGreetingMessage(), 255));
         createReq.setGreetingAudioUrl(null);
         createReq.setAvatarUrl(safeStr(finalBrief.getAvatarUrl(), 255));
-        createReq.setVoiceType(safeStr(finalBrief.getVoiceType() != null ? finalBrief.getVoiceType() : "qiniu_zh_female_tmjxxy", 50));
+        String resolvedVoiceType = (finalBrief.getVoiceType() != null && !finalBrief.getVoiceType().isEmpty())
+                ? finalBrief.getVoiceType()
+                : "qiniu_zh_female_dmytwz"; // 默认音色
+        createReq.setVoiceType(safeStr(resolvedVoiceType, 50));
 
         RoleDTO created = roleApplicationService.createPrivateRole(userId, createReq);
+
+        // 如果有开场白，则生成TTS音频并上传CDN，更新角色greeting_audio_url
+        try {
+            String greeting = finalBrief.getGreetingMessage();
+            if (greeting != null && !greeting.trim().isEmpty()) {
+                String cleaned = com.nexusvoice.utils.MarkdownTextUtils.cleanForTTS(greeting);
+                com.nexusvoice.application.tts.dto.TTSRequestDTO ttsReq = new com.nexusvoice.application.tts.dto.TTSRequestDTO();
+                ttsReq.setText(cleaned);
+                ttsReq.setVoiceType(resolvedVoiceType);
+                ttsReq.setEncoding("mp3");
+                ttsReq.setSpeedRatio(1.0);
+                com.nexusvoice.application.tts.dto.TTSResponseDTO ttsResp = ttsService.textToSpeech(ttsReq);
+                String audioUrl = ttsResp != null ? ttsResp.getAudioData() : null;
+                if (audioUrl != null && !audioUrl.isEmpty()) {
+                    com.nexusvoice.application.role.dto.RoleUpdateRequest upd = new com.nexusvoice.application.role.dto.RoleUpdateRequest();
+                    upd.setGreetingAudioUrl(audioUrl);
+                    // 若最终voiceType与创建时不同（理论上不会），也一并更新
+                    upd.setVoiceType(resolvedVoiceType);
+                    roleApplicationService.updatePrivateRole(userId, created.getId(), upd);
+                    created.setGreetingAudioUrl(audioUrl);
+                    created.setVoiceType(resolvedVoiceType);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("创建角色后生成开场白音频失败，将仅返回文本开场白。roleId={}, err={}", created.getId(), e.getMessage());
+        }
 
         // 写入系统消息记录创建结果
         saveSystemNote(conversationId, "角色已创建：" + created.getName(), makeMetadata("ROLE_CREATED", toJson(finalBrief)));
@@ -289,7 +324,7 @@ public class RoleAssistantService {
         Collections.reverse(reversed);
         for (ConversationMessage m : reversed) {
             String metadata = m.getMetadata();
-            if (metadata != null && metadata.contains("\"type\":\"ROLE_BRIEF\"")) {
+            if (metadata != null && metadata.contains("ROLE_BRIEF")) {
                 try {
                     JsonNode node = objectMapper.readTree(metadata);
                     if (node.has("payload")) {
@@ -422,23 +457,71 @@ public class RoleAssistantService {
             node.put("type", type);
             node.put("version", "1.0");
             node.put("timestamp", System.currentTimeMillis());
-            node.set("payload", objectMapper.readTree(payload));
+            
+            // 先验证payload是否为有效JSON，如果不是则作为字符串处理
+            try {
+                node.set("payload", objectMapper.readTree(payload));
+            } catch (JsonProcessingException jsonError) {
+                log.warn("payload不是有效JSON，作为字符串处理：{}", jsonError.getMessage());
+                // 清理payload中的无效字符
+                String cleanPayload = cleanJsonString(payload);
+                node.put("payload", cleanPayload);
+            }
             return node.toString();
-        } catch (JsonProcessingException e) {
-            // 回退为简单KV，避免失败
-            return "{\"type\":\"" + type + "\",\"payload\":" + quote(payload) + "}";
+        } catch (Exception e) {
+            log.error("创建metadata失败：{}", e.getMessage(), e);
+            // 回退为安全的简单格式
+            String cleanType = cleanJsonString(type);
+            String cleanPayload = cleanJsonString(payload);
+            return "{\"type\":\"" + cleanType + "\",\"payload\":\"" + cleanPayload + "\"}";
         }
     }
-
-    private String quote(String s) {
-        if (s == null) return "\"\"";
-        return "\"" + s.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    
+    /**
+     * 清理字符串中的无效字符，确保JSON安全
+     */
+    private String cleanJsonString(String input) {
+        if (input == null) return "";
+        
+        // 移除控制字符和无效的Unicode字符
+        StringBuilder cleaned = new StringBuilder();
+        for (int i = 0; i < input.length(); i++) {
+            char c = input.charAt(i);
+            if (Character.isISOControl(c) && c != '\t' && c != '\n' && c != '\r') {
+                // 跳过控制字符（除了tab、换行、回车）
+                continue;
+            }
+            // 转义特殊JSON字符
+            if (c == '"') {
+                cleaned.append("\\\"");
+            } else if (c == '\\') {
+                cleaned.append("\\\\");
+            } else if (c == '\b') {
+                cleaned.append("\\b");
+            } else if (c == '\f') {
+                cleaned.append("\\f");
+            } else if (c == '\n') {
+                cleaned.append("\\n");
+            } else if (c == '\r') {
+                cleaned.append("\\r");
+            } else if (c == '\t') {
+                cleaned.append("\\t");
+            } else {
+                cleaned.append(c);
+            }
+        }
+        return cleaned.toString();
     }
+
 
     private String toJson(Object obj) {
         try {
-            return objectMapper.writeValueAsString(obj);
+            String json = objectMapper.writeValueAsString(obj);
+            // 验证生成的JSON是否有效
+            objectMapper.readTree(json); // 如果无效会抛异常
+            return json;
         } catch (Exception e) {
+            log.warn("对象JSON序列化失败，使用空对象：{}", e.getMessage());
             return "{}";
         }
     }

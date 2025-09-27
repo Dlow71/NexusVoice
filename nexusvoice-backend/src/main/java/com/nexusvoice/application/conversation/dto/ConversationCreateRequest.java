@@ -26,4 +26,7 @@ public class ConversationCreateRequest {
     @Schema(description = "角色ID（可选，用于为会话绑定一个角色）", example = "1")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long roleId;
+
+    @Schema(description = "是否启用语音合成，生成角色开场白audioUrl", example = "false")
+    private Boolean enableAudio = false;
 }
