@@ -2,6 +2,7 @@ package com.nexusvoice.application.conversation.dto;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -19,6 +20,7 @@ import java.time.LocalDateTime;
 public class ConversationCreateResponse {
 
     @Schema(description = "对话ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
 
     @Schema(description = "对话标题")
@@ -31,6 +33,7 @@ public class ConversationCreateResponse {
     private String systemPrompt;
 
     @Schema(description = "角色ID（如果绑定了角色则返回）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long roleId;
 
     @Schema(description = "创建时间")
