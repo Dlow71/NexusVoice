@@ -105,6 +105,10 @@ public enum ErrorCodeEnum {
     CONFIG_NOT_FOUND(1801, "配置不存在"),
     CONFIG_INVALID(1802, "配置无效"),
     CONFIG_UPDATE_FAILED(1803, "配置更新失败"),
+    CONFIG_ALREADY_EXISTS(1804, "配置已存在"),
+    CONFIG_CREATE_FAILED(1805, "配置创建失败"),
+    CONFIG_DELETE_FAILED(1806, "配置删除失败"),
+    CONFIG_READONLY(1807, "配置为只读"),
     
     // 缓存相关 19xx
     CACHE_ERROR(1901, "缓存错误"),
