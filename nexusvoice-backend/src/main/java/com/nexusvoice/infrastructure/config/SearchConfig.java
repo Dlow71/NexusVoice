@@ -1,6 +1,5 @@
 package com.nexusvoice.infrastructure.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -48,14 +47,4 @@ public class SearchConfig {
         return restTemplate;
     }
     
-    /**
-     * JSON对象映射器
-     */
-    @Bean
-    @ConditionalOnMissingBean
-    public ObjectMapper objectMapper() {
-        ObjectMapper objectMapper = new ObjectMapper();
-        log.info("搜索服务ObjectMapper配置完成");
-        return objectMapper;
-    }
 }

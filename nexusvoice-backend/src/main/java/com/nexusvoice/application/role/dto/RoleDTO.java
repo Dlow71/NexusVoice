@@ -2,6 +2,7 @@ package com.nexusvoice.application.role.dto;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -12,6 +13,7 @@ import java.time.LocalDateTime;
 public class RoleDTO {
 
     @Schema(description = "角色ID")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
 
     @Schema(description = "角色名称")
@@ -39,6 +41,7 @@ public class RoleDTO {
     private Boolean isPublic;
 
     @Schema(description = "创建者用户ID（私人角色）")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
 
     @Schema(description = "创建时间")

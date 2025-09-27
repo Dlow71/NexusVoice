@@ -1,5 +1,7 @@
 package com.nexusvoice.application.conversation.dto;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -22,5 +24,6 @@ public class ConversationCreateRequest {
     private String systemPrompt;
 
     @Schema(description = "角色ID（可选，用于为会话绑定一个角色）", example = "1")
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long roleId;
 }
