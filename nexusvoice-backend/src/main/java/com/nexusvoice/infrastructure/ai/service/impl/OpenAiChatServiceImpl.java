@@ -146,6 +146,36 @@ public class OpenAiChatServiceImpl implements AiChatService {
             // 转换消息格式
             List<dev.langchain4j.data.message.ChatMessage> messages = convertMessages(request.getMessages());
 
+            // 根据配置与开关，注入联网搜索结果作为额外SystemMessage
+            boolean enableWebSearch = request.getEnableWebSearch() != null && request.getEnableWebSearch();
+            boolean canUseSearch = enableWebSearch && toolsEnabled && searchToolEnabled && (searchTool != null);
+            List<dev.langchain4j.data.message.ChatMessage> finalMessages = messages;
+            if (canUseSearch) {
+                try {
+                    // 取最后一条用户消息作为查询
+                    String query = null;
+                    List<ChatMessage> reqMsgs = request.getMessages();
+                    for (int i = reqMsgs.size() - 1; i >= 0; i--) {
+                        ChatMessage m = reqMsgs.get(i);
+                        if (m.getRole() == com.nexusvoice.domain.conversation.constant.MessageRole.USER) {
+                            query = m.getContent();
+                            break;
+                        }
+                    }
+                    if (query != null && !query.isEmpty()) {
+                        String searchSummary = searchTool.searchWeb(query);
+                        String sysText = "以下是搜索到的参考资料（仅供回答参考）：\n\n" + searchSummary;
+                        List<dev.langchain4j.data.message.ChatMessage> augmented = new ArrayList<>(messages);
+                        // 将搜索资料作为最新的SystemMessage加入，提升当前问答上下文权重
+                        augmented.add(0, dev.langchain4j.data.message.SystemMessage.from(sysText));
+                        finalMessages = augmented;
+                        log.info("已注入联网搜索结果到流式上下文，query长度={}，summary长度={}", query.length(), searchSummary != null ? searchSummary.length() : 0);
+                    }
+                } catch (Exception se) {
+                    log.warn("注入搜索结果失败，将继续无联网增强的流式生成", se);
+                }
+            }
+
             // 创建流式响应处理器
             AtomicInteger index = new AtomicInteger(0);
             AtomicReference<String> responseId = new AtomicReference<>("stream_" + System.currentTimeMillis());
@@ -195,7 +225,7 @@ public class OpenAiChatServiceImpl implements AiChatService {
             onNext.accept(startResponse);
 
             // 开始流式请求
-            streamingChatModel.generate(messages, handler);
+            streamingChatModel.generate(finalMessages, handler);
 
         } catch (Exception e) {
             log.error("启动流式聊天请求失败，用户ID：{}，对话ID：{}",

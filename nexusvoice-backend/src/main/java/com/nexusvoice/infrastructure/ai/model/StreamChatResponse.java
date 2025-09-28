@@ -58,6 +58,26 @@ public class StreamChatResponse {
     private String errorMessage;
 
     /**
+     * 对话ID（仅在END时返回）
+     */
+    private Long conversationId;
+
+    /**
+     * 消息ID（仅在END时返回）
+     */
+    private Long messageId;
+
+    /**
+     * AI回复语音地址（仅在END时返回且启用TTS时存在）
+     */
+    private String audioUrl;
+
+    /**
+     * 响应时间（毫秒，仅在END时可选返回）
+     */
+    private Long responseTimeMs;
+
+    /**
      * 流消息类型
      */
     public enum StreamMessageType {

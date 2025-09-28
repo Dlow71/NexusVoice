@@ -92,6 +92,16 @@ nexusvoice:
     speed-ratio: 1.0
     # 连接超时时间（秒）（可选配置）
     timeout-seconds: 30
+  # 图像生成服务配置
+  image:
+    # 硅基流动API配置
+    siliconflow:
+      # 硅基流动API密钥 - 请填入你的实际API密钥
+      api-key: sk-your-siliconflow-api-key-here
+      # API基础URL（可选，默认使用官方地址）
+      base-url: https://api.siliconflow.cn/v1
+    # 服务启用状态（可选配置）
+    enabled: true
 
 # 第三方API密钥
 # third-party:

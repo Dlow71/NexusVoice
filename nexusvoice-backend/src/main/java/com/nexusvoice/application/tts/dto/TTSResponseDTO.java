@@ -33,4 +33,32 @@ public class TTSResponseDTO {
 
     @Schema(description = "音频时长(秒)", example = "5.2")
     private Double duration;
+
+    @Schema(description = "是否为分段合成")
+    private Boolean chunked;
+
+    @Schema(description = "分段批次ID")
+    private String groupId;
+
+    @Schema(description = "分段列表，顺序播放")
+    private java.util.List<Segment> segments;
+
+    @Data
+    @Schema(description = "TTS分段信息")
+    public static class Segment {
+        @Schema(description = "分段序号，从0开始", example = "0")
+        private Integer index;
+
+        @Schema(description = "该段文本")
+        private String text;
+
+        @Schema(description = "该段音频URL")
+        private String url;
+
+        @Schema(description = "该段音频大小(字节)")
+        private Integer size;
+
+        @Schema(description = "该段时长(秒)")
+        private Double duration;
+    }
 }

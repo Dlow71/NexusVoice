@@ -114,6 +114,7 @@ public class ConversationApplicationService {
             if (aiResponse.getSuccess()) {
                 // 8. 根据enableAudio参数决定是否调用TTS服务生成音频
                 String audioUrl = null;
+                TTSResponseDTO ttsResponse = null;
                 boolean shouldGenerateAudio = requestDto.getEnableAudio() != null && requestDto.getEnableAudio();
                 if (shouldGenerateAudio) {
                     try {
@@ -132,8 +133,8 @@ public class ConversationApplicationService {
                         
                         log.info("使用TTS语音类型：{}，对话ID：{}，{}", selectedVoiceType, conversation.getId(), 
                                 MarkdownTextUtils.getCleaningStats(aiResponse.getContent(), cleanedText));
-                        TTSResponseDTO ttsResponse = ttsService.textToSpeech(ttsRequest);
-                        audioUrl = ttsResponse.getAudioData(); // TTSService返回的是音频URL
+                        ttsResponse = ttsService.textToSpeech(ttsRequest);
+                        audioUrl = ttsResponse.getAudioData(); // TTSService返回的是音频URL（分段时为首段）
                         
                         log.info("TTS转换成功，对话ID：{}，音频URL：{}", conversation.getId(), audioUrl);
                     } catch (Exception e) {
@@ -171,15 +172,28 @@ public class ConversationApplicationService {
                             .build();
                 }
 
-                return ChatResponseDto.success(
-                        conversation.getId(),
-                        aiMessage.getId(),
-                        aiResponse.getContent(),
-                        aiResponse.getModel(),
-                        usageDto,
-                        aiResponse.getResponseTimeMs(),
-                        audioUrl
-                );
+                if (ttsResponse != null && Boolean.TRUE.equals(ttsResponse.getChunked()) && 
+                        ttsResponse.getSegments() != null && !ttsResponse.getSegments().isEmpty()) {
+                    return ChatResponseDto.successWithTts(
+                            conversation.getId(),
+                            aiMessage.getId(),
+                            aiResponse.getContent(),
+                            aiResponse.getModel(),
+                            usageDto,
+                            aiResponse.getResponseTimeMs(),
+                            ttsResponse
+                    );
+                } else {
+                    return ChatResponseDto.success(
+                            conversation.getId(),
+                            aiMessage.getId(),
+                            aiResponse.getContent(),
+                            aiResponse.getModel(),
+                            usageDto,
+                            aiResponse.getResponseTimeMs(),
+                            audioUrl
+                    );
+                }
             } else {
                 log.error("AI聊天失败，对话ID：{}，错误：{}", conversation.getId(), aiResponse.getErrorMessage());
                 return ChatResponseDto.error("AI聊天失败：" + aiResponse.getErrorMessage());
