@@ -187,7 +187,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             ConversationMessage userMessage = ConversationMessage.createUserMessage(
                     conversation.getId(), 
                     requestDto.getMessage(),
-                    getNextSequence(conversation.getId())
+                    null
             );
             conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
             
@@ -257,7 +257,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                                 ConversationMessage aiMessage = ConversationMessage.createAssistantMessage(
                                         conversation.getId(),
                                         responseContent.toString(),
-                                        getNextSequence(conversation.getId()),
+                                        null,
                                         audioUrl
                                 );
                                 conversationDomainService.addMessageToConversation(conversation.getId(), aiMessage);
@@ -402,7 +402,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             messages.add(ChatMessage.system(systemPrompt));
         }
         
-        // 添加历史消息（最多20条）
+        // 添加历史消息（最多20条；history 已包含刚保存的用户消息，这里不要重复追加当前消息）
         int maxHistory = 20;
         int startIndex = Math.max(0, history.size() - maxHistory);
         for (int i = startIndex; i < history.size(); i++) {
@@ -418,9 +418,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                     break;
             }
         }
-        
-        // 添加当前消息
-        messages.add(ChatMessage.user(requestDto.getMessage()));
+
         
         boolean enableWebSearch = requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : getBooleanConfig("search.enabled", false);
 

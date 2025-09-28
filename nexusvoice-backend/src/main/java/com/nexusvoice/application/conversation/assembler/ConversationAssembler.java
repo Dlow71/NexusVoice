@@ -66,7 +66,7 @@ public class ConversationAssembler {
                 .lastActiveAt(conversation.getLastActiveAt())
                 .createdAt(conversation.getCreatedAt())
                 .roleId(conversation.getRoleId())
-                .role(toRoleInfoDto(role))
+                .conversationRole(toRoleInfoDto(role))
                 .build();
     }
 

@@ -99,7 +99,10 @@ public class OpenAiChatServiceImpl implements AiChatService {
             
             String responseText;
             
-            if (enableWebSearch && toolsEnabled && searchToolEnabled && searchTool != null) {
+            // 仅在确有“时效性/事实检索”需求时才走带工具提示的路径，避免冗长指令影响延迟
+            String lastUserMsg = extractLastUserMessage(request.getMessages());
+            boolean needsSearch = enableWebSearch && shouldSearch(lastUserMsg);
+            if (needsSearch && toolsEnabled && searchToolEnabled && searchTool != null) {
                 // 使用带工具调用的AI助手
                 log.info("使用带联网搜索的AI助手处理请求");
                 responseText = getOrCreateToolEnabledAssistant().chat(buildFullMessage(request));
@@ -148,7 +151,8 @@ public class OpenAiChatServiceImpl implements AiChatService {
 
             // 根据配置与开关，注入联网搜索结果作为额外SystemMessage
             boolean enableWebSearch = request.getEnableWebSearch() != null && request.getEnableWebSearch();
-            boolean canUseSearch = enableWebSearch && toolsEnabled && searchToolEnabled && (searchTool != null);
+            String latestUser = extractLastUserMessage(request.getMessages());
+            boolean canUseSearch = enableWebSearch && shouldSearch(latestUser) && toolsEnabled && searchToolEnabled && (searchTool != null);
             List<dev.langchain4j.data.message.ChatMessage> finalMessages = messages;
             if (canUseSearch) {
                 try {
@@ -162,7 +166,7 @@ public class OpenAiChatServiceImpl implements AiChatService {
                             break;
                         }
                     }
-                    if (query != null && !query.isEmpty()) {
+                    if (query != null && !query.isEmpty() && shouldSearch(query)) {
                         String searchSummary = searchTool.searchWeb(query);
                         String sysText = "以下是搜索到的参考资料（仅供回答参考）：\n\n" + searchSummary;
                         List<dev.langchain4j.data.message.ChatMessage> augmented = new ArrayList<>(messages);
@@ -264,6 +268,38 @@ public class OpenAiChatServiceImpl implements AiChatService {
         List<dev.langchain4j.data.message.ChatMessage> messages = convertMessages(request.getMessages());
         Response<AiMessage> response = chatLanguageModel.generate(messages);
         return response.content().text();
+    }
+
+    /**
+     * 简单启发式：仅当问题明显具有时效性/检索需求时触发联网
+     */
+    private boolean shouldSearch(String query) {
+        if (query == null) return false;
+        String q = query.trim();
+        if (q.isEmpty()) return false;
+        String lower = q.toLowerCase();
+        // 中文/英文常见时效性关键词
+        String[] hints = new String[]{
+                "最新","今天","刚刚","现在","新闻","价格","涨跌","发布","更新","政策","实时","比赛","比分","天气","汇率","热点",
+                "today","latest","breaking","price","stock","score","who won","release","update","news","trend","weather","rate"
+        };
+        for (String h : hints) {
+            if (lower.contains(h)) return true;
+        }
+        // 含年份/日期的强时效场景（简单检测）
+        if (lower.matches(".*\\b20\\d{2}\\b.*")) return true;
+        return false;
+    }
+
+    private String extractLastUserMessage(List<com.nexusvoice.infrastructure.ai.model.ChatMessage> msgs) {
+        if (msgs == null || msgs.isEmpty()) return null;
+        for (int i = msgs.size() - 1; i >= 0; i--) {
+            com.nexusvoice.infrastructure.ai.model.ChatMessage m = msgs.get(i);
+            if (m.getRole() == com.nexusvoice.domain.conversation.constant.MessageRole.USER) {
+                return m.getContent();
+            }
+        }
+        return null;
     }
 
     /**
