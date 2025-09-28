@@ -8,11 +8,11 @@
           :key="convo.id"
           class="history-item"
           :class="{ active: convo.id === activeId }"
-          :title="convo.role ? convo.role.name : '未知角色'"
+          :title="convo.conversationRole ? convo.conversationRole.name : '未知角色'"
           @click="switchConversation(convo.id)"
       >
         <img
-            :src="(convo.role && convo.role.avatarUrl) ? convo.role.avatarUrl : defaultAvatar"
+            :src="(convo.conversationRole && convo.conversationRole.avatarUrl) ? convo.conversationRole.avatarUrl : defaultAvatar"
             @error="onImageError"
             alt="avatar"
             class="avatar"
