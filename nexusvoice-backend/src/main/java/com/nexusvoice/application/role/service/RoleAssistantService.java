@@ -171,6 +171,10 @@ public class RoleAssistantService {
         } else if (request.getOverrideVoiceType() != null && !request.getOverrideVoiceType().isEmpty()) {
             draft.setVoiceType(request.getOverrideVoiceType());
         }
+        // 新参数：avatarUrl（前端直传）
+        if (request.getAvatarUrl() != null && !request.getAvatarUrl().isEmpty()) {
+            draft.setAvatarUrl(request.getAvatarUrl());
+        }
 
         RoleBriefDto finalBrief = draft;
 
@@ -450,7 +454,7 @@ public class RoleAssistantService {
         sys.setMetadata(metadata);
         conversationDomainService.addMessageToConversation(conversationId, sys);
     }
-
+    
     private String makeMetadata(String type, String payload) {
         try {
             com.fasterxml.jackson.databind.node.ObjectNode node = objectMapper.createObjectNode();

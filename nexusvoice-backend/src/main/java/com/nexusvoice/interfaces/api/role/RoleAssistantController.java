@@ -65,7 +65,7 @@ public class RoleAssistantController {
 
     @PostMapping("/confirm")
     @RequireUser
-    @Operation(summary = "确认创建私人角色", description = "使用最近一次草稿直接创建私人角色；可选开启深研增强")
+    @Operation(summary = "确认创建私人角色", description = "使用最近一次草稿直接创建私人角色；可选开启深研增强，可自定义头像URL")
     public Result<RoleDTO> confirmCreate(@jakarta.validation.Valid @RequestBody RoleAssistantConfirmRequest request) {
         Long userId = SecurityUtils.getCurrentUserId().get();
         RoleDTO dto = roleAssistantService.confirmCreateRole(request, userId);

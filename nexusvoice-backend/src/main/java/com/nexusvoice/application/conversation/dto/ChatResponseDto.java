@@ -10,6 +10,7 @@ import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.Builder;
+import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 
 import java.time.LocalDateTime;
 
@@ -61,6 +62,15 @@ public class ChatResponseDto {
     @Schema(description = "AI回复语音地址")
     private String audioUrl;
 
+    @Schema(description = "是否为分段TTS")
+    private Boolean ttsChunked;
+
+    @Schema(description = "分段批次ID")
+    private String ttsGroupId;
+
+    @Schema(description = "分段列表（顺序播放）")
+    private java.util.List<TTSResponseDTO.Segment> ttsSegments;
+
     @Data
     @Builder
     @Schema(description = "令牌使用统计")
@@ -106,6 +116,29 @@ public class ChatResponseDto {
                 .usage(usage)
                 .responseTimeMs(responseTime)
                 .audioUrl(audioUrl)
+                .success(true)
+                .finishReason("stop")
+                .createdAt(LocalDateTime.now())
+                .build();
+    }
+
+    /**
+     * 创建成功响应（包含TTS分段信息）
+     */
+    public static ChatResponseDto successWithTts(Long conversationId, Long messageId, String content,
+                                                String model, TokenUsageDto usage, Long responseTime,
+                                                TTSResponseDTO tts) {
+        return ChatResponseDto.builder()
+                .conversationId(conversationId)
+                .messageId(messageId)
+                .content(content)
+                .model(model)
+                .usage(usage)
+                .responseTimeMs(responseTime)
+                .audioUrl(tts != null ? tts.getAudioData() : null)
+                .ttsChunked(tts != null ? tts.getChunked() : null)
+                .ttsGroupId(tts != null ? tts.getGroupId() : null)
+                .ttsSegments(tts != null ? tts.getSegments() : null)
                 .success(true)
                 .finishReason("stop")
                 .createdAt(LocalDateTime.now())

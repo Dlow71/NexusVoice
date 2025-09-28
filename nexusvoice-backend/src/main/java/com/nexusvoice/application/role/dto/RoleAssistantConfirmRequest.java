@@ -33,4 +33,7 @@ public class RoleAssistantConfirmRequest {
 
     @Schema(description = "可选：自定义深研查询集合（将替换系统建议）")
     private List<String> researchQueries;
+
+    @Schema(description = "可选：自定义角色头像URL")
+    private String avatarUrl;
 }

@@ -126,10 +126,9 @@ public class TTSToolUtils {
             // 创建收集音频字节的 WebSocket 客户端
             CollectingWebSocketClient client = new CollectingWebSocketClient(uri, headers);
 
-            // 连接
-            client.connect();
-            Thread.sleep(2000); // 保守等待连接建立（与现有 TTSService 一致）
-            if (!client.isOpen()) {
+            // 连接：阻塞等待握手完成，提升并发稳定性
+            boolean connected = client.connectBlocking(5, TimeUnit.SECONDS);
+            if (!connected || !client.isOpen()) {
                 throw new TTSException("WebSocket连接失败");
             }
 
