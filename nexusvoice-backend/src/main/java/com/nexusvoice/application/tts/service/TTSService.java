@@ -102,6 +102,16 @@ public class TTSService {
                 responseDTO.setVoiceType(voiceType);
                 responseDTO.setSpeedRatio(speedRatio);
                 responseDTO.setChunked(false);
+                // 为单段TTS补充统一的分段结构，便于前端一致处理
+                List<TTSResponseDTO.Segment> segs = new ArrayList<>(1);
+                TTSResponseDTO.Segment seg = new TTSResponseDTO.Segment();
+                seg.setIndex(0);
+                seg.setText(text);
+                seg.setUrl(audioUrl);
+                seg.setSize((int) audioFile.getSize());
+                // 单段场景下时长未知，暂不填充
+                segs.add(seg);
+                responseDTO.setSegments(segs);
                 return responseDTO;
             }
 

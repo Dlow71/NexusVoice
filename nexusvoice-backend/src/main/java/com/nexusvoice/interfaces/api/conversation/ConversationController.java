@@ -1,5 +1,6 @@
 package com.nexusvoice.interfaces.api.conversation;
 
+import cn.hutool.core.collection.ListUtil;
 import com.nexusvoice.annotation.RequireAuth;
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
@@ -8,9 +9,11 @@ import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
 import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
+import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.utils.SecurityUtils;
 import com.nexusvoice.utils.JwtUtils;
+import com.qiniu.util.StringUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +23,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -68,7 +73,6 @@ public class ConversationController {
                 request.getEnableAudio() != null ? request.getEnableAudio() : false);
         
         ChatResponseDto response = conversationApplicationService.chat(request, currentUserId);
-        
         if (response.getSuccess()) {
             log.info("聊天成功，用户ID：{}，对话ID：{}，响应时间：{}ms", 
                     currentUserId, response.getConversationId(), response.getResponseTimeMs());
