@@ -125,6 +125,21 @@ public enum ErrorCodeEnum {
     TTS_CONNECTION_FAILED(2007, "TTS服务连接失败"),
     TTS_TIMEOUT(2008, "TTS处理超时"),
     
+    // 图像生成相关 21xx
+    IMAGE_SERVICE_ERROR(2101, "图像生成服务错误"),
+    IMAGE_PROMPT_INVALID(2102, "图像描述提示词无效"),
+    IMAGE_MODEL_NOT_SUPPORTED(2103, "图像生成模型不支持"),
+    IMAGE_SIZE_INVALID(2104, "图像尺寸无效"),
+    IMAGE_GENERATION_FAILED(2105, "图像生成失败"),
+    IMAGE_CONNECTION_FAILED(2106, "图像生成服务连接失败"),
+    IMAGE_TIMEOUT(2107, "图像生成处理超时"),
+    IMAGE_BATCH_SIZE_INVALID(2108, "图像批量大小无效"),
+    IMAGE_SEED_INVALID(2109, "图像生成种子无效"),
+    IMAGE_STEPS_INVALID(2110, "图像生成步数无效"),
+    IMAGE_GUIDANCE_SCALE_INVALID(2111, "图像引导比例无效"),
+    IMAGE_CFG_INVALID(2112, "图像CFG参数无效"),
+    IMAGE_API_KEY_INVALID(2113, "图像生成API密钥无效"),
+    
     // 通用业务错误
     BUSINESS_ERROR(9999, "业务处理失败");
     
