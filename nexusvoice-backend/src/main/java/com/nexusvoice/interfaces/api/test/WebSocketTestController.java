@@ -60,10 +60,25 @@ public class WebSocketTestController {
         
         // 响应格式示例
         Map<String, Object> responseFormat = new HashMap<>();
-        responseFormat.put("type", "CONTENT | START | END | ERROR | HEARTBEAT");
+        responseFormat.put("type", "CONTENT | START | END | ERROR | HEARTBEAT | TTS_SEGMENT | TTS_SEGMENT_UPDATE");
         responseFormat.put("delta", "增量文本内容");
         responseFormat.put("isEnd", false);
         responseFormat.put("errorMessage", "错误信息（仅在ERROR类型时存在）");
+        // TTS分段说明
+        Map<String, Object> ttsSegment = new HashMap<>();
+        ttsSegment.put("type", "TTS_SEGMENT");
+        ttsSegment.put("ttsGroupId", "分段批次ID");
+        ttsSegment.put("index", 0);
+        ttsSegment.put("delta", "该段文本");
+        ttsSegment.put("audioUrl", "该段音频URL");
+        ttsSegment.put("ttsChunked", true);
+        responseFormat.put("tts_segment_example", ttsSegment);
+        Map<String, Object> ttsUpdate = new HashMap<>();
+        ttsUpdate.put("type", "TTS_SEGMENT_UPDATE");
+        ttsUpdate.put("ttsGroupId", "分段批次ID");
+        ttsUpdate.put("index", 0);
+        ttsUpdate.put("audioUrl", "补发的音频URL");
+        responseFormat.put("tts_segment_update_example", ttsUpdate);
         info.put("response_format", responseFormat);
         
         // 使用说明

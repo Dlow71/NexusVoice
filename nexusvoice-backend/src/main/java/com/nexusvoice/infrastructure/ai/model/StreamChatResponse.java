@@ -73,6 +73,16 @@ public class StreamChatResponse {
     private String audioUrl;
 
     /**
+     * 分段TTS的组ID（当以分段形式返回时）
+     */
+    private String ttsGroupId;
+
+    /**
+     * 是否为分段TTS消息
+     */
+    private Boolean ttsChunked;
+
+    /**
      * 响应时间（毫秒，仅在END时可选返回）
      */
     private Long responseTimeMs;
@@ -105,6 +115,16 @@ public class StreamChatResponse {
          * 心跳信号
          */
         HEARTBEAT
+        ,
+        /**
+         * 分段TTS消息（携带该段文本与对应音频地址）
+         */
+        TTS_SEGMENT,
+        
+        /**
+         * 分段TTS补发（音频迟到时对已有文本段进行音频更新）
+         */
+        TTS_SEGMENT_UPDATE
     }
 
     /**
@@ -162,5 +182,38 @@ public class StreamChatResponse {
                 .type(StreamMessageType.HEARTBEAT)
                 .isEnd(false)
                 .build();
+    }
+
+    /**
+     * 创建分段TTS响应
+     */
+    public static StreamChatResponse ttsSegment(String groupId, int index, String text, String audioUrl, String model) {
+        StreamChatResponse resp = StreamChatResponse.builder()
+                .type(StreamMessageType.TTS_SEGMENT)
+                .isEnd(false)
+                .index(index)
+                .delta(text)
+                .audioUrl(audioUrl)
+                .model(model)
+                .ttsGroupId(groupId)
+                .ttsChunked(true)
+                .build();
+        return resp;
+    }
+
+    /**
+     * 创建分段TTS补发（迟到音频）
+     */
+    public static StreamChatResponse ttsSegmentUpdate(String groupId, int index, String audioUrl, String model) {
+        StreamChatResponse resp = StreamChatResponse.builder()
+                .type(StreamMessageType.TTS_SEGMENT_UPDATE)
+                .isEnd(false)
+                .index(index)
+                .audioUrl(audioUrl)
+                .model(model)
+                .ttsGroupId(groupId)
+                .ttsChunked(true)
+                .build();
+        return resp;
     }
 }
