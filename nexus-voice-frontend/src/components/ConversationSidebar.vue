@@ -1,176 +1,158 @@
 <template>
-  <!-- 侧边栏容器，根据 isCollapsed 状态动态添加 'collapsed' class -->
-  <aside class="sidebar" :class="{ collapsed: isCollapsed }">
-    <!-- 顶部区域，包含logo和折叠按钮 -->
-    <div class="sidebar-header">
-      <h1 v-if="!isCollapsed" class="sidebar-title">Nexus Voice</h1>
-      <button @click="toggleCollapse" class="collapse-btn">
-        <!-- 根据状态显示不同图标 -->
-        <span v-if="!isCollapsed">‹</span>
-        <span v-else>›</span>
-      </button>
-    </div>
-
-    <!-- 发起新对话按钮 -->
-    <div class="new-chat-section">
-      <button @click="startNew" class="new-chat-btn">
-        <span>+</span>
-        <span v-if="!isCollapsed">发起新对话</span>
-      </button>
-    </div>
-
-    <!-- 历史会话列表 -->
-    <div class="history-list-container">
-      <p v-if="!isCollapsed" class="history-title">最近对话</p>
-      <div
-          v-for="session in history"
-          :key="session.id"
+  <div class="sidebar-container">
+    <button @click="goHome" class="new-chat-btn">+ 发起新对话</button>
+    <h3 class="history-title">最近对话</h3>
+    <ul class="history-list">
+      <li
+          v-for="convo in history"
+          :key="convo.id"
           class="history-item"
-          :class="{ active: session.id === activeId }"
-          @click="selectSession(session.id)"
-          :title="session.title || '新的对话'"
+          :class="{ active: convo.id === activeId }"
+          :title="convo.role ? convo.role.name : '未知角色'"
+          @click="switchConversation(convo.id)"
       >
-        <span>•</span>
-        <span v-if="!isCollapsed">{{ session.title || '新的对话' }}</span>
-      </div>
-    </div>
-  </aside>
+        <img
+            :src="(convo.role && convo.role.avatarUrl) ? convo.role.avatarUrl : defaultAvatar"
+            @error="onImageError"
+            alt="avatar"
+            class="avatar"
+        />
+        <div class="convo-info">
+          <span class="convo-content">{{ convo.lastMessage || convo.title || '新对话' }}</span>
+        </div>
+        <button @click.stop="deleteConvo(convo.id)" class="delete-btn" title="删除对话">
+          ×
+        </button>
+      </li>
+    </ul>
+  </div>
 </template>
 
 <script setup>
-import { ref ,defineProps} from 'vue';
-    defineProps({
-      history: { // 接收父组件传递的会话历史数组
-        type: Array,
-        required: true,
-      },
-      activeId: { // 接收当前激活的会话ID，用于高亮显示
-        type: [String, Number, null],
-        default: null,
-      }
-    });
+import { useRouter } from "vue-router";
+import defaultAvatar from "../assets/placeholder.svg";
 
-// 组件事件
-const emit = defineEmits(['switch-conversation', 'new-conversation']);
+defineProps({
+  history: { type: Array, required: true },
+  activeId: { type: String, default: null },
+});
 
-// 组件内部状态
-const isCollapsed = ref(false); // 控制侧边栏的折叠状态
+// 增加 delete-conversation 事件
+const emit = defineEmits(["switch-conversation", "delete-conversation"]);
+const router = useRouter();
 
-// 组件方法
-
-// 切换折叠状态
-const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value;
+const goHome = () => router.push("/");
+const switchConversation = (id) => emit("switch-conversation", id);
+const onImageError = (event) => {
+  event.target.src = defaultAvatar;
 };
 
-// 当用户点击“发起新对话”时，向父组件发送事件
-const startNew = () => {
-  emit('new-conversation');
-};
-
-// 当用户点击某个历史会话时，向父组件发送事件并传递会话ID
-const selectSession = (id) => {
-  emit('switch-conversation', id);
+// 触发删除事件的函数
+const deleteConvo = (id) => {
+  emit("delete-conversation", id);
 };
 </script>
 
 <style scoped>
-/* 侧边栏基础样式 */
-.sidebar {
+.sidebar-container {
   width: 260px;
-  background-color: #1e1e1e;
-  flex-shrink: 0;
+  background-color: #1f2937;
+  padding: 1rem;
   display: flex;
   flex-direction: column;
+  height: 100vh;
   border-right: 1px solid #374151;
-  padding: 1rem;
-  transition: width 0.3s ease; /* 平滑的宽度变化动画 */
-}
-/* 折叠后的样式 */
-.sidebar.collapsed {
-  width: 68px; /* 仅显示图标的宽度 */
-  padding: 1rem 0.5rem;
-}
-
-.sidebar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.5rem;
-  padding: 0 0.5rem;
-}
-.sidebar-title {
-  color: white;
-  font-size: 1.5rem;
-  font-weight: bold;
-  white-space: nowrap; /* 防止文字换行 */
-}
-.collapse-btn {
-  background: #374151;
-  color: #d1d5db;
-  border: none;
-  border-radius: 50%;
-  width: 32px;
-  height: 32px;
-  cursor: pointer;
-  font-size: 1.5rem;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-.new-chat-section {
-  padding: 0 0.5rem;
 }
 .new-chat-btn {
   width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
   padding: 0.75rem;
   background-color: transparent;
   border: 1px solid #4b5563;
-  color: #d1d5db;
+  color: #e5e7eb;
   border-radius: 8px;
+  cursor: pointer;
   text-align: left;
   font-size: 1rem;
-  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 1rem;
 }
-.sidebar.collapsed .new-chat-btn {
-  justify-content: center;
-}
-
-.history-list-container {
-  flex-grow: 1;
-  overflow-y: auto;
-  margin-top: 1.5rem;
+.new-chat-btn:hover {
+  background-color: #374151;
+  border-color: #6b7280;
 }
 .history-title {
   color: #9ca3af;
-  font-size: 0.9rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  margin: 1rem 0 0.5rem;
+  text-transform: uppercase;
   padding: 0 0.5rem;
+}
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
 }
 .history-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  color: #d1d5db;
-  padding: 0.75rem 0.5rem;
-  border-radius: 6px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 0.75rem;
+  border-radius: 6px;
+  transition: background-color 0.2s;
+  color: #d1d5db;
+  position: relative;
 }
 .history-item:hover {
   background-color: #374151;
 }
 .history-item.active {
-  background-color: #3b82f6;
+  background-color: #4a90e2;
   color: white;
 }
-.sidebar.collapsed .history-item {
-  justify-content: center;
+.avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.convo-info {
+  flex-grow: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.convo-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+/* 删除按钮样式 */
+.delete-btn {
+  position: absolute;
+  right: 0.5rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #9ca3af;
+  font-size: 1rem;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  opacity: 0; /* 默认隐藏 */
+  transition: opacity 0.2s, background-color 0.2s;
+}
+.history-item:hover .delete-btn {
+  opacity: 1; /* 悬浮时显示 */
+}
+.delete-btn:hover {
+  background-color: #ef4444; /* 悬浮时变红 */
+  color: white;
 }
 </style>

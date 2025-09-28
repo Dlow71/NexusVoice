@@ -56,5 +56,5 @@ public class ConversationListDto {
     private Long roleId;
 
     @Schema(description = "角色信息")
-    private RoleInfoDto role;
+    private RoleInfoDto conversationRole;
 }

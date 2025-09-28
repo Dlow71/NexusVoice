@@ -5,7 +5,7 @@ import { useAuthStore } from '../stores/auth';
 const apiClient = axios.create({
     //从配置文件中读取文件
     baseURL:"http://localhost:8081/api",
-    timeout: 10000,
+    timeout: 30000,
 });
 
 // 2. 添加请求拦截器 (Request Interceptor)
