@@ -101,7 +101,7 @@ public class ConversationApplicationService {
             ConversationMessage userMessage = ConversationMessage.createUserMessage(
                     conversation.getId(), 
                     requestDto.getMessage(), 
-                    messageRepository.getNextSequenceByConversationId(conversation.getId())
+                    null
             );
             userMessage = conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
 
@@ -149,7 +149,7 @@ public class ConversationApplicationService {
                 ConversationMessage aiMessage = ConversationMessage.createAssistantMessage(
                         conversation.getId(),
                         aiResponse.getContent(),
-                        messageRepository.getNextSequenceByConversationId(conversation.getId()),
+                        null,
                         audioUrl
                 );
                 aiMessage.setTokenCount(aiResponse.getUsage() != null ? aiResponse.getUsage().getCompletionTokens() : 0);
@@ -402,9 +402,9 @@ public class ConversationApplicationService {
      * 构建AI请求
      */
     private ChatRequest buildAiRequest(Conversation conversation, ChatRequestDto requestDto, Role role) {
-        // 获取对话历史
+        // 获取对话历史（已包含刚保存的用户消息）
         List<ConversationMessage> history = messageRepository.findByConversationIdOrderBySequence(conversation.getId());
-        
+
         // 转换为AI请求格式
         List<ChatMessage> messages = new ArrayList<>();
         
@@ -414,26 +414,8 @@ public class ConversationApplicationService {
             messages.add(ChatMessage.system(systemPrompt));
         }
         
-        // 添加历史消息（限制数量以避免超过令牌限制）
-        int maxHistoryMessages = 20; // 最多包含20条历史消息
-        int startIndex = Math.max(0, history.size() - maxHistoryMessages);
-        for (int i = startIndex; i < history.size(); i++) {
-            ConversationMessage msg = history.get(i);
-            switch (msg.getRole()) {
-                case USER:
-                    messages.add(ChatMessage.user(msg.getContent()));
-                    break;
-                case ASSISTANT:
-                    messages.add(ChatMessage.assistant(msg.getContent()));
-                    break;
-                default:
-                    // 忽略其他类型
-                    break;
-            }
-        }
-        
-        // 添加当前用户消息
-        messages.add(ChatMessage.user(requestDto.getMessage()));
+        // 添加历史消息（动态截断，避免超额 token）
+        addTrimmedHistory(messages, history, systemPrompt);
         
         // 构建请求
         return ChatRequest.builder()
@@ -487,5 +469,37 @@ public class ConversationApplicationService {
         }
         
         return systemPromptBuilder.toString();
+    }
+
+    /**
+     * 根据简单 token 预算从尾部选择历史消息，避免重复添加当前用户消息
+     */
+    private void addTrimmedHistory(List<ChatMessage> target, List<ConversationMessage> history, String systemPrompt) {
+        if (history == null || history.isEmpty()) return;
+        // 预估预算（粗略）：限制在 ~2500 tokens 的上下文（不含输出）
+        int budget = 2500;
+        int used = 0;
+        if (systemPrompt != null) used += aiChatService.estimateTokenCount(systemPrompt);
+
+        // 从尾到头累加，再正序加入，最多 20 条
+        List<ConversationMessage> buffer = new ArrayList<>();
+        for (int i = history.size() - 1; i >= 0 && buffer.size() < 20; i--) {
+            ConversationMessage msg = history.get(i);
+            String content = msg.getContent();
+            if (content == null || content.isEmpty()) continue;
+            int t = aiChatService.estimateTokenCount(content);
+            if (used + t > budget) break;
+            used += t;
+            buffer.add(msg);
+        }
+        // 反转为时间顺序
+        for (int i = buffer.size() - 1; i >= 0; i--) {
+            ConversationMessage msg = buffer.get(i);
+            switch (msg.getRole()) {
+                case USER -> target.add(ChatMessage.user(msg.getContent()));
+                case ASSISTANT -> target.add(ChatMessage.assistant(msg.getContent()));
+                default -> {}
+            }
+        }
     }
 }

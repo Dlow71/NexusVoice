@@ -24,9 +24,15 @@ import java.util.UUID;
 public class FileUploadService {
     
     private final QiniuConfig qiniuConfig;
+    private final UploadManager uploadManager;
+    private final Auth auth;
     
     public FileUploadService(QiniuConfig qiniuConfig) {
         this.qiniuConfig = qiniuConfig;
+        // 复用上传客户端，减少初始化开销
+        Configuration cfg = new Configuration(Zone.autoZone());
+        this.uploadManager = new UploadManager(cfg);
+        this.auth = Auth.create(qiniuConfig.getAccessKey(), qiniuConfig.getSecretKey());
     }
     
     /**
@@ -61,15 +67,7 @@ public class FileUploadService {
         log.info("开始上传文件，文件名：{}，文件类型：{}", file.getOriginalFilename(), fileType.getDescription());
         
         // 创建上传token
-        Auth auth = Auth.create(qiniuConfig.getAccessKey(), qiniuConfig.getSecretKey());
         String upToken = auth.uploadToken(qiniuConfig.getBucket());
-        
-        // 设置上传配置，Region要与存储空间所属的存储区域保持一致
-        // 根据之前的错误信息，nexusvoice存储桶位于华北区域（z2）
-        Configuration cfg = new Configuration(Zone.autoZone());
-        
-        // 创建上传管理器
-        UploadManager uploadManager = new UploadManager(cfg);
         
         String originalFilename = file.getOriginalFilename();
         // 构造文件目录和文件名

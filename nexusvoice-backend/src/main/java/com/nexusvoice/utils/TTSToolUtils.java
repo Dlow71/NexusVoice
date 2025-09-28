@@ -36,7 +36,7 @@ public class TTSToolUtils {
     private static final String DEFAULT_VOICE = "qiniu_zh_female_wwxkjx";
     private static final String DEFAULT_ENCODING = "mp3";
     private static final double DEFAULT_SPEED = 1.0;
-    private static final int READ_TIMEOUT_MS = 30_000; // 30 seconds
+    private static final int READ_TIMEOUT_MS = 60_000; // 60 seconds
 
     private final String token;
     private final String host;
