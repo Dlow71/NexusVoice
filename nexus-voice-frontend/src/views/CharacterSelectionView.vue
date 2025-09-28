@@ -111,7 +111,7 @@ import { ref, computed, watch, onMounted } from 'vue';
 import { useAuthStore } from '../stores/auth';
 import CharacterCard from '../components/CharacterCard.vue';
 import characterApi from '../services/character';
-import { ElMessage } from 'element-plus';
+import {ElMessage, ElMessageBox} from 'element-plus';
 
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
@@ -192,19 +192,31 @@ const changePage = (newPage) => {
 };
 
 const handleDelete = async (id) => {
-  if (window.confirm('您确定要删除这个角色吗？此操作不可撤销。')) {
+  try {
+    await ElMessageBox.confirm(
+        "此操作将永久删除该角色, 是否继续?",
+        "警告",
+        {
+          confirmButtonText: "确认删除",
+          cancelButtonText: "取消",
+          type: "warning",
+        }
+    );
+    // 如果用户点击了“确认删除”，代码会继续执行到这里
     try {
       await characterApi.deleteCharacter(id);
-      ElMessage.success('角色删除成功！');
-      if (characters.value.length === 1 && pagination.value.page > 1) {
-        pagination.value.page--;
-      } else {
-        fetchData();
-      }
-    } catch (error) {
-      console.error("删除角色失败:", error);
-      ElMessage.error(error.response?.data?.message || '删除失败，请稍后再试。');
+      ElMessage.success("角色删除成功！");
+      // 刷新列表以显示删除后的结果
+     await fetchData();
+    } catch (apiError) {
+      console.error("删除角色API调用失败:", apiError);
+      ElMessage.error(
+          apiError.response?.data?.message || "删除角色失败，请稍后再试。"
+      );
     }
+  } catch (cancelAction) {
+    // 如果用户点击了“取消”或关闭弹窗，代码会进入 catch 块
+    ElMessage.info("已取消删除");
   }
 };
 
@@ -403,6 +415,7 @@ watch(searchQuery, () => {
   cursor: pointer;
   transition: all 0.2s;
   height: 100%;
+  width: 100%;
 }
 .character-card.create-new-card:hover { border-color: #6b7280; background-color: #374151; color: #e5e7eb; }
 .create-icon { font-size: 3rem; font-weight: 200; }

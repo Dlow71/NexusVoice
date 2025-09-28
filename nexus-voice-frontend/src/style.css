@@ -14,6 +14,7 @@
     --bg-main: #1a1a1a;         /* 主背景 */
     --bg-secondary: #1f2937;    /* 次级背景（头部/底部/AI气泡） */
     --border-color: #374151;    /* 边框线颜色 */
+    --primary-color-hover: #2563eb; /* 鼠标悬浮在主色按钮上时更深的蓝色 */
 
     /* 文字颜色 */
     --text-primary: #f9fafb;    /* 主文字 */

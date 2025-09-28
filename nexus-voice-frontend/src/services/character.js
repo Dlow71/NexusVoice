@@ -118,5 +118,48 @@ export default {
     deleteConversation(conversationId) {
         return apiClient.delete(`/v1/conversations/${conversationId}`);
     },
+    /**
+     * 1. 生成角色草稿
+     * @param {string} conversationId 对话ID
+     * @param {boolean} enableWebSearch 是否允许联网
+     */
+    generateRoleBrief(conversationId, enableWebSearch = false) {
+        return apiClient.post(`/roles/assistant/brief?conversationId=${conversationId}&enableWebSearch=${enableWebSearch}`);
+    },
+
+    /**
+     * 2. 预览深研任务清单
+     * @param {string} conversationId 对话ID
+     */
+    getResearchTasks(conversationId) {
+        return apiClient.get(`/roles/assistant/research/tasks?conversationId=${conversationId}`);
+    },
+
+    /**
+     * 3. 确认创建角色 (可带深研任务)
+     * @param {object} payload 请求体
+     */
+    confirmRoleCreation(payload) {
+        return apiClient.post('/roles/assistant/confirm', payload);
+    },
+
+    /**
+     *  应用深研并仅更新草稿
+     * @param {object} payload 请求体
+     */
+    applyResearchToBrief(payload) {
+        return apiClient.post('/roles/assistant/research/apply', payload);
+    },
+    /**
+     * ai生成头像
+     */
+    generateImage(prompt) {
+        const payload = {
+            model: "Kwai-Kolors/Kolors",
+            prompt: prompt,
+            imageSize: "1024x1024", // 默认尺寸
+        };
+        return apiClient.post("/v1/image/generate", payload);
+    },
 };
 
