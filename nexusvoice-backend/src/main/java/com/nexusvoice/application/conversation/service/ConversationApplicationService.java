@@ -172,8 +172,19 @@ public class ConversationApplicationService {
                             .build();
                 }
 
-                if (ttsResponse != null && Boolean.TRUE.equals(ttsResponse.getChunked()) && 
-                        ttsResponse.getSegments() != null && !ttsResponse.getSegments().isEmpty()) {
+                if (ttsResponse != null) {
+                    // 保障单段TTS也返回统一的分段结构
+                    if (ttsResponse.getSegments() == null || ttsResponse.getSegments().isEmpty()) {
+                        List<TTSResponseDTO.Segment> segs = new ArrayList<>(1);
+                        TTSResponseDTO.Segment seg = new TTSResponseDTO.Segment();
+                        seg.setIndex(0);
+                        seg.setText(ttsResponse.getText());
+                        seg.setUrl(ttsResponse.getAudioData());
+                        seg.setSize(ttsResponse.getAudioSize());
+                        segs.add(seg);
+                        ttsResponse.setSegments(segs);
+                        ttsResponse.setChunked(false);
+                    }
                     return ChatResponseDto.successWithTts(
                             conversation.getId(),
                             aiMessage.getId(),
