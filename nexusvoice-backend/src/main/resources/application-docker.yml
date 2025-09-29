@@ -1,0 +1,244 @@
+# NexusVoice Backend - Docker 环境专用配置
+# 此配置将在 Docker 容器中使用，通过环境变量覆盖默认配置
+
+spring:
+  application:
+    name: nexusvoice-backend
+    
+  # 数据源配置 - 通过环境变量配置
+  datasource:
+    url: jdbc:mysql://${DB_HOST:nexusvoice-mysql}:${DB_PORT:3306}/${DB_NAME:nexusvoice_dev}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
+    username: ${DB_USERNAME:nexusvoice}
+    password: ${DB_PASSWORD:nexusvoice123}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    
+    # Druid 连接池配置（Docker 环境优化）
+    druid:
+      # 初始化大小，最小，最大
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      # 配置获取连接等待超时的时间
+      max-wait: 60000
+      # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒
+      time-between-eviction-runs-millis: 60000
+      # 配置一个连接在池中最小生存的时间，单位是毫秒
+      min-evictable-idle-time-millis: 300000
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      # 打开PSCache，并且指定每个连接上PSCache的大小
+      pool-prepared-statements: true
+      max-pool-prepared-statement-per-connection-size: 20
+      # 配置监控统计拦截的filters
+      filters: stat,wall,slf4j
+      # 通过connectProperties属性来打开mergeSql功能；慢SQL记录
+      connection-properties: druid.stat.mergeSql=true;druid.stat.slowSqlMillis=5000
+      
+      # Docker 环境下的 Druid 监控配置
+      web-stat-filter:
+        enabled: ${ENABLE_DRUID_MONITOR:true}
+        url-pattern: "/*"
+        exclusions: "*.js,*.gif,*.jpg,*.bmp,*.png,*.css,*.ico,/druid/*"
+      
+      stat-view-servlet:
+        enabled: ${ENABLE_DRUID_MONITOR:true}
+        url-pattern: "/druid/*"
+        allow: 127.0.0.1,172.20.0.0/16
+        reset-enable: false
+        login-username: ${DRUID_LOGIN_USERNAME:admin}
+        login-password: ${DRUID_LOGIN_PASSWORD:admin123}
+
+  # Redis 配置 - 通过环境变量配置
+  redis:
+    host: ${REDIS_HOST:nexusvoice-redis}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: 3000ms
+      shutdown-timeout: 100ms
+
+  # Jackson 配置
+  jackson:
+    time-zone: GMT+8
+    serialization:
+      write-dates-as-timestamps: false
+      write-date-timestamps-as-nanoseconds: false
+    deserialization:
+      fail-on-unknown-properties: false
+      accept-empty-string-as-null-object: true
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: ${MAX_FILE_SIZE:100MB}
+      max-request-size: ${MAX_REQUEST_SIZE:100MB}
+      file-size-threshold: 2KB
+      location: /app/uploads
+
+  # SQL 初始化
+  sql:
+    init:
+      mode: never
+
+  # 线程配置
+  threads:
+    virtual:
+      enabled: true
+
+# 服务器配置
+server:
+  port: 8080
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+  http2:
+    enabled: true
+  forward-headers-strategy: framework
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# MyBatis-Plus配置
+  mybatis-plus:
+    type-enums-package: com.nexusvoice.domain.user.constant
+    configuration:
+      map-underscore-to-camel-case: true
+      call-setters-on-nulls: true
+      # Docker 环境下的日志配置
+      # 说明：Spring 配置不支持三元表达式，这里改为通过环境变量显式指定实现类
+      # 可选：org.apache.ibatis.logging.stdout.StdOutImpl（打印SQL）或 org.apache.ibatis.logging.nologging.NoLoggingImpl（关闭）
+      log-impl: ${MYBATIS_LOG_IMPL:org.apache.ibatis.logging.stdout.StdOutImpl}
+  global-config:
+    db-config:
+      id-type: ASSIGN_ID
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      insert-strategy: NOT_EMPTY
+      update-strategy: NOT_EMPTY
+      where-strategy: NOT_EMPTY
+  mapper-locations: classpath*:mapper/**/*Mapper.xml
+
+# JWT 配置 - 通过环境变量配置
+jwt:
+  secret: ${JWT_SECRET:nexusvoice-jwt-secret-key-change-in-production}
+  expiration: ${JWT_EXPIRATION:86400000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
+  issuer: ${JWT_ISSUER:nexusvoice}
+
+# LangChain4j 配置 - 通过环境变量配置
+langchain4j:
+  enabled: ${LANGCHAIN4J_ENABLED:true}
+  open-ai:
+    api-key: ${OPENAI_API_KEY:}
+    base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+    chat-model:
+      model-name: ${OPENAI_MODEL:gpt-4o-mini}
+      temperature: ${OPENAI_TEMPERATURE:0.7}
+      max-tokens: ${OPENAI_MAX_TOKENS:2000}
+    embedding-model:
+      model-name: text-embedding-3-small
+
+# NexusVoice 自定义配置
+nexusvoice:
+  # 搜索服务配置
+  search:
+    provider: ${SEARCH_PROVIDER:tavily}
+    tavily:
+      api-key: ${TAVILY_API_KEY:}
+  
+  # TTS 配置
+  tts:
+    token: ${TTS_TOKEN:}
+    voice-type: ${TTS_VOICE_TYPE:qiniu_zh_female_wwxkjx}
+    encoding: mp3
+    speed-ratio: 1.0
+    timeout-seconds: 30
+  
+  # 图像生成配置
+  image:
+    enabled: true
+    siliconflow:
+      api-key: ${SILICONFLOW_API_KEY:}
+      base-url: ${SILICONFLOW_BASE_URL:https://api.siliconflow.cn/v1}
+
+# 第三方服务配置
+qiniu:
+  access-key: ${QINIU_ACCESS_KEY:}
+  secret-key: ${QINIU_SECRET_KEY:}
+  bucket: ${QINIU_BUCKET:}
+  domain: ${QINIU_DOMAIN:}
+
+# Actuator 监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        # 说明：Spring 配置不支持三元表达式，这里改为通过环境变量直接控制暴露的端点列表
+        # 例如：MANAGEMENT_ENDPOINTS_INCLUDE=health,info  或  health,info,metrics,prometheus,druid
+        include: ${MANAGEMENT_ENDPOINTS_INCLUDE:health,info,metrics,prometheus,druid}
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: ${METRICS_EXPORT_PROMETHEUS:false}
+
+# 日志配置
+logging:
+  level:
+    root: INFO
+    com.nexusvoice: DEBUG
+    # 说明：Spring 配置不支持三元表达式，这里改为通过环境变量直接指定日志级别
+    # 可选：TRACE, DEBUG, INFO, WARN, ERROR, OFF
+    com.nexusvoice.mapper: ${MAPPER_LOG_LEVEL:DEBUG}
+    # Spring 框架日志
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    # MyBatis 日志
+    org.apache.ibatis: INFO
+    # Druid 日志
+    com.alibaba.druid: INFO
+    # HTTP 客户端日志
+    org.apache.http: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{50} - %msg%n"
+  file:
+    name: /app/logs/nexusvoice-backend.log
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 1GB
+
+# SpringDoc API 文档配置
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+  show-actuator: ${ENABLE_ACTUATOR:true}
+
+# 缓存配置
+cache:
+  caffeine:
+    spec: maximumSize=1000,expireAfterWrite=30m

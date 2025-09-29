@@ -1,0 +1,327 @@
+# NexusVoice Backend - Docker Compose 配置文件
+# 版本：1.0.0
+# 技术栈：Spring Boot 3.3.5 + MySQL 8.0 + Redis + LangChain4j
+# 
+# 使用说明：
+# 1. 复制 .env.example 为 .env 并配置环境变量
+# 2. 运行 docker-compose up -d 启动所有服务
+# 3. 访问 http://localhost:8080 查看应用
+# 4. 访问 http://localhost:8080/swagger-ui.html 查看API文档
+# 5. 访问 http://localhost:8082 使用phpMyAdmin管理数据库
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # NexusVoice 后端应用服务
+  # ===========================================
+  nexusvoice-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - JAVA_VERSION=21
+    container_name: nexusvoice-backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
+      - "${APP_DEBUG_PORT:-5005}:5005"  # JVM远程调试端口
+    environment:
+      # Spring Boot 配置
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-docker}
+      - SERVER_PORT=8080
+      - JAVA_OPTS=${JAVA_OPTS:--Xms512m -Xmx1024m -XX:+UseG1GC}
+      
+      # 数据库配置
+      - DB_HOST=nexusvoice-mysql
+      - DB_PORT=3306
+      - DB_NAME=${DB_NAME:-nexusvoice_dev}
+      - DB_USERNAME=${DB_USERNAME:-nexusvoice}
+      - DB_PASSWORD=${DB_PASSWORD:-nexusvoice123}
+      
+      # Redis配置
+      - REDIS_HOST=nexusvoice-redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DATABASE=${REDIS_DATABASE:-0}
+      
+      # JWT配置
+      - JWT_SECRET=${JWT_SECRET:-nexusvoice-jwt-secret-key-change-in-production}
+      - JWT_EXPIRATION=${JWT_EXPIRATION:-86400000}
+      - JWT_REFRESH_EXPIRATION=${JWT_REFRESH_EXPIRATION:-604800000}
+      - JWT_ISSUER=${JWT_ISSUER:-nexusvoice}
+      
+      # LangChain4j配置
+      - LANGCHAIN4J_ENABLED=${LANGCHAIN4J_ENABLED:-true}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
+      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-2000}
+      
+      # 搜索服务配置
+      - SEARCH_PROVIDER=${SEARCH_PROVIDER:-tavily}
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      
+      # TTS配置
+      - TTS_TOKEN=${TTS_TOKEN:-}
+      - TTS_VOICE_TYPE=${TTS_VOICE_TYPE:-qiniu_zh_female_wwxkjx}
+      
+      # 图像生成配置
+      - SILICONFLOW_API_KEY=${SILICONFLOW_API_KEY:-}
+      - SILICONFLOW_BASE_URL=${SILICONFLOW_BASE_URL:-https://api.siliconflow.cn/v1}
+      
+      # 七牛云配置
+      - QINIU_ACCESS_KEY=${QINIU_ACCESS_KEY:-}
+      - QINIU_SECRET_KEY=${QINIU_SECRET_KEY:-}
+      - QINIU_BUCKET=${QINIU_BUCKET:-}
+      - QINIU_DOMAIN=${QINIU_DOMAIN:-}
+      
+      # 调试配置
+      - JVM_DEBUG=${JVM_DEBUG:-false}
+      - JVM_DEBUG_PORT=5005
+      - JVM_DEBUG_SUSPEND=${JVM_DEBUG_SUSPEND:-n}
+      
+    volumes:
+      # 应用日志
+      - ./logs:/app/logs
+      # 文件上传存储（可选，如果使用本地存储）
+      - ./uploads:/app/uploads
+      # 时区配置
+      - /etc/localtime:/etc/localtime:ro
+      
+    depends_on:
+      nexusvoice-mysql:
+        condition: service_healthy
+      nexusvoice-redis:
+        condition: service_healthy
+        
+    networks:
+      - nexusvoice-network
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nexusvoice.rule=Host(`nexusvoice.local`)"
+      - "traefik.http.services.nexusvoice.loadbalancer.server.port=8080"
+
+  # ===========================================
+  # MySQL 8.0 数据库服务
+  # ===========================================
+  nexusvoice-mysql:
+    image: mysql:8.0.35
+    container_name: nexusvoice-mysql
+    restart: unless-stopped
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    environment:
+      # 数据库配置
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123}
+      - MYSQL_DATABASE=${DB_NAME:-nexusvoice_dev}
+      - MYSQL_USER=${DB_USERNAME:-nexusvoice}
+      - MYSQL_PASSWORD=${DB_PASSWORD:-nexusvoice123}
+      
+      # MySQL配置优化
+      - MYSQL_CHARSET=utf8mb4
+      - MYSQL_COLLATION=utf8mb4_unicode_ci
+      
+    command: >
+      --default-authentication-plugin=mysql_native_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --sql_mode=STRICT_TRANS_TABLES,NO_ZERO_DATE,NO_ZERO_IN_DATE,ERROR_FOR_DIVISION_BY_ZERO
+      --max_connections=1000
+      --innodb_buffer_pool_size=256M
+      --innodb_log_file_size=128M
+      --innodb_flush_log_at_trx_commit=1
+      --sync_binlog=1
+      --server-id=1
+      --log-bin=mysql-bin
+      --expire_logs_days=7
+      --slow_query_log=1
+      --long_query_time=2
+      --general_log=0
+      
+    volumes:
+      # 数据持久化
+      - nexusvoice_mysql_data:/var/lib/mysql
+      # 配置文件
+      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
+      # 初始化脚本（包含Flyway迁移脚本）
+      - ./src/main/resources/db/migration:/docker-entrypoint-initdb.d:ro
+      # 备份目录
+      - ./docker/mysql/backup:/backup
+      # 日志目录
+      - ./docker/mysql/logs:/var/log/mysql
+      # 时区配置
+      - /etc/localtime:/etc/localtime:ro
+      
+    networks:
+      - nexusvoice-network
+      
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD:-root123}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+      
+    labels:
+      - "traefik.enable=false"
+
+  # ===========================================
+  # Redis 缓存服务
+  # ===========================================
+  nexusvoice-redis:
+    image: redis:7.2.4-alpine
+    container_name: nexusvoice-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DATABASES=${REDIS_DATABASES:-16}
+    
+    # 使用redis.conf，并在提供密码时追加 --requirepass（通过容器内shell展开变量）
+    command: ["sh", "-c", "exec redis-server /usr/local/etc/redis/redis.conf $${REDIS_PASSWORD:+--requirepass $$REDIS_PASSWORD}"]
+      
+    volumes:
+      # Redis数据持久化
+      - nexusvoice_redis_data:/data
+      # Redis配置文件
+      - ./docker/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+      # 时区配置
+      - /etc/localtime:/etc/localtime:ro
+      
+    networks:
+      - nexusvoice-network
+      
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli $${REDIS_PASSWORD:+-a $$REDIS_PASSWORD} PING | grep -q PONG"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+      
+    labels:
+      - "traefik.enable=false"
+
+  # ===========================================
+  # phpMyAdmin 数据库管理工具
+  # ===========================================
+  nexusvoice-phpmyadmin:
+    image: phpmyadmin/phpmyadmin:5.2.1
+    container_name: nexusvoice-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - "${PHPMYADMIN_PORT:-8082}:80"
+    environment:
+      # phpMyAdmin配置
+      - PMA_HOST=nexusvoice-mysql
+      - PMA_PORT=3306
+      - PMA_USER=root
+      - PMA_PASSWORD=${MYSQL_ROOT_PASSWORD:-root123}
+      - PMA_ARBITRARY=1
+      - PMA_CONTROLUSER=root
+      - PMA_CONTROLPASS=${MYSQL_ROOT_PASSWORD:-root123}
+      
+      # 上传限制配置
+      - UPLOAD_LIMIT=256M
+      - MEMORY_LIMIT=512M
+      - MAX_EXECUTION_TIME=600
+      
+    volumes:
+      # phpMyAdmin配置
+      - ./docker/phpmyadmin/config.user.inc.php:/etc/phpmyadmin/config.user.inc.php:ro
+      # 会话存储
+      - nexusvoice_phpmyadmin_sessions:/sessions
+      # 时区配置
+      - /etc/localtime:/etc/localtime:ro
+      
+    depends_on:
+      nexusvoice-mysql:
+        condition: service_healthy
+        
+    networks:
+      - nexusvoice-network
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.phpmyadmin.rule=Host(`phpmyadmin.nexusvoice.local`)"
+      - "traefik.http.services.phpmyadmin.loadbalancer.server.port=80"
+
+  # ===========================================
+  # Redis Commander (Redis管理工具) - 可选
+  # ===========================================
+  nexusvoice-redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: nexusvoice-redis-commander
+    restart: unless-stopped
+    ports:
+      - "${REDIS_COMMANDER_PORT:-8083}:8081"
+    environment:
+      - REDIS_HOSTS=local:nexusvoice-redis:6379:0:${REDIS_PASSWORD:-}
+      - HTTP_USER=${REDIS_COMMANDER_USER:-admin}
+      - HTTP_PASSWORD=${REDIS_COMMANDER_PASSWORD:-admin123}
+      
+    depends_on:
+      nexusvoice-redis:
+        condition: service_healthy
+        
+    networks:
+      - nexusvoice-network
+      
+    profiles:
+      - tools  # 使用 --profile tools 来启动
+      
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis-commander.rule=Host(`redis.nexusvoice.local`)"
+      - "traefik.http.services.redis-commander.loadbalancer.server.port=8081"
+
+# ===========================================
+# 网络配置
+# ===========================================
+networks:
+  nexusvoice-network:
+    driver: bridge
+    name: nexusvoice-network
+    ipam:
+      config:
+        - subnet: ${DOCKER_SUBNET:-172.20.0.0/16}
+    labels:
+      - "project=nexusvoice"
+
+# ===========================================
+# 数据卷配置
+# ===========================================
+volumes:
+  # MySQL数据持久化
+  nexusvoice_mysql_data:
+    driver: local
+    name: nexusvoice_mysql_data
+    labels:
+      - "project=nexusvoice"
+      - "service=mysql"
+      
+  # Redis数据持久化
+  nexusvoice_redis_data:
+    driver: local
+    name: nexusvoice_redis_data
+    labels:
+      - "project=nexusvoice"
+      - "service=redis"
+      
+  # phpMyAdmin会话存储
+  nexusvoice_phpmyadmin_sessions:
+    driver: local
+    name: nexusvoice_phpmyadmin_sessions
+    labels:
+      - "project=nexusvoice"
+      - "service=phpmyadmin"

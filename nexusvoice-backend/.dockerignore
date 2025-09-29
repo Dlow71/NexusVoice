@@ -1,0 +1,158 @@
+# NexusVoice Backend - Docker 构建忽略文件
+# 优化 Docker 构建性能，减少构建上下文大小
+
+# 版本控制
+.git/
+.gitignore
+.gitattributes
+
+# IDE 配置
+.idea/
+.vscode/
+.eclipse/
+*.iml
+*.ipr
+*.iws
+
+# OS 生成的文件
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Maven 构建产物
+target/
+!target/*.jar
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Gradle 构建产物（如果使用）
+.gradle/
+build/
+gradle-app.setting
+!gradle-wrapper.jar
+!gradle-wrapper.properties
+
+# 日志文件
+logs/
+*.log
+*.log.*
+
+# 临时文件
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+
+# 上传文件
+uploads/
+files/
+
+# 配置文件（包含敏感信息）
+src/main/resources/application-local.yml
+src/main/resources/application-local.yaml
+src/main/resources/application-*.yml
+!src/main/resources/application.yml
+!src/main/resources/application-docker.yml
+
+# 环境变量文件
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Docker 相关
+.dockerignore
+docker-compose.override.yml
+docker-compose.*.yml
+!docker-compose.yml
+
+# 数据库文件
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+
+# 备份文件
+*.backup
+*.bak
+*.old
+
+# 压缩文件
+*.zip
+*.tar.gz
+*.tar
+*.rar
+
+# 文档（构建时不需要）
+docs/
+*.md
+!README.md
+
+# 测试相关
+coverage/
+.nyc_output/
+.coverage
+
+# 缓存目录
+.cache/
+cache/
+
+# Node.js（如果项目中有前端资源）
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python（如果有Python脚本）
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# 开发工具生成的文件
+.editorconfig
+.eslintrc.*
+.prettierrc.*
+.stylelintrc.*
+
+# CI/CD 相关
+.github/
+.gitlab-ci.yml
+.travis.yml
+.circleci/
+Jenkinsfile
+
+# 本地开发工具
+docker/mysql/logs/
+docker/mysql/backup/
+docker/redis/data/
+
+# 大文件
+*.iso
+*.dmg
+*.exe
+*.msi
+
+# 证书文件
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
