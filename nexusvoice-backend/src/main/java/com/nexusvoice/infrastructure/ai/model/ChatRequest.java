@@ -79,6 +79,21 @@ public class ChatRequest {
      * 是否启用联网搜索
      */
     private Boolean enableWebSearch;
+    
+    /**
+     * 是否启用RAG（知识库检索增强）
+     */
+    private Boolean enableRag;
+    
+    /**
+     * 是否启用多模态（图片、视频等）
+     */
+    private Boolean enableMultiModal;
+    
+    /**
+     * RAG知识库ID列表
+     */
+    private List<Long> knowledgeBaseIds;
 
     /**
      * 创建默认配置的请求

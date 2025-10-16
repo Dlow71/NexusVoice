@@ -7,8 +7,6 @@ import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.tool.SimpleWebSearchTool;
-import com.nexusvoice.enums.ErrorCodeEnum;
-import com.nexusvoice.exception.BizException;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -16,12 +14,10 @@ import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.output.Response;
 import dev.langchain4j.model.StreamingResponseHandler;
-import dev.langchain4j.service.AiServices;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -31,14 +27,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
- * OpenAI聊天服务实现
+ * OpenAI聊天服务实现（旧版本，保留用于回滚）
+ * 默认禁用，如需启用请设置 nexusvoice.ai.legacy-service.enabled=true
  *
  * @author NexusVoice
  * @since 2025-09-25
+ * @deprecated 已被 OpenAiChatServiceNew 替代
  */
 @Slf4j
-@Primary
 @Service
+@ConditionalOnProperty(name = "nexusvoice.ai.legacy-service.enabled", havingValue = "true", matchIfMissing = false)
 public class OpenAiChatServiceImpl implements AiChatService {
 
     private final ChatLanguageModel chatLanguageModel;
@@ -316,6 +314,9 @@ public class OpenAiChatServiceImpl implements AiChatService {
         } else {
             fullMessage.append("你是一个有用的AI助手。\n\n");
         }
+        
+        // 添加全局回复风格要求
+        fullMessage.append("【重要】回复风格要求：请保持回答简洁精炼，直击要点，避免冗长的解释和不必要的铺垫。\n\n");
         
         // 添加历史消息
         List<ChatMessage> messages = request.getMessages();

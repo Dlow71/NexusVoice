@@ -50,4 +50,10 @@ public class ChatRequestDto {
     @Schema(description = "角色ID，指定AI扮演的角色", example = "1")
     @JsonSerialize(using = ToStringSerializer.class)
     private Long roleId;
+    
+    @Schema(description = "是否启用RAG（知识库检索增强）", example = "false")
+    private Boolean enableRag = false;
+    
+    @Schema(description = "知识库ID列表，启用RAG时使用", example = "[1, 2, 3]")
+    private java.util.List<Long> knowledgeBaseIds;
 }

@@ -23,8 +23,6 @@ import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
-import com.nexusvoice.utils.SecurityUtils;
-import com.nexusvoice.utils.JwtUtils;
 import com.nexusvoice.utils.MarkdownTextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -429,17 +427,25 @@ public class ConversationApplicationService {
         addTrimmedHistory(messages, history, systemPrompt);
         
         // 构建请求
+        String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName();
+        // 支持新的模型格式：provider:model，如果没有provider默认使用openai
+        if (modelName != null && !modelName.contains(":")) {
+            modelName = "openai:" + modelName;
+        }
+        
         return ChatRequest.builder()
                 .messages(messages)
-                .model(requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName())
+                .model(modelName)
                 .temperature(requestDto.getTemperature() != null ? requestDto.getTemperature() : 0.7)
                 .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
                 .userId(conversation.getUserId())
                 .conversationId(conversation.getId())
                 .enableWebSearch(requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : false)
+                .enableRag(requestDto.getEnableRag() != null ? requestDto.getEnableRag() : false)
+                .knowledgeBaseIds(requestDto.getKnowledgeBaseIds())
                 .build();
     }
-
+    
     /**
      * 构建系统提示词，集成角色信息
      */
@@ -478,6 +484,10 @@ public class ConversationApplicationService {
             
             log.info("集成角色信息到系统提示词，角色ID：{}，角色名称：{}", role.getId(), role.getName());
         }
+        
+        // 5. 添加全局回复风格要求
+        systemPromptBuilder.append("\n\n");
+        systemPromptBuilder.append("【重要】回复风格要求：请保持回答简洁精炼，直击要点，避免冗长的解释和不必要的铺垫。");
         
         return systemPromptBuilder.toString();
     }

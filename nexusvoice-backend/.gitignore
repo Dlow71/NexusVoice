@@ -8,6 +8,8 @@
 /.settings/
 *.iml
 
+docs
+
 # OS
 .DS_Store
 

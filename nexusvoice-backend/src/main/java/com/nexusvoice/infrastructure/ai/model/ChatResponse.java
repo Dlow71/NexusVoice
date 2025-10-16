@@ -6,6 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
 import java.util.Map;
+import java.util.HashMap;
 
 /**
  * AI聊天响应模型
@@ -113,5 +114,26 @@ public class ChatResponse {
                 .success(false)
                 .errorMessage(errorMessage)
                 .build();
+    }
+    
+    /**
+     * 设置单个元数据
+     */
+    public void setMetadata(String key, Object value) {
+        if (this.metadata == null) {
+            this.metadata = new HashMap<>();
+        }
+        this.metadata.put(key, value);
+    }
+    
+    /**
+     * 获取单个元数据
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T getMetadata(String key) {
+        if (this.metadata == null) {
+            return null;
+        }
+        return (T) this.metadata.get(key);
     }
 }
