@@ -63,12 +63,48 @@ langchain4j:
 #         starttls:
 #           enable: true
 
-# Redis配置
-# redis:
-#   host: localhost
-#   port: 6379
-#   password: your-redis-password
-#   database: 0
+# Redis配置 - 请根据实际情况配置
+  data:
+    redis:
+      # Redis服务器地址
+      host: localhost
+      # Redis服务器端口
+      port: 6379
+      # Redis密码（没有密码则留空或注释掉）
+      password: your-redis-password
+      # Redis数据库索引（默认为0）
+      database: 0
+      # 连接超时时间
+      timeout: 3000ms
+      # Lettuce连接池配置（可选，使用默认值即可）
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 3000ms
+
+# Redisson配置（高级分布式功能）
+redisson:
+  # 单节点配置
+  config: |
+    singleServerConfig:
+      # Redis地址，格式为redis://host:port
+      address: "redis://localhost:6379"
+      # Redis密码（没有密码则注释掉此行）
+      password: your-redis-password
+      # 数据库索引
+      database: 0
+      # 连接池大小
+      connectionPoolSize: 20
+      # 最小空闲连接数
+      connectionMinimumIdleSize: 5
+      # 连接超时时间（毫秒）
+      timeout: 3000
+      # 命令等待超时时间（毫秒）
+      commandTimeout: 3000
+      # 看门狗续期时间（毫秒），默认30000
+      lockWatchdogTimeout: 30000
 
 # NexusVoice配置
 nexusvoice:

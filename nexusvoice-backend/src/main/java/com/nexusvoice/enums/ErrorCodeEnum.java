@@ -143,6 +143,23 @@ public enum ErrorCodeEnum {
     // 功能实现相关
     FUNCTION_NOT_IMPLEMENTED(2200, "功能暂未实现"),
     
+    // Redis相关错误码 40xx
+    REDIS_CONNECTION_FAILED(4001, "Redis连接失败"),
+    REDIS_OPERATION_FAILED(4002, "Redis操作失败"),
+    REDIS_KEY_NOT_FOUND(4003, "Redis键不存在"),
+    REDIS_LOCK_ACQUIRE_FAILED(4004, "获取分布式锁失败"),
+    REDIS_LOCK_RELEASE_FAILED(4005, "释放分布式锁失败"),
+    RATE_LIMIT_EXCEEDED(4006, "请求频率超过限制，请稍后再试"),
+    BLOOM_FILTER_ERROR(4007, "布隆过滤器操作失败"),
+    REDIS_CACHE_PENETRATION(4008, "缓存穿透保护"),
+    REDIS_CACHE_BREAKDOWN(4009, "缓存击穿保护"),
+    REDIS_CACHE_AVALANCHE(4010, "缓存雪崩保护"),
+    REDIS_TRANSACTION_FAILED(4011, "Redis事务执行失败"),
+    REDIS_PIPELINE_FAILED(4012, "Redis管道操作失败"),
+    REDIS_SCRIPT_FAILED(4013, "Redis脚本执行失败"),
+    REDIS_PUB_SUB_FAILED(4014, "Redis发布订阅失败"),
+    REDIS_CLUSTER_ERROR(4015, "Redis集群错误"),
+    
     // 通用业务错误
     BUSINESS_ERROR(9999, "业务处理失败");
     

@@ -27,6 +27,7 @@
     <druid.version>1.2.23</druid.version>
     <jjwt.version>0.12.6</jjwt.version>
     <langchain4j.version>0.35.0</langchain4j.version>
+    <redisson.version>3.35.0</redisson.version>
   </properties>
 
   <dependencies>
@@ -262,6 +263,26 @@
       <groupId>org.apache.httpcomponents.client5</groupId>
       <artifactId>httpclient5</artifactId>
       <version>5.3.1</version>
+    </dependency>
+
+    <!-- Redis相关依赖 -->
+    <!-- Spring Data Redis -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+
+    <!-- Redisson Spring Boot Starter -->
+    <dependency>
+      <groupId>org.redisson</groupId>
+      <artifactId>redisson-spring-boot-starter</artifactId>
+      <version>${redisson.version}</version>
+    </dependency>
+
+    <!-- Lettuce连接池依赖 -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-pool2</artifactId>
     </dependency>
   </dependencies>
 
