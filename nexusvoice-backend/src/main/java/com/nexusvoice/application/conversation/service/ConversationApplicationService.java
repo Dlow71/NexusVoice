@@ -23,6 +23,7 @@ import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
+import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
 import com.nexusvoice.utils.MarkdownTextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -46,20 +47,20 @@ public class ConversationApplicationService {
     private final ConversationRepository conversationRepository;
     private final ConversationMessageRepository messageRepository;
     private final ConversationDomainService conversationDomainService;
-    private final AiChatService aiChatService;
+    private final DynamicAiModelBeanManager modelBeanManager;
     private final TTSService ttsService;
     private final RoleApplicationService roleApplicationService;
 
     public ConversationApplicationService(ConversationRepository conversationRepository,
                                         ConversationMessageRepository messageRepository,
                                         ConversationDomainService conversationDomainService,
-                                        AiChatService aiChatService,
+                                        DynamicAiModelBeanManager modelBeanManager,
                                         TTSService ttsService,
                                         RoleApplicationService roleApplicationService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
-        this.aiChatService = aiChatService;
+        this.modelBeanManager = modelBeanManager;
         this.ttsService = ttsService;
         this.roleApplicationService = roleApplicationService;
     }
@@ -107,6 +108,9 @@ public class ConversationApplicationService {
             ChatRequest aiRequest = buildAiRequest(conversation, requestDto, role);
 
             // 7. 调用AI服务
+            // 解析模型信息并获取对应的服务
+            String modelName = aiRequest.getModel();
+            AiChatService aiChatService = getAiChatService(modelName);
             ChatResponse aiResponse = aiChatService.chat(aiRequest);
 
             if (aiResponse.getSuccess()) {
@@ -408,6 +412,23 @@ public class ConversationApplicationService {
     }
 
     /**
+     * 获取AI聊天服务
+     * 根据模型名称动态获取对应的服务实例
+     */
+    private AiChatService getAiChatService(String modelName) {
+        if (modelName == null || modelName.trim().isEmpty()) {
+            modelName = "openai:gpt-oss-20b"; // 默认模型
+        }
+        
+        // 兼容旧格式（没有provider前缀的）
+        if (!modelName.contains(":")) {
+            modelName = "openai:" + modelName;
+        }
+        
+        return modelBeanManager.getServiceByModelKey(modelName);
+    }
+
+    /**
      * 构建AI请求
      */
     private ChatRequest buildAiRequest(Conversation conversation, ChatRequestDto requestDto, Role role) {
@@ -493,6 +514,19 @@ public class ConversationApplicationService {
     }
 
     /**
+     * 估算token数量
+     * 简单的估算方法：平均3-4个字符一个token
+     */
+    private int estimateTokenCount(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        // 中文字符通常占更多token，英文相对较少
+        // 这里使用简单的估算：大约3个字符=1个token
+        return (int) Math.ceil(text.length() / 3.0);
+    }
+    
+    /**
      * 根据简单 token 预算从尾部选择历史消息，避免重复添加当前用户消息
      */
     private void addTrimmedHistory(List<ChatMessage> target, List<ConversationMessage> history, String systemPrompt) {
@@ -500,7 +534,7 @@ public class ConversationApplicationService {
         // 预估预算（粗略）：限制在 ~2500 tokens 的上下文（不含输出）
         int budget = 2500;
         int used = 0;
-        if (systemPrompt != null) used += aiChatService.estimateTokenCount(systemPrompt);
+        if (systemPrompt != null) used += estimateTokenCount(systemPrompt);
 
         // 从尾到头累加，再正序加入，最多 20 条
         List<ConversationMessage> buffer = new ArrayList<>();
@@ -508,7 +542,7 @@ public class ConversationApplicationService {
             ConversationMessage msg = history.get(i);
             String content = msg.getContent();
             if (content == null || content.isEmpty()) continue;
-            int t = aiChatService.estimateTokenCount(content);
+            int t = estimateTokenCount(content);
             if (used + t > budget) break;
             used += t;
             buffer.add(msg);

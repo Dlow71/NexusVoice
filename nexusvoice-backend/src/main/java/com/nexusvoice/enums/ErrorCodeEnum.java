@@ -140,6 +140,9 @@ public enum ErrorCodeEnum {
     IMAGE_CFG_INVALID(2112, "图像CFG参数无效"),
     IMAGE_API_KEY_INVALID(2113, "图像生成API密钥无效"),
     
+    // 功能实现相关
+    FUNCTION_NOT_IMPLEMENTED(2200, "功能暂未实现"),
+    
     // 通用业务错误
     BUSINESS_ERROR(9999, "业务处理失败");
     
