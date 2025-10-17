@@ -440,10 +440,13 @@ const initWebSocket = () => {
     return;
   }
   
-  const wsUrl = `ws://localhost:8081/ws/chat/stream?token=${token}`;
+  // 使用子协议（Sec-WebSocket-Protocol）传递token，更安全
+  // 格式：Bearer.{token}，后端会从子协议中提取
+  const wsUrl = `ws://localhost:8081/ws/chat/stream`;
+  const protocol = `Bearer.${token}`;
   
   try {
-    ws.value = new WebSocket(wsUrl);
+    ws.value = new WebSocket(wsUrl, protocol);
     
     ws.value.onopen = () => {
       console.log('WebSocket连接已建立');

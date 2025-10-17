@@ -66,6 +66,13 @@ public class WebSocketJwtInterceptor implements HandshakeInterceptor {
             attributes.put("roles", roles);
             attributes.put("token", token);
 
+            // 如果前端使用子协议传递token，需要在响应中确认子协议
+            String protocol = request.getHeaders().getFirst("Sec-WebSocket-Protocol");
+            if (StringUtils.hasText(protocol) && protocol.startsWith("Bearer.")) {
+                response.getHeaders().set("Sec-WebSocket-Protocol", protocol);
+                log.debug("设置响应子协议：{}", protocol);
+            }
+
             log.info("WebSocket握手成功，用户ID：{}，用户名：{}，URI：{}", userId, username, request.getURI());
             return true;
 
@@ -90,30 +97,47 @@ public class WebSocketJwtInterceptor implements HandshakeInterceptor {
     /**
      * 从HTTP请求中提取JWT令牌
      * 支持以下方式：
-     * 1. Authorization请求头：Authorization: Bearer <token>
-     * 2. 查询参数：?token=<token>
-     * 3. 查询参数：?access_token=<token>
+     * 1. Sec-WebSocket-Protocol子协议：Bearer.{token}（推荐，更安全）
+     * 2. Authorization请求头：Authorization: Bearer <token>
+     * 3. 查询参数：?token=<token>
+     * 4. 查询参数：?access_token=<token>
      */
     private String extractToken(ServerHttpRequest request) {
-        // 1. 从Authorization头中提取
+        // 1. 从Sec-WebSocket-Protocol子协议中提取（推荐方式）
+        String protocol = request.getHeaders().getFirst("Sec-WebSocket-Protocol");
+        if (StringUtils.hasText(protocol)) {
+            // 支持格式：Bearer.{token}
+            if (protocol.startsWith("Bearer.")) {
+                String token = protocol.substring(7);
+                if (StringUtils.hasText(token)) {
+                    log.debug("从Sec-WebSocket-Protocol子协议中提取到令牌");
+                    return token;
+                }
+            }
+        }
+
+        // 2. 从Authorization头中提取
         String authHeader = request.getHeaders().getFirst("Authorization");
         if (StringUtils.hasText(authHeader) && authHeader.startsWith("Bearer ")) {
+            log.debug("从Authorization头中提取到令牌");
             return authHeader.substring(7);
         }
 
-        // 2. 从查询参数中提取
+        // 3. 从查询参数中提取（向后兼容）
         URI uri = request.getURI();
         String query = uri.getQuery();
         if (StringUtils.hasText(query)) {
             // 解析token参数
             String token = extractQueryParam(query, "token");
             if (StringUtils.hasText(token)) {
+                log.debug("从查询参数token中提取到令牌");
                 return token;
             }
             
             // 解析access_token参数
             token = extractQueryParam(query, "access_token");
             if (StringUtils.hasText(token)) {
+                log.debug("从查询参数access_token中提取到令牌");
                 return token;
             }
         }

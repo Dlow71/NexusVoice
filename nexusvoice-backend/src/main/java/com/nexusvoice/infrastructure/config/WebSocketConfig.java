@@ -34,7 +34,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
         // 注册流式聊天WebSocket端点，添加JWT认证拦截器
         registry.addHandler(chatStreamHandler, "/ws/chat/stream")
                 .setAllowedOriginPatterns("*") // 生产环境应该收紧域名限制
-                .addInterceptors(webSocketJwtInterceptor); // 添加JWT认证拦截器
+                .addInterceptors(webSocketJwtInterceptor) // 添加JWT认证拦截器
+                .setAllowedOrigins("*"); // 允许所有来源（生产环境需要限制）
                 // 注意：移除.withSockJS()，使用原生WebSocket协议
+                // 支持子协议传递token：Bearer.{token}
     }
 }
