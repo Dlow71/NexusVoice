@@ -17,6 +17,7 @@ import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
+import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.domain.config.repository.SystemConfigRepository;
@@ -26,6 +27,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 
+import jakarta.annotation.PreDestroy;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -34,8 +37,11 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -48,38 +54,44 @@ import java.util.function.Consumer;
 @Component
 public class ChatStreamHandler implements WebSocketHandler {
 
-    private final AiChatService aiChatService;
     private final ConversationApplicationService conversationApplicationService;
     private final ConversationRepository conversationRepository;
     private final ConversationDomainService conversationDomainService;
-    private final ConversationMessageRepository conversationMessageRepository;
     private final RoleApplicationService roleApplicationService;
     private final TTSService ttsService;
     private final SystemConfigRepository systemConfigRepository;
+    private final DynamicAiModelBeanManager modelBeanManager;
     private final ObjectMapper objectMapper;
     
     // 存储会话信息
     private final Map<String, WebSocketSession> activeSessions = new ConcurrentHashMap<>();
     // 单flight保护：同一Session同一时间仅处理一个请求
     private final ConcurrentMap<String, Boolean> streamingSessions = new ConcurrentHashMap<>();
+    // 正在处理的TTS任务计数器，用于优雅关闭
+    private final ConcurrentMap<String, AtomicInteger> sessionTaskCounts = new ConcurrentHashMap<>();
     
-    public ChatStreamHandler(AiChatService aiChatService,
-                           ConversationApplicationService conversationApplicationService,
+    // JDK 21虚拟线程执行器 - 用于I/O密集型任务（如TTS调用）
+    private final ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    // 专用的心跳任务执行器（使用单个虚拟线程）
+    private final ExecutorService heartbeatExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    
+    public ChatStreamHandler(ConversationApplicationService conversationApplicationService,
                            ConversationRepository conversationRepository,
                            ConversationDomainService conversationDomainService,
                            ConversationMessageRepository conversationMessageRepository,
                            RoleApplicationService roleApplicationService,
                            TTSService ttsService,
                            SystemConfigRepository systemConfigRepository,
+                           DynamicAiModelBeanManager modelBeanManager,
                            ObjectMapper objectMapper) {
-        this.aiChatService = aiChatService;
         this.conversationApplicationService = conversationApplicationService;
         this.conversationRepository = conversationRepository;
         this.conversationDomainService = conversationDomainService;
-        this.conversationMessageRepository = conversationMessageRepository;
+        // conversationMessageRepository不需要存储，不使用
         this.roleApplicationService = roleApplicationService;
         this.ttsService = ttsService;
         this.systemConfigRepository = systemConfigRepository;
+        this.modelBeanManager = modelBeanManager;
         this.objectMapper = objectMapper;
     }
 
@@ -151,9 +163,29 @@ public class ChatStreamHandler implements WebSocketHandler {
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
         String sessionId = session.getId();
+        
+        // 等待正在执行的TTS任务完成（最多等待5秒）
+        AtomicInteger taskCount = sessionTaskCounts.get(sessionId);
+        if (taskCount != null && taskCount.get() > 0) {
+            log.info("等待{}个TTS任务完成，会话ID：{}", taskCount.get(), sessionId);
+            long waitStart = System.currentTimeMillis();
+            while (taskCount.get() > 0 && System.currentTimeMillis() - waitStart < 5000) {
+                try {
+                    Thread.sleep(100);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+            // 超时后强制记录警告
+            if (taskCount.get() > 0) {
+                log.warn("等待TTS任务超时，强制清理，会话ID：{}，剩余任务数：{}", sessionId, taskCount.get());
+            }
+        }
+        
         activeSessions.remove(sessionId);
-        // 清理单flight标记，避免异常断开导致残留
         streamingSessions.remove(sessionId);
+        sessionTaskCounts.remove(sessionId);
         
         log.info("WebSocket连接关闭，会话ID：{}，状态：{}", sessionId, closeStatus);
     }
@@ -161,6 +193,50 @@ public class ChatStreamHandler implements WebSocketHandler {
     @Override
     public boolean supportsPartialMessages() {
         return false;
+    }
+    
+    /**
+     * 优雅关闭：清理资源
+     */
+    @PreDestroy
+    public void destroy() {
+        log.info("正在关闭WebSocket处理器，清理资源...");
+        
+        // 1. 关闭所有活动会话
+        activeSessions.values().forEach(session -> {
+            try {
+                if (session.isOpen()) {
+                    session.close(CloseStatus.GOING_AWAY);
+                }
+            } catch (Exception e) {
+                log.warn("关闭WebSocket会话失败：{}", e.getMessage());
+            }
+        });
+        
+        // 2. 等待所有TTS任务完成（最多等待10秒）
+        long shutdownStart = System.currentTimeMillis();
+        while (!sessionTaskCounts.isEmpty() && 
+               System.currentTimeMillis() - shutdownStart < 10000) {
+            int totalTasks = sessionTaskCounts.values().stream()
+                    .mapToInt(AtomicInteger::get).sum();
+            if (totalTasks > 0) {
+                log.info("等待{}个TTS任务完成...", totalTasks);
+                try {
+                    Thread.sleep(500);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        
+        // 3. 关闭线程池
+        virtualThreadExecutor.shutdown();
+        heartbeatExecutor.shutdown();
+        
+        log.info("WebSocket处理器资源清理完成");
     }
 
     /**
@@ -204,8 +280,8 @@ public class ChatStreamHandler implements WebSocketHandler {
             final Role roleSnapshot = role;
             
             // 5. 开始流式响应
-            StringBuilder responseContent = new StringBuilder();
-            final boolean[] receivedEnd = {false};
+            // 使用StringBuffer保证线程安全（多个TTS线程会并发append）
+            StringBuffer responseContent = new StringBuffer();
 
             // 是否启用“分段同步TTS”模式（当 enableAudio=true 时启用）
             final boolean segmentedTtsEnabled = requestDto.getEnableAudio() != null && requestDto.getEnableAudio();
@@ -226,17 +302,21 @@ public class ChatStreamHandler implements WebSocketHandler {
 
             // 分段器，仅在启用分段TTS时创建
             final SegmentAggregator aggregator = segmentedTtsEnabled
-                    ? new SegmentAggregator(ttsGroupId, selectedVoiceType, modelName, firstMinChars, minChars, maxChars, firstGateMs, ttsMaxConcurrency, heartbeatMs, lateUpdateEnabled,
+                    ? new SegmentAggregator(sessionId, ttsGroupId, selectedVoiceType, modelName, firstMinChars, minChars, maxChars, firstGateMs, ttsMaxConcurrency, heartbeatMs, lateUpdateEnabled,
                     (segText) -> responseContent.append(segText),
                     (resp) -> sendMessage(session, resp))
                     : null;
 
+            // 动态获取AI服务（与HTTP完全一致）
+            AiChatService aiChatService = getAiChatService(aiRequest.getModel());
+            
             aiChatService.streamChat(aiRequest,
                     // onNext - 处理流式数据
                     (streamResponse) -> {
                         try {
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.END) {
-                                receivedEnd[0] = true;
+                                // END信号由onComplete处理，这里只记录日志
+                                log.debug("收到AI模型的END信号，对话ID：{}", conversation.getId());
                                 return;
                             }
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.START) {
@@ -261,9 +341,13 @@ public class ChatStreamHandler implements WebSocketHandler {
                     (error) -> {
                         log.error("流式聊天出错，对话ID：{}", conversation.getId(), error);
                         sendErrorMessage(session, "AI响应出错：" + error.getMessage());
-                        if (singleFlightEnabled) {
-                            streamingSessions.remove(sessionId);
-                        }
+                        // 发送END信号给客户端，避免客户端一直等待
+                        StreamChatResponse errorEndResp = StreamChatResponse.end("error");
+                        errorEndResp.setConversationId(conversation.getId());
+                        errorEndResp.setResponseTimeMs(System.currentTimeMillis() - startTime);
+                        sendMessage(session, errorEndResp);
+                        // 清理会话状态（包括任务计数器）
+                        cleanupSession(sessionId, singleFlightEnabled);
                     },
                     // onComplete - 完成处理
                     () -> {
@@ -319,16 +403,14 @@ public class ChatStreamHandler implements WebSocketHandler {
                                 } catch (Exception ee) {
                                     log.error("保存AI回复消息失败", ee);
                                 } finally {
-                                    if (singleFlightEnabled) {
-                                        streamingSessions.remove(sessionId);
-                                    }
+                                    // 清理会话状态（包括任务计数器）
+                                    cleanupSession(sessionId, singleFlightEnabled);
                                 }
                             });
                         } catch (Exception e) {
                             log.error("流式完成阶段处理失败", e);
-                            if (singleFlightEnabled) {
-                                streamingSessions.remove(sessionId);
-                            }
+                            // 清理会话状态（包括任务计数器）
+                            cleanupSession(sessionId, singleFlightEnabled);
                         }
                     }
             );
@@ -336,18 +418,50 @@ public class ChatStreamHandler implements WebSocketHandler {
         } catch (BizException e) {
             log.error("流式聊天业务异常，用户ID：{}", userId, e);
             sendErrorMessage(session, e.getMessage());
-            if (singleFlightEnabled) {
-                streamingSessions.remove(session.getId());
-            }
+            // 发送END信号给客户端
+            sendMessage(session, StreamChatResponse.end("error"));
+            // 清理会话状态（包括任务计数器）
+            cleanupSession(session.getId(), singleFlightEnabled);
         } catch (Exception e) {
             log.error("流式聊天系统异常，用户ID：{}", userId, e);
             sendErrorMessage(session, "系统繁忙，请稍后重试");
-            if (singleFlightEnabled) {
-                streamingSessions.remove(session.getId());
-            }
+            // 发送END信号给客户端
+            sendMessage(session, StreamChatResponse.end("error"));
+            // 清理会话状态（包括任务计数器）
+            cleanupSession(session.getId(), singleFlightEnabled);
         }
     }
 
+    /**
+     * 获取AI聊天服务
+     * 根据模型名称动态获取对应的服务实例（与HTTP完全一致）
+     */
+    private AiChatService getAiChatService(String modelName) {
+        if (modelName == null || modelName.trim().isEmpty()) {
+            modelName = "openai:gpt-oss-20b"; // 默认模型
+        }
+        
+        // 兼容旧格式（没有provider前缀的）
+        if (!modelName.contains(":")) {
+            modelName = "openai:" + modelName;
+        }
+        
+        return modelBeanManager.getServiceByModelKey(modelName);
+    }
+    
+    /**
+     * 估算token数量
+     * 简单的估算方法：平均 3-4 个字符一个token
+     */
+    private int estimateTokenCount(String text) {
+        if (text == null || text.isEmpty()) {
+            return 0;
+        }
+        // 中文字符通常占更多token，英文相对较少
+        // 这里使用简单的估算：大约3个字符=1个token
+        return (int) Math.ceil(text.length() / 3.0);
+    }
+    
     /**
      * 简单读取整数配置
      */
@@ -377,7 +491,8 @@ public class ChatStreamHandler implements WebSocketHandler {
      * 分段聚合器：按阈值切分文本、并发TTS并按序发送TTS_SEGMENT
      */
     private class SegmentAggregator {
-        private final String groupId;
+        private final String sessionId; // WebSocket会话sessionId，用于任务计数
+        private final String groupId;   // TTS分组ID，用于消息分组
         private final String voiceType;
         private final String model;
         private final int firstMinChars;
@@ -394,15 +509,17 @@ public class ChatStreamHandler implements WebSocketHandler {
         private final Map<Integer, String> segText = new ConcurrentHashMap<>();
         private final Map<Integer, String> segAudio = new ConcurrentHashMap<>();
         private final Map<Integer, Boolean> audioDelivered = new ConcurrentHashMap<>();
-        private volatile int nextIndex = 0;
-        private volatile int produced = 0;
+        private final AtomicInteger nextIndex = new AtomicInteger(0);
+        private final AtomicInteger produced = new AtomicInteger(0);
         private volatile boolean finished = false;
         private final CompletableFuture<Void> done = new CompletableFuture<>();
-        private volatile boolean heartbeatRunning = false;
+        private final AtomicBoolean heartbeatRunning = new AtomicBoolean(false);
         private CompletableFuture<?> heartbeatTask;
+        private CompletableFuture<?> firstSegmentFallbackTask; // 首段超时任务
 
-        SegmentAggregator(String groupId, String voiceType, String model, int firstMinChars, int minChars, int maxChars, int firstGateMs, int concurrency, int heartbeatMs, boolean lateUpdate,
+        SegmentAggregator(String sessionId, String groupId, String voiceType, String model, int firstMinChars, int minChars, int maxChars, int firstGateMs, int concurrency, int heartbeatMs, boolean lateUpdate,
                           Consumer<String> appendTotal, Consumer<StreamChatResponse> sender) {
+            this.sessionId = sessionId;
             this.groupId = groupId;
             this.voiceType = voiceType;
             this.model = model;
@@ -430,7 +547,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                 if (buf.length() > 0) {
                     String text = buf.toString();
                     buf.setLength(0);
-                    scheduleSegment(text, produced++);
+                    scheduleSegment(text, produced.getAndIncrement());
                 }
                 finished = true;
             }
@@ -441,30 +558,41 @@ public class ChatStreamHandler implements WebSocketHandler {
 
         private void tryCut() {
             while (true) {
-                int need = (produced == 0) ? firstMinChars : minChars;
+                int currentProduced = produced.get();
+                int need = (currentProduced == 0) ? firstMinChars : minChars;
                 if (buf.length() < need) return;
                 int cut = findCutIndex(buf, need, maxChars);
                 if (cut <= 0) return;
                 String text = buf.substring(0, cut);
                 buf.delete(0, cut);
-                scheduleSegment(text, produced++);
+                scheduleSegment(text, produced.getAndIncrement());
             }
         }
 
         private void scheduleSegment(String text, int index) {
             segText.put(index, text);
             appendTotal.accept(text);
+            // 增加任务计数（使用WebSocket的sessionId）
+            sessionTaskCounts.computeIfAbsent(sessionId, k -> new AtomicInteger(0)).incrementAndGet();
+            
             if (index == 0) {
                 startHeartbeat();
                 // 首段fallback：超过firstGateMs仍未获取音频，先释放文本段
-                CompletableFuture.delayedExecutor(firstGateMs, TimeUnit.MILLISECONDS).execute(() -> {
-                    if (!segAudio.containsKey(0)) {
-                        segAudio.put(0, null);
-                        flush();
+                firstSegmentFallbackTask = CompletableFuture.runAsync(() -> {
+                    try {
+                        Thread.sleep(firstGateMs);
+                        if (!segAudio.containsKey(0)) {
+                            segAudio.put(0, null);
+                            flush();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.debug("首段fallback任务被中断");
                     }
-                });
+                }, virtualThreadExecutor);
             }
 
+            // 使用虚拟线程执行器代替默认线程池
             CompletableFuture.runAsync(() -> {
                 boolean acquired = false;
                 try {
@@ -481,43 +609,53 @@ public class ChatStreamHandler implements WebSocketHandler {
                     segAudio.put(index, url);
                     // 若此前已经发送过该段文本且未带音频，则补发音频更新
                     maybeSendLateUpdate(index, url);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.warn("分段TTS被中断：index={}", index);
+                    segAudio.put(index, null);
                 } catch (Exception e) {
-                    log.warn("分段TTS失败：index={}，错误：{}", index, e.getMessage());
+                    log.warn("分段TTS失败：index={}，错误：{}", index, e.getMessage(), e);
                     segAudio.put(index, null);
                 } finally {
                     if (acquired) permits.release();
                     flush();
+                    // 减少任务计数
+                    AtomicInteger counter = sessionTaskCounts.get(sessionId);
+                    if (counter != null) {
+                        counter.decrementAndGet();
+                    }
                 }
-            });
+            }, virtualThreadExecutor); // 使用虚拟线程执行器
         }
 
-        private void flush() {
+        private synchronized void flush() {
             // 首段同步门：只有当 index=0 有音频（或超时）才发
-            if (nextIndex == 0 && produced > 0 && !segAudio.containsKey(0)) {
+            int currentNextIndex = nextIndex.get();
+            int currentProduced = produced.get();
+            if (currentNextIndex == 0 && currentProduced > 0 && !segAudio.containsKey(0)) {
                 return;
             }
-            while (segText.containsKey(nextIndex)) {
+            while (segText.containsKey(currentNextIndex)) {
                 // 对于非首段，允许音频为空（失败也发文本）
-                if (nextIndex == 0 && !segAudio.containsKey(0)) break;
-                String text = segText.remove(nextIndex);
-                String audio = segAudio.getOrDefault(nextIndex, null);
-                StreamChatResponse seg = StreamChatResponse.ttsSegment(groupId, nextIndex, text, audio, model);
+                if (currentNextIndex == 0 && !segAudio.containsKey(0)) break;
+                String text = segText.remove(currentNextIndex);
+                String audio = segAudio.getOrDefault(currentNextIndex, null);
+                StreamChatResponse seg = StreamChatResponse.ttsSegment(groupId, currentNextIndex, text, audio, model);
                 try {
                     sender.accept(seg);
                 } catch (Exception e) {
-                    log.warn("发送TTS_SEGMENT失败：index={}，错误：{}", nextIndex, e.getMessage());
+                    log.warn("发送TTS_SEGMENT失败：index={}，错误：{}", currentNextIndex, e.getMessage());
                 }
-                audioDelivered.put(nextIndex, audio != null);
-                nextIndex++;
+                audioDelivered.put(currentNextIndex, audio != null);
+                nextIndex.incrementAndGet();
+                currentNextIndex = nextIndex.get();
             }
             // 如果已完成且全部发送，标记done
-            if (finished && nextIndex >= produced) {
+            if (finished && currentNextIndex >= currentProduced) {
                 done.complete(null);
                 stopHeartbeat();
             }
-            if (nextIndex > 0) {
-                stopHeartbeat();
-            }
+            // 删除过早停止心跳的逻辑，让心跳持续到全部完成
         }
 
         private void maybeSendLateUpdate(int index, String audioUrl) {
@@ -525,7 +663,8 @@ public class ChatStreamHandler implements WebSocketHandler {
             if (audioUrl == null) return;
             // 已经发出过该段，并且之前未带音频
             Boolean delivered = audioDelivered.get(index);
-            if (index < nextIndex && (delivered == null || !delivered)) {
+            int currentNextIndex = nextIndex.get();
+            if (index < currentNextIndex && (delivered == null || !delivered)) {
                 try {
                     StreamChatResponse upd = StreamChatResponse.ttsSegmentUpdate(groupId, index, audioUrl, model);
                     sender.accept(upd);
@@ -537,13 +676,15 @@ public class ChatStreamHandler implements WebSocketHandler {
         }
 
         private void startHeartbeat() {
-            if (heartbeatRunning) return;
-            heartbeatRunning = true;
+            if (!heartbeatRunning.compareAndSet(false, true)) return;
+            
             heartbeatTask = CompletableFuture.runAsync(() -> {
-                while (heartbeatRunning) {
+                while (heartbeatRunning.get()) {
                     try {
                         sender.accept(StreamChatResponse.heartbeat());
-                    } catch (Exception ignore) {}
+                    } catch (Exception e) {
+                        log.debug("发送心跳失败：{}", e.getMessage());
+                    }
                     try {
                         Thread.sleep(heartbeatMs);
                     } catch (InterruptedException ie) {
@@ -551,12 +692,20 @@ public class ChatStreamHandler implements WebSocketHandler {
                         break;
                     }
                 }
-            });
+            }, heartbeatExecutor); // 使用专用的心跳执行器
         }
 
         private void stopHeartbeat() {
-            heartbeatRunning = false;
-            heartbeatTask = null;
+            heartbeatRunning.set(false);
+            if (heartbeatTask != null) {
+                heartbeatTask.cancel(true); // 主动取消心跳任务
+                heartbeatTask = null;
+            }
+            // 同时取消首段fallback任务
+            if (firstSegmentFallbackTask != null) {
+                firstSegmentFallbackTask.cancel(true);
+                firstSegmentFallbackTask = null;
+            }
         }
 
         private int findCutIndex(StringBuilder sb, int minChars, int maxChars) {
@@ -597,18 +746,52 @@ public class ChatStreamHandler implements WebSocketHandler {
     }
 
     /**
+     * 清理会话状态（统一清理入口）
+     * 
+     * 设计策略：
+     * 1. 此方法在请求完成或失败时调用，用于清理streamingSessions
+     * 2. sessionTaskCounts不在此处删除，因为可能还有TTS任务在执行
+     * 3. TTS任务完成时会自动decrementAndGet()，让计数器自然减到0
+     * 4. 连接关闭时，在afterConnectionClosed()中等待任务后强制删除sessionTaskCounts
+     * 
+     * 这样设计的原因：
+     * - 避免任务执行中删除计数器导致NPE
+     * - 让计数器自然减到0，便于监控和调试
+     * - 支持任务在请求完成后继续执行（异步处理）
+     */
+    private void cleanupSession(String sessionId, boolean clearStreamingFlag) {
+        try {
+            if (clearStreamingFlag) {
+                streamingSessions.remove(sessionId);
+            }
+            // 记录当前未完成的任务数（用于调试）
+            AtomicInteger taskCount = sessionTaskCounts.get(sessionId);
+            if (taskCount != null && taskCount.get() > 0) {
+                log.debug("请求已完成，但还有{}个TTS任务在处理，会话ID：{}", taskCount.get(), sessionId);
+            }
+        } catch (Exception e) {
+            log.warn("清理会话状态失败，会话ID：{}", sessionId, e);
+        }
+    }
+    
+    /**
      * 发送消息到WebSocket
      */
     private void sendMessage(WebSocketSession session, StreamChatResponse response) {
         try {
-            if (session.isOpen()) {
-                String json = objectMapper.writeValueAsString(response);
-                synchronized (session) { // 避免并发写同一Session导致异常
+            synchronized (session) { // 避免并发写同一Session导致异常
+                if (session.isOpen()) {
+                    String json = objectMapper.writeValueAsString(response);
                     session.sendMessage(new TextMessage(json));
                 }
             }
+        } catch (IllegalStateException e) {
+            // 会话已关闭，静默忽略
+            log.debug("会话已关闭，无法发送消息：sessionId={}", session.getId());
         } catch (IOException e) {
-            log.error("发送WebSocket消息失败", e);
+            log.warn("发送WebSocket消息失败：sessionId={}，错误：{}", session.getId(), e.getMessage());
+        } catch (Exception e) {
+            log.error("发送WebSocket消息异常：sessionId={}", session.getId(), e);
         }
     }
 
@@ -695,16 +878,26 @@ public class ChatStreamHandler implements WebSocketHandler {
 
         // 与HTTP语义对齐：联网搜索仅按请求开关控制，默认false
         boolean enableWebSearch = requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : false;
+        
+        // 处理模型名称（与HTTP完全一致）
+        String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName();
+        // 支持新的模型格式：provider:model，如果没有provider默认使用openai
+        if (modelName != null && !modelName.contains(":")) {
+            modelName = "openai:" + modelName;
+        }
 
+        // 完全对标HTTP实现，添加RAG和知识库支持
         return ChatRequest.builder()
                 .messages(messages)
-                .model(requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName())
+                .model(modelName)
                 .temperature(requestDto.getTemperature() != null ? requestDto.getTemperature() : 0.7)
                 .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
                 .stream(true)
                 .userId(conversation.getUserId())
                 .conversationId(conversation.getId())
                 .enableWebSearch(enableWebSearch)
+                .enableRag(requestDto.getEnableRag() != null ? requestDto.getEnableRag() : false)
+                .knowledgeBaseIds(requestDto.getKnowledgeBaseIds())
                 .build();
     }
 
@@ -717,19 +910,30 @@ public class ChatStreamHandler implements WebSocketHandler {
         int budget = 2500; // 粗略预算
         int used = 0;
         if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            used += aiChatService.estimateTokenCount(systemPrompt);
+            used += estimateTokenCount(systemPrompt);
         }
 
+        // 优化：确保至少保留最近3条消息（即便超出token预算）
         List<ConversationMessage> buffer = new ArrayList<>();
+        int minKeep = 3; // 至少保留的消息数
+        
         for (int i = history.size() - 1; i >= 0 && buffer.size() < 20; i--) {
             ConversationMessage msg = history.get(i);
             String content = msg.getContent();
             if (content == null || content.isEmpty()) continue;
-            int t = aiChatService.estimateTokenCount(content);
-            if (used + t > budget) break;
-            used += t;
-            buffer.add(msg);
+            
+            int t = estimateTokenCount(content);
+            
+            // 如果是前几条必须保留的消息，或者token预算还有空间
+            if (buffer.size() < minKeep || used + t <= budget) {
+                used += t;
+                buffer.add(msg);
+            } else if (used + t > budget) {
+                // token预算已满，且已经有最小保留数，停止添加
+                break;
+            }
         }
+        
         // 正序追加到目标
         for (int i = buffer.size() - 1; i >= 0; i--) {
             ConversationMessage msg = buffer.get(i);
@@ -747,28 +951,48 @@ public class ChatStreamHandler implements WebSocketHandler {
     }
 
     /**
-     * 构建系统提示词，集成角色信息（与HTTP一致）
+     * 构建系统提示词，集成角色信息（与HTTP完全一致）
      */
     private String buildSystemPrompt(Conversation conversation, ChatRequestDto requestDto, Role role) {
         StringBuilder sb = new StringBuilder();
+        
+        // 1. 优先使用请求中的系统提示词
         if (requestDto.getSystemPrompt() != null && !requestDto.getSystemPrompt().trim().isEmpty()) {
             sb.append(requestDto.getSystemPrompt().trim());
-        } else if (conversation.getSystemPrompt() != null && !conversation.getSystemPrompt().trim().isEmpty()) {
+        }
+        // 2. 其次使用对话中保存的系统提示词
+        else if (conversation.getSystemPrompt() != null && !conversation.getSystemPrompt().trim().isEmpty()) {
             sb.append(conversation.getSystemPrompt().trim());
-        } else {
+        }
+        // 3. 最后使用默认提示词
+        else {
             sb.append("你是一个有用的AI助手");
         }
+        
+        // 4. 如果指定了角色，集成角色的人设信息
         if (role != null) {
             sb.append("\n\n");
             sb.append("=== 角色设定 ===\n");
+            
+            // 添加角色描述
             if (role.getDescription() != null && !role.getDescription().trim().isEmpty()) {
                 sb.append("角色描述：").append(role.getDescription().trim()).append("\n");
             }
+            
+            // 添加角色人设提示词
             if (role.getPersonaPrompt() != null && !role.getPersonaPrompt().trim().isEmpty()) {
                 sb.append("人设要求：").append(role.getPersonaPrompt().trim()).append("\n");
             }
+            
             sb.append("请严格按照以上角色设定进行对话，保持角色的一致性。");
+            
+            log.info("集成角色信息到系统提示词，角色ID：{}，角色名称：{}", role.getId(), role.getName());
         }
+        
+        // 5. 添加全局回复风格要求（与HTTP完全一致）
+        sb.append("\n\n");
+        sb.append("【重要】回复风格要求：请保持回答简洁精炼，直击要点，避免冗长的解释和不必要的铺垫。");
+        
         return sb.toString();
     }
 
@@ -790,17 +1014,4 @@ public class ChatStreamHandler implements WebSocketHandler {
         }
     }
 
-    /**
-     * 获取下一个消息序号
-     */
-    private Integer getNextSequence(Long conversationId) {
-        try {
-            return conversationMessageRepository.getNextSequenceByConversationId(conversationId);
-        } catch (Exception e) {
-            log.error("获取消息序号失败，对话ID：{}", conversationId, e);
-            // 如果获取失败，返回一个安全的默认值
-            Long messageCount = conversationMessageRepository.countByConversationId(conversationId);
-            return messageCount.intValue() + 1;
-        }
-    }
 }
