@@ -52,6 +52,14 @@ export default {
         return apiClient.delete(`/roles/private/${id}`);
     },
     /**
+     * 获取角色详情
+     * @param id
+     * @returns {Promise<axios.AxiosResponse<any>>}
+     */
+    getCharacterDetail(id) {
+        return apiClient.get(`/roles/${id}`);
+    },
+    /**
      * 上传头像
      * @param file
      * @returns {Promise<axios.AxiosResponse<any>>}

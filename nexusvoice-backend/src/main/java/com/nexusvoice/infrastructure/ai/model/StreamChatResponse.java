@@ -1,5 +1,7 @@
 package com.nexusvoice.infrastructure.ai.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import lombok.Data;
 import lombok.Builder;
 import lombok.AllArgsConstructor;
@@ -60,11 +62,13 @@ public class StreamChatResponse {
     /**
      * 对话ID（仅在END时返回）
      */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
 
     /**
      * 消息ID（仅在END时返回）
      */
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long messageId;
 
     /**

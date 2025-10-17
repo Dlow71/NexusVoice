@@ -86,7 +86,7 @@ public abstract class AbstractAiChatService implements AiChatService {
     }
     
     /**
-     * 流式聊天（暂时保持原有逻辑，后续可重构）
+     * 流式聊天（使用增强链处理联网搜索等功能）
      */
     @Override
     public void streamChat(ChatRequest request, 
@@ -94,13 +94,24 @@ public abstract class AbstractAiChatService implements AiChatService {
                           Consumer<Throwable> onError, 
                           Runnable onComplete) {
         try {
-            // 验证请求
+            // 1. 验证请求
             validateRequest(request);
             
-            // 解析模型信息
+            // 2. 解析模型信息
             AiModelInfo modelInfo = parseModelInfo(request);
             
-            // 执行流式处理（由子类实现）
+            // 3. 创建增强上下文
+            EnhancementContext context = createEnhancementContext(request);
+            
+            // 4. 执行请求增强链（包含联网搜索、RAG等）
+            if (context.hasEnhancements()) {
+                context = enhancementChain.enhance(context);
+                request = context.getEnhancedRequest();
+                log.info("流式聊天请求增强完成，联网搜索：{}，RAG：{}", 
+                        context.getEnableWebSearch(), context.getEnableRag());
+            }
+            
+            // 5. 执行流式处理（由子类实现）
             doStreamChat(request, modelInfo, onNext, onError, onComplete);
             
         } catch (Exception e) {

@@ -3,10 +3,12 @@ package com.nexusvoice.infrastructure.ai.manager;
 import com.nexusvoice.domain.ai.model.AiApiCallLog;
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
+import com.nexusvoice.domain.ai.model.EnhancementContext;
 import com.nexusvoice.domain.ai.repository.AiApiCallLogRepository;
 import com.nexusvoice.domain.ai.repository.AiModelRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.ai.chain.ChatEnhancementChain;
 import com.nexusvoice.infrastructure.ai.factory.LangChain4jModelFactory;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
@@ -58,6 +60,9 @@ public class DynamicAiModelBeanManager {
     
     @Autowired
     private LangChain4jModelFactory modelFactory;
+    
+    @Autowired(required = false)
+    private ChatEnhancementChain enhancementChain;
     
     /**
      * 模型服务映射表
@@ -298,14 +303,35 @@ public class DynamicAiModelBeanManager {
             AiApiKey apiKey = null;
             
             try {
-                // 1. 获取API密钥
+                // 1. 执行请求增强链（联网搜索、RAG等）
+                ChatRequest enhancedRequest = request;
+                if (enhancementChain != null) {
+                    EnhancementContext context = EnhancementContext.builder()
+                            .originalRequest(request)
+                            .enhancedRequest(request)
+                            .enableWebSearch(request.getEnableWebSearch())
+                            .enableRag(request.getEnableRag())
+                            .enableMultiModal(request.getEnableMultiModal())
+                            .build();
+                    
+                    if (context.hasEnhancements()) {
+                        log.info("开始执行流式聊天增强链，模型：{}，联网搜索：{}", 
+                                model.getModelKey(), request.getEnableWebSearch());
+                        context = enhancementChain.enhance(context);
+                        enhancedRequest = context.getEnhancedRequest();
+                        log.info("流式聊天增强链执行完成，模型：{}", model.getModelKey());
+                    }
+                }
+                final ChatRequest finalRequest = enhancedRequest;
+                
+                // 2. 获取API密钥
                 apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
                 
-                // 2. 创建流式模型实例
+                // 3. 创建流式模型实例
                 StreamingChatLanguageModel streamingModel = modelFactory.createStreamingChatModel(model, apiKey);
                 
-                // 3. 转换消息格式
-                List<ChatMessage> langchainMessages = convertMessages(request);
+                // 4. 转换消息格式
+                List<ChatMessage> langchainMessages = convertMessages(finalRequest);
                 
                 // 4. 创建响应处理器
                 AtomicInteger index = new AtomicInteger(0);
@@ -326,7 +352,7 @@ public class DynamicAiModelBeanManager {
                     @Override
                     public void onComplete(Response<AiMessage> response) {
                         // 计算费用并记录
-                        int promptTokens = estimateTokenCount(request.getMessages().stream()
+                        int promptTokens = estimateTokenCount(finalRequest.getMessages().stream()
                                 .map(m -> m.getContent())
                                 .collect(Collectors.joining("\n")));
                         int completionTokens = estimateTokenCount(fullResponse.toString());
@@ -339,7 +365,7 @@ public class DynamicAiModelBeanManager {
                         // 记录调用日志
                         AiApiCallLog callLog = AiApiCallLog.success(
                                 finalApiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                                request.getUserId(), request.getConversationId(),
+                                finalRequest.getUserId(), finalRequest.getConversationId(),
                                 requestId, requestTime,
                                 (int)(System.currentTimeMillis() - startTime),
                                 promptTokens, completionTokens, cost
@@ -364,7 +390,7 @@ public class DynamicAiModelBeanManager {
                         // 记录失败日志
                         AiApiCallLog callLog = AiApiCallLog.failure(
                                 finalApiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                                request.getUserId(), request.getConversationId(),
+                                finalRequest.getUserId(), finalRequest.getConversationId(),
                                 requestId, requestTime, throwable.getMessage()
                         );
                         callLogRepository.save(callLog);

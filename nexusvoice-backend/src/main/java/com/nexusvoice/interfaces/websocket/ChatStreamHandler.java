@@ -288,7 +288,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             final String modelName = aiRequest.getModel();
             final String selectedVoiceType = (roleSnapshot != null && roleSnapshot.getVoiceType() != null && !roleSnapshot.getVoiceType().trim().isEmpty())
                     ? roleSnapshot.getVoiceType().trim()
-                    : "qiniu_zh_female_wwxkjx";
+                    : systemConfigService.getDefaultTtsVoice();
 
             // 分段参数（可后续接入系统配置）
             final int firstMinChars = getIntConfig("websocket.tts.segment.first_min_chars", 300, 100, 1000);
@@ -325,11 +325,12 @@ public class ChatStreamHandler implements WebSocketHandler {
                             }
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.CONTENT && streamResponse.getDelta() != null) {
                                 String delta = streamResponse.getDelta();
+                                responseContent.append(delta);
+                                // 始终发送CONTENT消息，让前端显示流式文字
+                                sendMessage(session, streamResponse);
+                                // 如果启用了分段TTS，也传递给aggregator处理
                                 if (segmentedTtsEnabled && aggregator != null) {
                                     aggregator.onDelta(delta);
-                                } else {
-                                    responseContent.append(delta);
-                                    sendMessage(session, streamResponse);
                                 }
                             }
                         } catch (Exception e) {
@@ -354,6 +355,11 @@ public class ChatStreamHandler implements WebSocketHandler {
                             CompletableFuture<Void> segmentsDone;
                             if (segmentedTtsEnabled && aggregator != null) {
                                 segmentsDone = aggregator.finish();
+                                
+                                // 添加超时机制：15秒后强制完成，避免TTS处理卡住
+                                segmentsDone = segmentsDone.completeOnTimeout(null, 15, java.util.concurrent.TimeUnit.SECONDS);
+                                
+                                log.info("等待分段TTS处理完成，对话ID：{}，超时时间：15秒", conversation.getId());
                             } else {
                                 segmentsDone = CompletableFuture.completedFuture(null);
                             }
@@ -543,9 +549,25 @@ public class ChatStreamHandler implements WebSocketHandler {
                     scheduleSegment(text, produced.getAndIncrement());
                 }
                 finished = true;
+                log.info("分段TTS处理标记完成，总分段数：{}，sessionId={}", produced.get(), sessionId);
             }
             // 尝试在完成后刷新
             flush();
+            
+            // 添加兜底机制：即使TTS任务未完成，也要在合理时间内完成done
+            CompletableFuture.runAsync(() -> {
+                try {
+                    Thread.sleep(10000); // 10秒后强制完成
+                    if (!done.isDone()) {
+                        log.warn("分段TTS处理超时，强制完成，sessionId={}", sessionId);
+                        done.complete(null);
+                        stopHeartbeat();
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }, virtualThreadExecutor);
+            
             return done;
         }
 
@@ -591,23 +613,34 @@ public class ChatStreamHandler implements WebSocketHandler {
                 try {
                     permits.acquire();
                     acquired = true;
+                    
+                    log.debug("开始处理分段TTS：index={}，文本长度：{}，sessionId={}", index, text.length(), sessionId);
+                    
                     String cleaned = MarkdownTextUtils.cleanForTTS(text);
                     TTSRequestDTO ttsReq = new TTSRequestDTO();
                     ttsReq.setText(cleaned);
                     ttsReq.setVoiceType(voiceType);
                     ttsReq.setEncoding("mp3");
                     ttsReq.setSpeedRatio(1.0);
+                    
                     TTSResponseDTO res = ttsService.textToSpeech(ttsReq);
                     String url = (res != null) ? res.getAudioData() : null;
-                    segAudio.put(index, url);
-                    // 若此前已经发送过该段文本且未带音频，则补发音频更新
-                    maybeSendLateUpdate(index, url);
+                    
+                    if (url != null && !url.isEmpty()) {
+                        log.debug("分段TTS成功：index={}，音频URL：{}", index, url);
+                        segAudio.put(index, url);
+                        // 若此前已经发送过该段文本且未带音频，则补发音频更新
+                        maybeSendLateUpdate(index, url);
+                    } else {
+                        log.warn("分段TTS返回空URL：index={}", index);
+                        segAudio.put(index, null);
+                    }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    log.warn("分段TTS被中断：index={}", index);
+                    log.warn("分段TTS被中断：index={}，sessionId={}", index, sessionId);
                     segAudio.put(index, null);
                 } catch (Exception e) {
-                    log.warn("分段TTS失败：index={}，错误：{}", index, e.getMessage(), e);
+                    log.error("分段TTS失败：index={}，sessionId={}，错误：{}", index, sessionId, e.getMessage(), e);
                     segAudio.put(index, null);
                 } finally {
                     if (acquired) permits.release();
@@ -615,7 +648,8 @@ public class ChatStreamHandler implements WebSocketHandler {
                     // 减少任务计数
                     AtomicInteger counter = sessionTaskCounts.get(sessionId);
                     if (counter != null) {
-                        counter.decrementAndGet();
+                        int remaining = counter.decrementAndGet();
+                        log.debug("TTS任务完成：index={}，剩余任务数：{}，sessionId={}", index, remaining, sessionId);
                     }
                 }
             }, virtualThreadExecutor); // 使用虚拟线程执行器
@@ -626,6 +660,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             int currentNextIndex = nextIndex.get();
             int currentProduced = produced.get();
             if (currentNextIndex == 0 && currentProduced > 0 && !segAudio.containsKey(0)) {
+                log.debug("等待首段音频生成，当前nextIndex={}，produced={}，sessionId={}", currentNextIndex, currentProduced, sessionId);
                 return;
             }
             while (segText.containsKey(currentNextIndex)) {
@@ -633,11 +668,16 @@ public class ChatStreamHandler implements WebSocketHandler {
                 if (currentNextIndex == 0 && !segAudio.containsKey(0)) break;
                 String text = segText.remove(currentNextIndex);
                 String audio = segAudio.getOrDefault(currentNextIndex, null);
+                
+                log.debug("发送TTS分段：index={}，有音频：{}，文本长度：{}，sessionId={}", 
+                         currentNextIndex, (audio != null), text.length(), sessionId);
+                
                 StreamChatResponse seg = StreamChatResponse.ttsSegment(groupId, currentNextIndex, text, audio, model);
                 try {
                     sender.accept(seg);
+                    log.debug("TTS_SEGMENT发送成功：index={}", currentNextIndex);
                 } catch (Exception e) {
-                    log.warn("发送TTS_SEGMENT失败：index={}，错误：{}", currentNextIndex, e.getMessage());
+                    log.error("发送TTS_SEGMENT失败：index={}，错误：{}", currentNextIndex, e.getMessage(), e);
                 }
                 audioDelivered.put(currentNextIndex, audio != null);
                 nextIndex.incrementAndGet();
@@ -645,6 +685,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             }
             // 如果已完成且全部发送，标记done
             if (finished && currentNextIndex >= currentProduced) {
+                log.info("所有TTS分段已发送完成，nextIndex={}，produced={}，sessionId={}", currentNextIndex, currentProduced, sessionId);
                 done.complete(null);
                 stopHeartbeat();
             }

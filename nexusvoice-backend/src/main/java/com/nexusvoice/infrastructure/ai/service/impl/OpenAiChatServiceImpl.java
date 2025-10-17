@@ -7,6 +7,8 @@ import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.tool.SimpleWebSearchTool;
+import com.nexusvoice.enums.ErrorCodeEnum;
+import com.nexusvoice.exception.BizException;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -82,6 +84,7 @@ public class OpenAiChatServiceImpl implements AiChatService {
     @Override
     public ChatResponse chat(ChatRequest request) {
         long startTime = System.currentTimeMillis();
+        String responseText = null;
 
         try {
             // 检查是否启用联网搜索
@@ -92,15 +95,13 @@ public class OpenAiChatServiceImpl implements AiChatService {
             
             // 检查必要的依赖
             if (chatLanguageModel == null) {
-                return ChatResponse.error("AI聊天服务未正确配置，请检查LangChain4j配置");
+                throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, "AI服务未正确初始化");
             }
+
+            List<dev.langchain4j.data.message.ChatMessage> messages = convertMessages(request.getMessages());
             
-            String responseText;
-            
-            // 仅在确有“时效性/事实检索”需求时才走带工具提示的路径，避免冗长指令影响延迟
-            String lastUserMsg = extractLastUserMessage(request.getMessages());
-            boolean needsSearch = enableWebSearch && shouldSearch(lastUserMsg);
-            if (needsSearch && toolsEnabled && searchToolEnabled && searchTool != null) {
+            // 直接根据用户开关决定是否使用联网搜索，而不再强制使用启发式判断
+            if (enableWebSearch && toolsEnabled && searchToolEnabled && searchTool != null) {
                 // 使用带工具调用的AI助手
                 log.info("使用带联网搜索的AI助手处理请求");
                 responseText = getOrCreateToolEnabledAssistant().chat(buildFullMessage(request));
@@ -149,8 +150,8 @@ public class OpenAiChatServiceImpl implements AiChatService {
 
             // 根据配置与开关，注入联网搜索结果作为额外SystemMessage
             boolean enableWebSearch = request.getEnableWebSearch() != null && request.getEnableWebSearch();
-            String latestUser = extractLastUserMessage(request.getMessages());
-            boolean canUseSearch = enableWebSearch && shouldSearch(latestUser) && toolsEnabled && searchToolEnabled && (searchTool != null);
+            // 直接根据用户开关决定是否使用联网搜索，而不再强制使用启发式判断
+            boolean canUseSearch = enableWebSearch && toolsEnabled && searchToolEnabled && (searchTool != null);
             List<dev.langchain4j.data.message.ChatMessage> finalMessages = messages;
             if (canUseSearch) {
                 try {
@@ -164,7 +165,7 @@ public class OpenAiChatServiceImpl implements AiChatService {
                             break;
                         }
                     }
-                    if (query != null && !query.isEmpty() && shouldSearch(query)) {
+                    if (query != null && !query.isEmpty()) {
                         String searchSummary = searchTool.searchWeb(query);
                         String sysText = "以下是搜索到的参考资料（仅供回答参考）：\n\n" + searchSummary;
                         List<dev.langchain4j.data.message.ChatMessage> augmented = new ArrayList<>(messages);

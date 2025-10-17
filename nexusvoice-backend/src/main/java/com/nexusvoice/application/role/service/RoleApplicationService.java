@@ -60,6 +60,29 @@ public class RoleApplicationService {
     }
 
     /**
+     * 获取角色详情（支持公共角色和用户自己的私人角色）
+     * @param roleId 角色ID
+     * @param currentUserId 当前用户ID（可为null）
+     * @return 角色DTO
+     */
+    public RoleDTO getRoleDetail(Long roleId, Long currentUserId) {
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
+        
+        // 如果是公共角色，任何人都可以查看
+        if (Boolean.TRUE.equals(role.getIsPublic())) {
+            return RoleAssembler.toDTO(role);
+        }
+        
+        // 如果是私人角色，只有创建者可以查看
+        if (currentUserId != null && role.ownedBy(currentUserId)) {
+            return RoleAssembler.toDTO(role);
+        }
+        
+        throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, "无权查看该角色");
+    }
+
+    /**
      * 获取角色信息用于聊天（支持公共角色和用户自己的私人角色）
      */
     public Role getRoleForChat(Long roleId, Long currentUserId) {

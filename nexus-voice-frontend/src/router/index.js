@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import LoginView from '../views/LoginView.vue'
 // 角色选择页面
 import CharacterSelectionView from '../views/CharacterSelectionView.vue'
+import ChatStreamView from '../views/ChatStreamView.vue'
 import {useAuthStore} from "../stores/auth.js";
 
 // 定义应用的路由规则
@@ -24,6 +25,12 @@ const routes = [
         // 使用路由懒加载，只有当用户访问这个页面时，才会去加载 ChatView.vue 文件
         component: () => import('../views/ChatView.vue'),
         meta:{requiresAuth: true},
+    },
+    {
+        path: '/stream/:roleId',
+        name: 'StreamChat',
+        component: ChatStreamView,
+        meta: { requiresAuth: true }
     },
     {
         // 实验室页面路由

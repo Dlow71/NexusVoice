@@ -51,6 +51,15 @@ public class RoleController {
         return Result.success("查询成功", dto);
     }
 
+    @Operation(summary = "角色详情", description = "获取角色详情（公共或私人均可）")
+    @GetMapping("/{id}")
+    public Result<RoleDTO> getRoleDetail(@PathVariable("id") Long id) {
+        // 尝试获取当前用户ID（可能未登录）
+        Long userId = SecurityUtils.getCurrentUserId().orElse(null);
+        RoleDTO dto = roleApplicationService.getRoleDetail(id, userId);
+        return Result.success("查询成功", dto);
+    }
+
     // ============== 私人角色管理（需要登录用户） ==============
 
     @Operation(summary = "我的私人角色列表", description = "分页查看自己创建的私人角色")

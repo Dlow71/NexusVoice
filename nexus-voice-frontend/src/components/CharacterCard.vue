@@ -38,23 +38,28 @@ const router = useRouter();
 // 点击卡片跳转到对应的聊天页面
 const selectCharacter = async () => {
   try {
-    // 1. 调用创建会话的接口，并传入角色ID
-    const response = await characterApi.createConversation({
-      roleId: props.character.id,
-    });
-
-    if (response.data.success) {
-      // 2. 从响应中获取新创建的 conversationId
-      const conversationId = response.data.data.conversationId;
-
-      // 3. 使用 conversationId 跳转到聊天页面
-      router.push(`/chat/${conversationId}`);
-    } else {
-      throw new Error(response.data.message || '创建会话失败');
-    }
+    // 方案1：默认使用WebSocket流式聊天（推荐）
+    router.push(`/stream/${props.character.id}`);
+    
+    // 方案2：如果需要兼容HTTP版本，可以通过配置选择
+    // const useStream = localStorage.getItem('chat-mode') !== 'http';
+    // if (useStream) {
+    //   router.push(`/stream/${props.character.id}`);
+    // } else {
+    //   // 原有的HTTP版本逻辑
+    //   const response = await characterApi.createConversation({
+    //     roleId: props.character.id,
+    //   });
+    //   if (response.data.success) {
+    //     const conversationId = response.data.data.conversationId;
+    //     router.push(`/chat/${conversationId}`);
+    //   } else {
+    //     throw new Error(response.data.message || '创建会话失败');
+    //   }
+    // }
   } catch (error) {
-    console.error("创建会话失败:", error);
-    ElMessage.error(error.message || '无法开始新对话，请稍后再试。');
+    console.error("跳转失败:", error);
+    ElMessage.error(error.message || '无法开始对话，请稍后再试。');
   }
 };
 
