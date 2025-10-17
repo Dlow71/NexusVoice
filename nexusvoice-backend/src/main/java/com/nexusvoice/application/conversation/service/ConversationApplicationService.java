@@ -11,6 +11,7 @@ import com.nexusvoice.application.role.service.RoleApplicationService;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 import com.nexusvoice.application.tts.service.TTSService;
+import com.nexusvoice.domain.config.service.SystemConfigService;
 import com.nexusvoice.domain.conversation.model.Conversation;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
 import com.nexusvoice.domain.conversation.repository.ConversationRepository;
@@ -50,19 +51,22 @@ public class ConversationApplicationService {
     private final DynamicAiModelBeanManager modelBeanManager;
     private final TTSService ttsService;
     private final RoleApplicationService roleApplicationService;
+    private final SystemConfigService systemConfigService;
 
     public ConversationApplicationService(ConversationRepository conversationRepository,
                                         ConversationMessageRepository messageRepository,
                                         ConversationDomainService conversationDomainService,
                                         DynamicAiModelBeanManager modelBeanManager,
                                         TTSService ttsService,
-                                        RoleApplicationService roleApplicationService) {
+                                        RoleApplicationService roleApplicationService,
+                                        SystemConfigService systemConfigService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
         this.modelBeanManager = modelBeanManager;
         this.ttsService = ttsService;
         this.roleApplicationService = roleApplicationService;
+        this.systemConfigService = systemConfigService;
     }
 
     /**
@@ -78,8 +82,10 @@ public class ConversationApplicationService {
             conversationDomainService.validateConversationAccess(conversation.getId(), userId);
 
             // 3. 检查限制
-            conversationDomainService.checkMessageCountLimit(conversation.getId(), 100); // 最大100条消息
-            conversationDomainService.checkTokenLimit(conversation.getId(), 50000); // 最大5万令牌
+            conversationDomainService.checkMessageCountLimit(conversation.getId(), 
+                    systemConfigService.getConversationMaxMessages()); // 从配置获取最大消息数
+            conversationDomainService.checkTokenLimit(conversation.getId(), 
+                    systemConfigService.getConversationMaxTokens()); // 从配置获取最大令牌数
 
             // 4. 查询角色信息（如果指定了角色ID）
             Role role = null;
@@ -319,9 +325,12 @@ public class ConversationApplicationService {
      */
     @Transactional
     public ConversationCreateResponse createConversation(ConversationCreateRequest request, Long userId) {
-        String title = request.getTitle() != null && !request.getTitle().trim().isEmpty() ? request.getTitle().trim() : "新对话";
-        String modelName = request.getModelName() != null && !request.getModelName().trim().isEmpty() ? request.getModelName().trim() : "gpt-4o-mini";
-        String systemPrompt = request.getSystemPrompt() != null && !request.getSystemPrompt().trim().isEmpty() ? request.getSystemPrompt().trim() : "你是一个有用的AI助手";
+        String title = request.getTitle() != null && !request.getTitle().trim().isEmpty() 
+                ? request.getTitle().trim() : systemConfigService.getDefaultConversationTitle();
+        String modelName = request.getModelName() != null && !request.getModelName().trim().isEmpty() 
+                ? request.getModelName().trim() : systemConfigService.getDefaultAiModel();
+        String systemPrompt = request.getSystemPrompt() != null && !request.getSystemPrompt().trim().isEmpty() 
+                ? request.getSystemPrompt().trim() : systemConfigService.getDefaultSystemPrompt();
 
         Conversation conversation = conversationDomainService.createConversation(userId, title, modelName, systemPrompt, request.getRoleId());
 
@@ -402,10 +411,10 @@ public class ConversationApplicationService {
             return conversationRepository.findByIdAndUserId(requestDto.getConversationId(), userId)
                     .orElseThrow(() -> new BizException(ErrorCodeEnum.DATA_NOT_FOUND, "对话不存在"));
         } else {
-            // 创建新对话
-            String title = requestDto.getTitle() != null ? requestDto.getTitle() : "新对话";
-            String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : "gpt-4o-mini";
-            String systemPrompt = requestDto.getSystemPrompt() != null ? requestDto.getSystemPrompt() : "你是一个有用的AI助手";
+            // 创建新对话，所有默认值从系统配置获取
+            String title = requestDto.getTitle() != null ? requestDto.getTitle() : systemConfigService.getDefaultConversationTitle();
+            String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : systemConfigService.getDefaultAiModel();
+            String systemPrompt = requestDto.getSystemPrompt() != null ? requestDto.getSystemPrompt() : systemConfigService.getDefaultSystemPrompt();
             
             return conversationDomainService.createConversation(userId, title, modelName, systemPrompt, requestDto.getRoleId());
         }
@@ -417,12 +426,16 @@ public class ConversationApplicationService {
      */
     private AiChatService getAiChatService(String modelName) {
         if (modelName == null || modelName.trim().isEmpty()) {
-            modelName = "openai:gpt-oss-20b"; // 默认模型
+            // 从系统配置获取默认模型
+            modelName = systemConfigService.getDefaultAiModel();
+            log.debug("使用默认AI模型：{}", modelName);
         }
         
         // 兼容旧格式（没有provider前缀的）
         if (!modelName.contains(":")) {
-            modelName = "openai:" + modelName;
+            String defaultProvider = systemConfigService.getDefaultAiModelProvider();
+            modelName = defaultProvider + ":" + modelName;
+            log.debug("自动添加模型厂商前缀：{}", modelName);
         }
         
         return modelBeanManager.getServiceByModelKey(modelName);
@@ -481,9 +494,9 @@ public class ConversationApplicationService {
         else if (conversation.getSystemPrompt() != null && !conversation.getSystemPrompt().trim().isEmpty()) {
             systemPromptBuilder.append(conversation.getSystemPrompt().trim());
         }
-        // 3. 最后使用默认提示词
+        // 3. 最后使用系统配置中的默认提示词
         else {
-            systemPromptBuilder.append("你是一个有用的AI助手");
+            systemPromptBuilder.append(systemConfigService.getDefaultSystemPrompt());
         }
         
         // 4. 如果指定了角色，集成角色的人设信息

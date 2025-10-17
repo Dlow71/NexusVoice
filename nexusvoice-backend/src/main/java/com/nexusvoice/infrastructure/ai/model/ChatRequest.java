@@ -97,11 +97,13 @@ public class ChatRequest {
 
     /**
      * 创建默认配置的请求
+     * @deprecated 建议使用Builder模式并从SystemConfigService获取默认值，这里的硬编码值仅作为fallback
      */
+    @Deprecated
     public static ChatRequest defaultRequest(List<ChatMessage> messages) {
         return ChatRequest.builder()
                 .messages(messages)
-                .model("gpt-4o-mini")
+                .model("openai:gpt-oss-20b") // fallback值，实际应用应从SystemConfigService获取
                 .temperature(0.7)
                 .maxTokens(2000)
                 .topP(1.0)
@@ -113,11 +115,13 @@ public class ChatRequest {
 
     /**
      * 创建流式请求
+     * @deprecated 建议使用Builder模式并从SystemConfigService获取默认值，这里的硬编码值仅作为fallback
      */
+    @Deprecated
     public static ChatRequest streamRequest(List<ChatMessage> messages) {
         return ChatRequest.builder()
                 .messages(messages)
-                .model("gpt-4o-mini")
+                .model("openai:gpt-oss-20b") // fallback值，实际应用应从SystemConfigService获取
                 .temperature(0.7)
                 .maxTokens(2000)
                 .topP(1.0)

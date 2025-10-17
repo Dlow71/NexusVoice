@@ -47,6 +47,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String requestURI = request.getRequestURI();
         log.debug("JWT过滤器处理请求: {} {}", request.getMethod(), requestURI);
         
+        // WebSocket路径直接放行，由WebSocketJwtInterceptor处理认证
+        if (requestURI.startsWith("/ws/")) {
+            log.debug("检测到WebSocket请求，跳过JWT过滤器，由WebSocket拦截器处理认证");
+            filterChain.doFilter(request, response);
+            return;
+        }
+        
         try {
             String token = extractTokenFromRequest(request);
             log.debug("提取到的令牌: {}", token != null ? "存在(长度:" + token.length() + ")" : "不存在");

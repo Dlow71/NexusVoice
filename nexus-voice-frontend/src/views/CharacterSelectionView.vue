@@ -2,6 +2,7 @@
   <div class="selection-container">
     <div v-if="user" class="user-info-bar">
       <span class="welcome-text">欢迎, {{ user.nickname || '用户' }}</span>
+      <button @click="goToLab" class="lab-button">🧪 实验室</button>
       <button @click="handleLogout" class="logout-button">退出登录</button>
     </div>
 
@@ -108,11 +109,13 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import CharacterCard from '../components/CharacterCard.vue';
 import characterApi from '../services/character';
 import {ElMessage, ElMessageBox} from 'element-plus';
 
+const router = useRouter();
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
 
@@ -179,6 +182,10 @@ const fetchData = async () => {
 };
 
 const handleLogout = () => { authStore.logout(); };
+
+const goToLab = () => { 
+  router.push('/lab'); 
+};
 
 const selectTab = (tab) => {
   if (activeTab.value === tab) return;
@@ -348,6 +355,8 @@ watch(searchQuery, () => {
   z-index: 10;
 }
 .welcome-text { color: #d1d5db; font-weight: 500; }
+.lab-button { background-color: #1e3a8a; border: 1px solid #2563eb; color: #e0f2fe; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+.lab-button:hover { background-color: #1e40af; border-color: #3b82f6; }
 .logout-button { background-color: transparent; border: 1px solid #4b5563; color: #d1d5db; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; }
 .logout-button:hover { background-color: #374151; border-color: #6b7280; }
 

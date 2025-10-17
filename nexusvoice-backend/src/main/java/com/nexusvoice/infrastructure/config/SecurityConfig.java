@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -41,6 +42,17 @@ public class SecurityConfig {
     @Autowired
     private JwtAccessDeniedHandler jwtAccessDeniedHandler;
 
+    /**
+     * WebSocket安全配置
+     * 完全忽略WebSocket端点，不经过Spring Security过滤链
+     * WebSocket连接的认证由WebSocketJwtInterceptor独立处理
+     */
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring()
+                .requestMatchers("/ws/**");
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -69,9 +81,9 @@ public class SecurityConfig {
                     "/swagger-resources/**",
                     "/webjars/**",
                     "/druid/**",
-                    "/ws/**",
                     "/error"
                 ).permitAll()
+                // 注意：/ws/** 已通过webSecurityCustomizer()完全忽略，不在此配置
                 
                 // 需要认证的端点
                 .anyRequest().authenticated()

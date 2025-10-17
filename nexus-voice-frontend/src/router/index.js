@@ -24,6 +24,13 @@ const routes = [
         // 使用路由懒加载，只有当用户访问这个页面时，才会去加载 ChatView.vue 文件
         component: () => import('../views/ChatView.vue'),
         meta:{requiresAuth: true},
+    },
+    {
+        // 实验室页面路由
+        path: '/lab',
+        name: 'Lab',
+        component: () => import('../views/LabView.vue'),
+        meta: { requiresAuth: true },
     }
 ]
 

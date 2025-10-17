@@ -20,8 +20,7 @@ import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
-import com.nexusvoice.domain.config.repository.SystemConfigRepository;
-import com.nexusvoice.domain.config.model.SystemConfig;
+import com.nexusvoice.domain.config.service.SystemConfigService;
 import com.nexusvoice.utils.MarkdownTextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -59,7 +58,7 @@ public class ChatStreamHandler implements WebSocketHandler {
     private final ConversationDomainService conversationDomainService;
     private final RoleApplicationService roleApplicationService;
     private final TTSService ttsService;
-    private final SystemConfigRepository systemConfigRepository;
+    private final SystemConfigService systemConfigService;
     private final DynamicAiModelBeanManager modelBeanManager;
     private final ObjectMapper objectMapper;
     
@@ -81,7 +80,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                            ConversationMessageRepository conversationMessageRepository,
                            RoleApplicationService roleApplicationService,
                            TTSService ttsService,
-                           SystemConfigRepository systemConfigRepository,
+                           SystemConfigService systemConfigService,
                            DynamicAiModelBeanManager modelBeanManager,
                            ObjectMapper objectMapper) {
         this.conversationApplicationService = conversationApplicationService;
@@ -90,7 +89,7 @@ public class ChatStreamHandler implements WebSocketHandler {
         // conversationMessageRepository不需要存储，不使用
         this.roleApplicationService = roleApplicationService;
         this.ttsService = ttsService;
-        this.systemConfigRepository = systemConfigRepository;
+        this.systemConfigService = systemConfigService;
         this.modelBeanManager = modelBeanManager;
         this.objectMapper = objectMapper;
     }
@@ -438,12 +437,16 @@ public class ChatStreamHandler implements WebSocketHandler {
      */
     private AiChatService getAiChatService(String modelName) {
         if (modelName == null || modelName.trim().isEmpty()) {
-            modelName = "openai:gpt-oss-20b"; // 默认模型
+            // 从系统配置获取默认模型
+            modelName = systemConfigService.getDefaultAiModel();
+            log.debug("WebSocket使用默认AI模型：{}", modelName);
         }
         
         // 兼容旧格式（没有provider前缀的）
         if (!modelName.contains(":")) {
-            modelName = "openai:" + modelName;
+            String defaultProvider = systemConfigService.getDefaultAiModelProvider();
+            modelName = defaultProvider + ":" + modelName;
+            log.debug("WebSocket自动添加模型厂商前缀：{}", modelName);
         }
         
         return modelBeanManager.getServiceByModelKey(modelName);
@@ -467,20 +470,10 @@ public class ChatStreamHandler implements WebSocketHandler {
      */
     private int getIntConfig(String key, int defaultVal, int min, int max) {
         try {
-            return systemConfigRepository.findByKey(key)
-                    .filter(SystemConfig::getEnabled)
-                    .map(SystemConfig::getConfigValue)
-                    .map(v -> {
-                        try {
-                            int n = Integer.parseInt(v.trim());
-                            if (n < min) return min;
-                            if (n > max) return max;
-                            return n;
-                        } catch (Exception e) {
-                            return defaultVal;
-                        }
-                    })
-                    .orElse(defaultVal);
+            int value = systemConfigService.getInt(key, defaultVal);
+            if (value < min) return min;
+            if (value > max) return max;
+            return value;
         } catch (Exception e) {
             log.warn("读取整型配置失败，key={}，使用默认值 {}", key, defaultVal, e);
             return defaultVal;
@@ -849,9 +842,10 @@ public class ChatStreamHandler implements WebSocketHandler {
             return conversationRepository.findByIdAndUserId(requestDto.getConversationId(), userId)
                     .orElseThrow(() -> new BizException(ErrorCodeEnum.DATA_NOT_FOUND, "对话不存在"));
         } else {
-            String title = requestDto.getTitle() != null ? requestDto.getTitle() : "新对话";
-            String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : "gpt-4o-mini";
-            String systemPrompt = requestDto.getSystemPrompt() != null ? requestDto.getSystemPrompt() : "你是一个有用的AI助手";
+            // 所有默认值从系统配置获取
+            String title = requestDto.getTitle() != null ? requestDto.getTitle() : systemConfigService.getDefaultConversationTitle();
+            String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : systemConfigService.getDefaultAiModel();
+            String systemPrompt = requestDto.getSystemPrompt() != null ? requestDto.getSystemPrompt() : systemConfigService.getDefaultSystemPrompt();
             
             return conversationDomainService.createConversation(userId, title, modelName, systemPrompt, requestDto.getRoleId());
         }
@@ -998,16 +992,7 @@ public class ChatStreamHandler implements WebSocketHandler {
 
     private boolean getBooleanConfig(String key, boolean defaultVal) {
         try {
-            return systemConfigRepository.findByKey(key)
-                    .filter(SystemConfig::getEnabled)
-                    .map(SystemConfig::getConfigValue)
-                    .map(val -> {
-                        String v = val.trim().toLowerCase();
-                        if ("true".equals(v) || "1".equals(v) || "yes".equals(v) || "on".equals(v)) return true;
-                        if ("false".equals(v) || "0".equals(v) || "no".equals(v) || "off".equals(v)) return false;
-                        return defaultVal;
-                    })
-                    .orElse(defaultVal);
+            return systemConfigService.getBoolean(key, defaultVal);
         } catch (Exception e) {
             log.warn("读取系统配置失败，key={}，使用默认值 {}", key, defaultVal, e);
             return defaultVal;
