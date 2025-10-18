@@ -143,3 +143,18 @@ nexusvoice:
 # third-party:
 #   api-key: your-api-key
 #   secret-key: your-secret-key
+
+# RocketMQ配置
+rocketmq:
+  # NameServer地址 - 请填入您的RocketMQ服务器地址
+  # 本地开发：localhost:9876
+  # 远程服务器：YOUR_SERVER_IP:9876
+  name-server: localhost:9876
+  
+  # 消费者配置示例
+  listeners:
+    # 示例监听器配置
+    example:
+      enabled: false  # 设置为true以启用示例监听器
+      topic: example_topic
+      consumer-group: example_consumer_group

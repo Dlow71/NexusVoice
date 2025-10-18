@@ -93,6 +93,33 @@ mybatis-plus:
       update-strategy: NOT_EMPTY
       where-strategy: NOT_EMPTY
 
+# RocketMQ配置 - 具体配置在application-local.yml中
+rocketmq:
+  # NameServer地址在application-local.yml中配置
+  # name-server: 请在application-local.yml中配置
+  producer:
+    # 生产者组名
+    group: ${spring.application.name}_producer
+    # 发送消息超时时间（毫秒）
+    send-message-timeout: 3000
+    # 消息最大长度（4MB）
+    max-message-size: 4194304
+    # 发送失败重试次数
+    retry-times-when-send-failed: 2
+    # 异步发送失败重试次数
+    retry-times-when-send-async-failed: 2
+    # 是否启用VIP通道（提高发送速度）
+    vip-channel-enabled: false
+    # 压缩消息阈值（超过4KB自动压缩）
+    compress-message-body-threshold: 4096
+  
+  # 消费者配置示例（可以在application-local.yml中覆盖）
+  listeners:
+    example:
+      enabled: false  # 示例监听器默认关闭
+      topic: example_topic
+      consumer-group: example_consumer_group
+
 server:
   port: 8081
 

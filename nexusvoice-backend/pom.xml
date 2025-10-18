@@ -28,6 +28,7 @@
     <jjwt.version>0.12.6</jjwt.version>
     <langchain4j.version>0.35.0</langchain4j.version>
     <redisson.version>3.35.0</redisson.version>
+    <rocketmq.version>2.3.0</rocketmq.version>
   </properties>
 
   <dependencies>
@@ -45,6 +46,13 @@
           <artifactId>minio</artifactId>
           <version>8.5.7</version>
       </dependency>
+
+    <!-- RocketMQ Spring Boot Starter -->
+    <dependency>
+        <groupId>org.apache.rocketmq</groupId>
+        <artifactId>rocketmq-spring-boot-starter</artifactId>
+        <version>${rocketmq.version}</version>
+    </dependency>
 
     <!-- Web and JSON -->
     <dependency>

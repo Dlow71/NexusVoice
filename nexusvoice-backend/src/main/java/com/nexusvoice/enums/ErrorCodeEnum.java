@@ -164,6 +164,16 @@ public enum ErrorCodeEnum {
     REDIS_PUB_SUB_FAILED(4014, "Redis发布订阅失败"),
     REDIS_CLUSTER_ERROR(4015, "Redis集群错误"),
     
+    // 消息队列相关 23xx
+    MQ_SEND_ERROR(2301, "消息发送失败"),
+    MQ_CONSUME_ERROR(2302, "消息消费失败"),
+    MQ_CONNECTION_ERROR(2303, "消息队列连接失败"),
+    MQ_TIMEOUT_ERROR(2304, "消息处理超时"),
+    MQ_RETRY_EXCEEDED(2305, "消息重试次数超限"),
+    MQ_TOPIC_NOT_FOUND(2306, "消息主题不存在"),
+    MQ_CONSUMER_NOT_FOUND(2307, "消费者不存在"),
+    MQ_TRANSACTION_ERROR(2308, "事务消息处理失败"),
+    
     // 通用业务错误
     BUSINESS_ERROR(9999, "业务处理失败");
     
