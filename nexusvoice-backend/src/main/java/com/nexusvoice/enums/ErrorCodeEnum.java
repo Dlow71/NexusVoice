@@ -28,6 +28,7 @@ public enum ErrorCodeEnum {
     
     // ========== 服务端错误 5xx ==========
     INTERNAL_SERVER_ERROR(500, "系统内部错误"),
+    SYSTEM_ERROR(500, "系统错误"),
     BAD_GATEWAY(502, "网关错误"),
     SERVICE_UNAVAILABLE(503, "服务不可用"),
     GATEWAY_TIMEOUT(504, "网关超时"),
@@ -70,6 +71,9 @@ public enum ErrorCodeEnum {
     FILE_UPLOAD_FAILED(1402, "文件上传失败"),
     FILE_SIZE_EXCEEDED(1403, "文件大小超出限制"),
     FILE_TYPE_NOT_SUPPORTED(1404, "文件类型不支持"),
+    FILE_IS_EMPTY(1405, "文件为空"),
+    FILE_NAME_INVALID(1406, "文件名无效"),
+    FILE_DOWNLOAD_FAILED(1407, "文件下载失败"),
     
     // AI相关 15xx
     AI_SERVICE_ERROR(1501, "AI服务错误"),
