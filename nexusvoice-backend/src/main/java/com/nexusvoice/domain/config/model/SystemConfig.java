@@ -1,6 +1,7 @@
 package com.nexusvoice.domain.config.model;
 
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import com.nexusvoice.domain.common.BaseEntity;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -39,6 +40,10 @@ public class SystemConfig extends BaseEntity {
 
     @Schema(description = "备注")
     private String remark;
+    
+    @Version
+    @Schema(description = "版本号（乐观锁）", hidden = true)
+    private Integer version;
 
     // 构造函数
     public SystemConfig() {
@@ -117,6 +122,14 @@ public class SystemConfig extends BaseEntity {
 
     public void setRemark(String remark) {
         this.remark = remark;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 
     /**

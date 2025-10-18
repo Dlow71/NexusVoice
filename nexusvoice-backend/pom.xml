@@ -285,6 +285,12 @@
       <artifactId>redisson-spring-boot-starter</artifactId>
       <version>${redisson.version}</version>
     </dependency>
+    
+    <!-- Caffeine本地缓存 -->
+    <dependency>
+      <groupId>com.github.ben-manes.caffeine</groupId>
+      <artifactId>caffeine</artifactId>
+    </dependency>
 
     <!-- Lettuce连接池依赖 -->
     <dependency>

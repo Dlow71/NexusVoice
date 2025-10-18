@@ -117,4 +117,30 @@ public class SystemConfigController {
         logger.info("接收批量更新配置状态请求，配置数量: {}, 状态: {}", ids.size(), enabled);
         return systemConfigApplicationService.batchUpdateStatus(ids, enabled);
     }
+    
+    // ==================== 缓存管理接口 ====================
+    
+    @Operation(summary = "刷新配置缓存", description = "刷新指定配置或全部配置的缓存")
+    @PostMapping("/cache/refresh")
+    public Result<Void> refreshCache(
+            @Parameter(description = "配置键列表（为空则刷新全部）") 
+            @RequestBody(required = false) List<String> configKeys) {
+        logger.info("接收刷新配置缓存请求，配置键: {}", 
+                configKeys == null ? "全部" : String.join(",", configKeys));
+        return systemConfigApplicationService.refreshCache(configKeys);
+    }
+    
+    @Operation(summary = "刷新所有配置缓存", description = "强制刷新所有配置的缓存")
+    @PostMapping("/cache/refresh-all")
+    public Result<Void> refreshAllCache() {
+        logger.info("接收刷新所有配置缓存请求");
+        return systemConfigApplicationService.refreshCache(null);
+    }
+    
+    @Operation(summary = "获取缓存统计信息", description = "获取配置缓存的统计信息")
+    @GetMapping("/cache/stats")
+    public Result<Map<String, Object>> getCacheStats() {
+        logger.info("接收获取缓存统计信息请求");
+        return systemConfigApplicationService.getCacheStats();
+    }
 }

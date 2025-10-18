@@ -1,44 +1,25 @@
 package com.nexusvoice.domain.config.service;
 
 import com.nexusvoice.domain.config.constant.SystemConfigKey;
-import com.nexusvoice.domain.config.model.SystemConfig;
-import com.nexusvoice.domain.config.repository.SystemConfigRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * 系统配置领域服务
- * 提供便捷的配置获取方法，带本地缓存
+ * 提供便捷的配置获取方法
+ * 缓存由SystemConfigCacheService统一管理
  *
  * @author NexusVoice
  * @since 2025-10-17
+ * @updated 2025-10-18 集成SystemConfigCacheService
  */
 @Slf4j
 @Service
 public class SystemConfigService {
 
     @Autowired
-    private SystemConfigRepository systemConfigRepository;
-
-    /**
-     * 本地缓存，存储配置键值对
-     */
-    private final Map<String, String> configCache = new ConcurrentHashMap<>();
-
-    /**
-     * 缓存最后更新时间
-     */
-    private volatile long lastRefreshTime = 0;
-
-    /**
-     * 缓存过期时间（毫秒），默认5分钟
-     */
-    private static final long CACHE_EXPIRE_MS = 5 * 60 * 1000;
+    private SystemConfigCacheService cacheService;
 
     /**
      * 获取配置值（字符串类型）
@@ -49,25 +30,11 @@ public class SystemConfigService {
      */
     public String getString(String configKey, String defaultValue) {
         try {
-            // 检查缓存是否过期
-            if (isCacheExpired()) {
-                refreshCache();
-            }
-
-            // 从缓存获取
-            String value = configCache.get(configKey);
+            String value = cacheService.getConfigValue(configKey);
             if (value != null) {
                 return value;
             }
-
-            // 缓存未命中，从数据库查询
-            Optional<SystemConfig> configOpt = systemConfigRepository.findByKey(configKey);
-            if (configOpt.isPresent() && configOpt.get().isActive()) {
-                value = configOpt.get().getConfigValue();
-                configCache.put(configKey, value);
-                return value;
-            }
-
+            
             // 配置不存在，返回默认值
             log.debug("配置项不存在，使用默认值，key={}，defaultValue={}", configKey, defaultValue);
             return defaultValue;
@@ -156,38 +123,22 @@ public class SystemConfigService {
     /**
      * 刷新缓存
      */
-    public synchronized void refreshCache() {
-        try {
-            log.info("开始刷新系统配置缓存");
-            configCache.clear();
-            
-            // 加载所有启用的配置
-            systemConfigRepository.findAllEnabled().forEach(config -> {
-                configCache.put(config.getConfigKey(), config.getConfigValue());
-            });
-            
-            lastRefreshTime = System.currentTimeMillis();
-            log.info("系统配置缓存刷新完成，加载了{}个配置项", configCache.size());
-            
-        } catch (Exception e) {
-            log.error("刷新系统配置缓存失败", e);
-        }
+    public void refreshCache() {
+        cacheService.warmUpCache();
     }
 
     /**
      * 清空缓存
      */
     public void clearCache() {
-        configCache.clear();
-        lastRefreshTime = 0;
-        log.info("系统配置缓存已清空");
+        cacheService.evictAllConfigs();
     }
-
+    
     /**
-     * 检查缓存是否过期
+     * 失效指定配置的缓存
      */
-    private boolean isCacheExpired() {
-        return System.currentTimeMillis() - lastRefreshTime > CACHE_EXPIRE_MS;
+    public void evictConfig(String configKey) {
+        cacheService.evictConfig(configKey);
     }
 
     // ==================== 便捷方法：获取常用配置 ====================
