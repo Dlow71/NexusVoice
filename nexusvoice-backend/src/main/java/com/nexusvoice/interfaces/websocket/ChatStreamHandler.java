@@ -265,7 +265,19 @@ public class ChatStreamHandler implements WebSocketHandler {
                 }
             }
             
-            // 3. 保存用户消息
+            // 3. 验证模型一致性（方案一：会话级固定模型）
+            // 如果请求中指定了模型，验证是否与会话绑定的模型一致
+            if (requestDto.getModelName() != null && !requestDto.getModelName().trim().isEmpty()) {
+                try {
+                    conversation.validateModelConsistency(requestDto.getModelName());
+                } catch (BizException e) {
+                    // 模型不一致，向用户返回友好提示
+                    log.info("会话{}模型一致性验证失败：{}", conversation.getId(), e.getMessage());
+                    throw e; // 重新抛出异常，让外层处理
+                }
+            }
+            
+            // 4. 保存用户消息
             ConversationMessage userMessage = ConversationMessage.createUserMessage(
                     conversation.getId(), 
                     requestDto.getMessage(),
@@ -273,12 +285,12 @@ public class ChatStreamHandler implements WebSocketHandler {
             );
             conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
             
-            // 4. 构建AI请求
+            // 5. 构建AI请求
             ChatRequest aiRequest = buildStreamAiRequest(conversation, requestDto, role);
             // 注意：lambda中引用的本地变量需要是final或有效final，这里固定一份快照供后续lambda使用
             final Role roleSnapshot = role;
             
-            // 5. 开始流式响应
+            // 6. 开始流式响应
             // 使用StringBuffer保证线程安全（多个TTS线程会并发append）
             StringBuffer responseContent = new StringBuffer();
 
@@ -306,7 +318,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                     (resp) -> sendMessage(session, resp))
                     : null;
 
-            // 动态获取AI服务（与HTTP完全一致）
+            // 7. 动态获取AI服务（与HTTP完全一致）
             AiChatService aiChatService = getAiChatService(aiRequest.getModel());
             
             aiChatService.streamChat(aiRequest,

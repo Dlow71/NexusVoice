@@ -87,7 +87,19 @@ public class ConversationApplicationService {
             conversationDomainService.checkTokenLimit(conversation.getId(), 
                     systemConfigService.getConversationMaxTokens()); // 从配置获取最大令牌数
 
-            // 4. 查询角色信息（如果指定了角色ID）
+            // 4. 验证模型一致性（方案一：会话级固定模型）
+            // 如果请求中指定了模型，验证是否与会话绑定的模型一致
+            if (requestDto.getModelName() != null && !requestDto.getModelName().trim().isEmpty()) {
+                try {
+                    conversation.validateModelConsistency(requestDto.getModelName());
+                } catch (BizException e) {
+                    // 模型不一致，向用户返回友好提示
+                    log.info("会话{}模型一致性验证失败：{}", conversation.getId(), e.getMessage());
+                    throw e; // 重新抛出异常，让外层处理
+                }
+            }
+
+            // 5. 查询角色信息（如果指定了角色ID）
             Role role = null;
             Long effectiveRoleId = requestDto.getRoleId() != null ? requestDto.getRoleId() : conversation.getRoleId();
             if (effectiveRoleId != null) {
@@ -102,7 +114,7 @@ public class ConversationApplicationService {
                 }
             }
 
-            // 5. 保存用户消息
+            // 6. 保存用户消息
             ConversationMessage userMessage = ConversationMessage.createUserMessage(
                     conversation.getId(), 
                     requestDto.getMessage(), 
@@ -110,17 +122,17 @@ public class ConversationApplicationService {
             );
             userMessage = conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
 
-            // 6. 构建AI请求
+            // 7. 构建AI请求
             ChatRequest aiRequest = buildAiRequest(conversation, requestDto, role);
 
-            // 7. 调用AI服务
+            // 8. 调用AI服务
             // 解析模型信息并获取对应的服务
             String modelName = aiRequest.getModel();
             AiChatService aiChatService = getAiChatService(modelName);
             ChatResponse aiResponse = aiChatService.chat(aiRequest);
 
             if (aiResponse.getSuccess()) {
-                // 8. 根据enableAudio参数决定是否调用TTS服务生成音频
+                // 9. 根据enableAudio参数决定是否调用TTS服务生成音频
                 String audioUrl = null;
                 TTSResponseDTO ttsResponse = null;
                 boolean shouldGenerateAudio = requestDto.getEnableAudio() != null && requestDto.getEnableAudio();
@@ -153,7 +165,7 @@ public class ConversationApplicationService {
                     log.debug("跳过TTS音频生成，enableAudio=false，对话ID：{}", conversation.getId());
                 }
 
-                // 9. 保存AI回复（包含音频URL）
+                // 10. 保存AI回复（包含音频URL）
                 ConversationMessage aiMessage = ConversationMessage.createAssistantMessage(
                         conversation.getId(),
                         aiResponse.getContent(),
@@ -163,14 +175,14 @@ public class ConversationApplicationService {
                 aiMessage.setTokenCount(aiResponse.getUsage() != null ? aiResponse.getUsage().getCompletionTokens() : 0);
                 aiMessage = conversationDomainService.addMessageToConversation(conversation.getId(), aiMessage);
 
-                // 10. 自动更新对话标题（如果是新对话且未设置标题）
+                // 11. 自动更新对话标题（如果是新对话且未设置标题）
                 if (conversation.getTitle() == null || conversation.getTitle().equals("新对话")) {
                     String generatedTitle = conversationDomainService.generateConversationTitle(conversation.getId());
                     conversation.updateTitle(generatedTitle);
                     conversationRepository.save(conversation);
                 }
 
-                // 11. 构建响应
+                // 12. 构建响应
                 ChatResponseDto.TokenUsageDto usageDto = null;
                 if (aiResponse.getUsage() != null) {
                     usageDto = ChatResponseDto.TokenUsageDto.builder()

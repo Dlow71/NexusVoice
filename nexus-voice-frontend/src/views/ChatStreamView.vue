@@ -130,6 +130,33 @@
       <footer class="chat-footer">
         <div class="footer-options">
           <p class="system-message">{{ systemMessage }}</p>
+          
+          <!-- 模型选择器 -->
+          <div class="model-selector" :class="{ 'locked': isModelLocked }">
+            <label class="model-label">
+              <span class="model-icon">🤖</span>
+              <span v-if="isModelLocked" class="lock-icon" title="会话已绑定模型，无法切换">🔒</span>
+              模型：
+            </label>
+            <div class="model-buttons">
+              <button 
+                v-for="model in availableModels" 
+                :key="model.modelKey"
+                @click="!isModelLocked && (selectedModel = model.modelKey)"
+                :class="{ 
+                  'active': selectedModel === model.modelKey,
+                  'disabled': isModelLocked
+                }"
+                :disabled="isModelLocked"
+                class="model-btn"
+                :title="isModelLocked ? '当前会话已绑定' + model.modelName : model.description"
+              >
+                <span class="model-name">{{ model.modelName }}</span>
+                <span v-if="selectedModel === model.modelKey" class="check-mark">✓</span>
+              </button>
+            </div>
+          </div>
+          
           <div class="search-toggle-container">
             <label class="switch">
               <input type="checkbox" v-model="enableWebSearch" />
@@ -358,6 +385,11 @@ const isSending = ref(false);
 const conversationId = ref(null); // 注意：保持为字符串类型，避免精度丢失
 const roleId = computed(() => route.params.roleId); // 从路由获取动态roleId
 
+// 模型选择相关
+const availableModels = ref([]); // 可用模型列表
+const selectedModel = ref('openai:gpt-oss-20b'); // 默认选中gpt-oss-20b
+const isModelLocked = computed(() => !!conversationId.value); // 有对话后锁定模型
+
 // 角色信息
 const currentCharacter = ref(null);
 const conversationHistory = ref([]);
@@ -370,6 +402,54 @@ const isAIThinking = ref(false);
 // 开关选项
 const enableWebSearch = ref(false);
 const enableAudio = ref(false);  // 默认关闭音频，避免后端TTS问题导致卡死
+
+// 加载可用模型列表
+const fetchAvailableModels = async () => {
+  try {
+    const response = await characterApi.getAvailableModels();
+    if (response.data.success && response.data.data) {
+      // 只保留我们需要的两个模型
+      availableModels.value = response.data.data.filter(
+        model => model.modelKey === 'openai:gpt-oss-20b' || model.modelKey === 'grok:grok-4-fast'
+      );
+      
+      // 如果没有找到指定的模型，手动添加（作为备用）
+      if (availableModels.value.length === 0) {
+        availableModels.value = [
+          {
+            modelKey: 'openai:gpt-oss-20b',
+            modelName: 'GPT OSS 20B',
+            description: 'OpenAI兼容的开源模型',
+            contextWindow: 128000
+          },
+          {
+            modelKey: 'grok:grok-4-fast',
+            modelName: 'Grok 4 Fast',
+            description: 'xAI Grok 4快速版',
+            contextWindow: 131072
+          }
+        ];
+      }
+    }
+  } catch (error) {
+    console.error('加载模型列表失败:', error);
+    // 如果调用失败，使用默认配置
+    availableModels.value = [
+      {
+        modelKey: 'openai:gpt-oss-20b',
+        modelName: 'GPT OSS 20B',
+        description: 'OpenAI兼容的开源模型',
+        contextWindow: 128000
+      },
+      {
+        modelKey: 'grok:grok-4-fast',
+        modelName: 'Grok 4 Fast',
+        description: 'xAI Grok 4快速版',
+        contextWindow: 131072
+      }
+    ];
+  }
+};
 
 // 音频播放相关
 const audioQueue = ref([]);
@@ -761,9 +841,25 @@ const sendMessage = async () => {
   
   // 确保有conversationId，如果没有先创建
   if (!conversationId.value) {
-    await createConversationAndShowGreeting();
-    if (!conversationId.value) {
-      ElMessage.error('需要先创建对话');
+    try {
+      // 使用选中的模型创建对话
+      const response = await characterApi.createConversation({
+        roleId: roleId.value, // 保持字符串类型
+        modelName: selectedModel.value, // 传递选中的模型
+        enableAudio: false // 不需要后端生成音频，我们使用角色本身的音频
+      });
+      
+      if (response.data.success) {
+        const data = response.data.data;
+        conversationId.value = data.conversationId; // 后端返回的是字符串，直接使用
+        sessionStorage.setItem(`stream-conversation-${roleId.value}`, data.conversationId);
+        console.log('创建对话成功，使用模型：', selectedModel.value);
+      } else {
+        throw new Error(response.data.message || '创建对话失败');
+      }
+    } catch (error) {
+      console.error('创建对话失败:', error);
+      ElMessage.error('创建对话失败，请重试');
       return;
     }
   }
@@ -1055,64 +1151,44 @@ const loadCharacterInfo = async () => {
   }
 };
 
-// 创建对话并显示开场白（使用角色详情中的开场白）
-const createConversationAndShowGreeting = async () => {
-  if (!roleId.value) return;
+// 仅显示开场白（不创建对话）
+const showCharacterGreeting = () => {
+  if (!currentCharacter.value) return;
   
-  try {
-    // 调用创建对话接口
-    const response = await characterApi.createConversation({
-      roleId: roleId.value, // 保持字符串类型
-      enableAudio: false // 不需要后端生成音频，我们使用角色本身的音频
-    });
+  const greeting = currentCharacter.value.greetingMessage || currentCharacter.value.greeting_message;
+  const greetingAudioUrl = currentCharacter.value.greetingAudioUrl || currentCharacter.value.greeting_audio_url;
+  
+  if (greeting) {
+    const greetingMessage = {
+      id: `msg-greeting-${Date.now()}`,
+      type: 'assistant',
+      content: greeting,
+      isStreaming: false,
+      renderedContent: renderMarkdown(greeting),
+      audioSegments: [],
+      timestamp: new Date()
+    };
     
-    if (response.data.success) {
-      const data = response.data.data;
-      conversationId.value = data.conversationId; // 后端返回的是字符串，直接使用
-      sessionStorage.setItem(`stream-conversation-${roleId.value}`, data.conversationId);
+    // 如果有开场白音频，添加到消息中
+    if (greetingAudioUrl) {
+      greetingMessage.audioSegments = [{
+        index: 0,
+        text: greeting,
+        audioUrl: greetingAudioUrl,
+        groupId: 'greeting'
+      }];
       
-      // 显示角色的开场白（从currentCharacter中获取）
-      if (currentCharacter.value) {
-        const greeting = currentCharacter.value.greetingMessage || currentCharacter.value.greeting_message;
-        const greetingAudioUrl = currentCharacter.value.greetingAudioUrl || currentCharacter.value.greeting_audio_url;
-        
-        if (greeting) {
-          const greetingMessage = {
-            id: `msg-greeting-${Date.now()}`,
-            type: 'assistant',
-            content: greeting,
-            isStreaming: false,
-            renderedContent: renderMarkdown(greeting),
-            audioSegments: [],
-            timestamp: new Date()
-          };
-          
-          // 如果有开场白音频，添加到消息中
-          if (greetingAudioUrl) {
-            greetingMessage.audioSegments = [{
-              index: 0,
-              text: greeting,
-              audioUrl: greetingAudioUrl,
-              groupId: 'greeting'
-            }];
-            
-            // 自动播放开场白音频（开场白音频是预先生成的，始终播放）
-            console.log('[开场白] 检测到音频URL，准备播放:', greetingAudioUrl);
-            setTimeout(() => {
-              startAudioPlayback(greetingMessage);
-            }, 500);
-          } else {
-            console.log('[开场白] 没有音频URL');
-          }
-          
-          messages.value.push(greetingMessage);
-          scrollToBottom();
-        }
-      }
+      // 自动播放开场白音频（开场白音频是预先生成的，始终播放）
+      console.log('[开场白] 检测到音频URL，准备播放:', greetingAudioUrl);
+      setTimeout(() => {
+        startAudioPlayback(greetingMessage);
+      }, 500);
+    } else {
+      console.log('[开场白] 没有音频URL');
     }
-  } catch (error) {
-    console.error('创建对话失败:', error);
-    ElMessage.error('创建对话失败，请重试');
+    
+    messages.value.push(greetingMessage);
+    scrollToBottom();
   }
 };
 
@@ -1144,6 +1220,10 @@ const handleSwitchConversation = async (convId) => {
   // 从会话列表中获取该会话的角色信息
   const targetConversation = conversationHistory.value.find(c => c.id === convId);
   if (targetConversation) {
+    // 更新选中的模型（如果会话中有模型信息）
+    if (targetConversation.modelName) {
+      selectedModel.value = targetConversation.modelName;
+    }
     // 更新当前角色信息
     if (targetConversation.conversationRole) {
       currentCharacter.value = targetConversation.conversationRole;
@@ -1333,8 +1413,8 @@ watch(() => route.params.roleId, async (newRoleId, oldRoleId) => {
     // 重新加载角色信息
     await loadCharacterInfo();
     
-    // 创建新对话
-    await createConversationAndShowGreeting();
+    // 仅显示开场白（不创建对话）
+    showCharacterGreeting();
     
     // 重新建立WebSocket连接
     if (ws.value) {
@@ -1513,28 +1593,23 @@ onMounted(async () => {
   isLoading.value = true;
   
   try {
-    // 1. 先加载角色信息（必须先有角色信息才能显示开场白）
+    // 1. 加载可用模型列表
+    await fetchAvailableModels();
+    
+    // 2. 加载角色信息（必须先有角色信息才能显示开场白）
     await loadCharacterInfo();
     
-    if (!currentCharacter.value) {
-      throw new Error('无法加载角色信息');
-    }
+    // 3. 加载历史对话列表
+    fetchConversationHistory();
     
-    // 2. 加载对话历史列表（左侧列表）
-    await fetchConversationHistory();
-    
-    // 2.5 加载声音列表（用于角色创建助手）
-    await fetchVoiceList();
-    
-    // 3. 检查是否已有对话ID（从sessionStorage恢复，保持字符串类型）
+    // 4. 检查是否有保存的对话
     const savedConversationId = sessionStorage.getItem(`stream-conversation-${roleId.value}`);
     if (savedConversationId) {
-      // 已有对话，加载历史消息
-      conversationId.value = savedConversationId;
+      // 有历史对话，切换到该对话（会锁定模型）
       await handleSwitchConversation(savedConversationId);
     } else {
-      // 4. 没有对话，创建新对话并显示开场白
-      await createConversationAndShowGreeting();
+      // 没有对话，仅显示开场白（不创建对话）
+      showCharacterGreeting();
     }
     
     // 5. 初始化WebSocket连接
@@ -1888,6 +1963,82 @@ onUnmounted(() => {
     transform: translateY(-10px); 
     opacity: 1;
   }
+}
+
+/* 模型选择器 */
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  background-color: #1e293b;
+  border-radius: 8px;
+  transition: opacity 0.3s;
+}
+
+.model-selector.locked {
+  opacity: 0.7;
+}
+
+.model-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.model-icon {
+  font-size: 18px;
+}
+
+.lock-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.model-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.model-btn {
+  position: relative;
+  padding: 6px 14px;
+  background-color: #334155;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-btn:hover:not(.disabled) {
+  background-color: #475569;
+  border-color: #3b82f6;
+}
+
+.model-btn.active {
+  background-color: #1e40af;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.model-btn.disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.model-btn .check-mark {
+  color: #10b981;
+  font-weight: bold;
 }
 
 /* 底部输入区域 */

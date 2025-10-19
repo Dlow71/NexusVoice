@@ -4,14 +4,14 @@ import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.ai.model.GrokModelAdapter;
+import com.nexusvoice.infrastructure.ai.model.OpenAiModelAdapter;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,6 +25,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 public class LangChain4jModelFactory {
+    
+    @Autowired
+    private OpenAiModelAdapter openAiModelAdapter;
+    
+    @Autowired
+    private GrokModelAdapter grokModelAdapter;
     
     /**
      * 模型实例缓存
@@ -53,7 +59,10 @@ public class LangChain4jModelFactory {
         ChatLanguageModel chatModel;
         switch (model.getProviderCode().toLowerCase()) {
             case "openai":
-                chatModel = createOpenAiChatModel(model, apiKey);
+                chatModel = openAiModelAdapter.createChatModel(model, apiKey);
+                break;
+            case "grok":
+                chatModel = grokModelAdapter.createChatModel(model, apiKey);
                 break;
             case "claude":
                 chatModel = createClaudeChatModel(model, apiKey);
@@ -95,7 +104,10 @@ public class LangChain4jModelFactory {
         StreamingChatLanguageModel streamingModel;
         switch (model.getProviderCode().toLowerCase()) {
             case "openai":
-                streamingModel = createOpenAiStreamingChatModel(model, apiKey);
+                streamingModel = openAiModelAdapter.createStreamingChatModel(model, apiKey);
+                break;
+            case "grok":
+                streamingModel = grokModelAdapter.createStreamingChatModel(model, apiKey);
                 break;
             case "claude":
                 streamingModel = createClaudeStreamingChatModel(model, apiKey);
@@ -121,57 +133,9 @@ public class LangChain4jModelFactory {
         return streamingModel;
     }
     
-    /**
-     * 创建OpenAI聊天模型
-     */
-    private ChatLanguageModel createOpenAiChatModel(AiModel model, AiApiKey apiKey) {
-        var builder = OpenAiChatModel.builder()
-                .apiKey(apiKey.getApiKey())
-                .modelName(model.getModelCode())
-                .temperature(model.getDefaultTemperature() != null ? 
-                           model.getDefaultTemperature().doubleValue() : 0.7)
-                .maxTokens(model.getDefaultMaxTokens() != null ? 
-                          model.getDefaultMaxTokens() : 2000)
-                .timeout(Duration.ofSeconds(model.getDefaultTimeoutSeconds() != null ? 
-                        model.getDefaultTimeoutSeconds() : 60));
-        
-        // 设置自定义端点
-        String baseUrl = apiKey.getBaseUrl() != null ? apiKey.getBaseUrl() : model.getDefaultBaseUrl();
-        if (baseUrl != null && !baseUrl.isEmpty()) {
-            builder.baseUrl(baseUrl);
-        }
-        
-        // 设置代理
-        if (apiKey.getProxyUrl() != null && !apiKey.getProxyUrl().isEmpty()) {
-            // TODO: 配置代理，需要根据LangChain4j的具体API调整
-            log.info("使用代理：{}", apiKey.getProxyUrl());
-        }
-        
-        return builder.build();
-    }
-    
-    /**
-     * 创建OpenAI流式聊天模型
-     */
-    private StreamingChatLanguageModel createOpenAiStreamingChatModel(AiModel model, AiApiKey apiKey) {
-        var builder = OpenAiStreamingChatModel.builder()
-                .apiKey(apiKey.getApiKey())
-                .modelName(model.getModelCode())
-                .temperature(model.getDefaultTemperature() != null ? 
-                           model.getDefaultTemperature().doubleValue() : 0.7)
-                .maxTokens(model.getDefaultMaxTokens() != null ? 
-                          model.getDefaultMaxTokens() : 2000)
-                .timeout(Duration.ofSeconds(model.getDefaultTimeoutSeconds() != null ? 
-                        model.getDefaultTimeoutSeconds() : 60));
-        
-        // 设置自定义端点
-        String baseUrl = apiKey.getBaseUrl() != null ? apiKey.getBaseUrl() : model.getDefaultBaseUrl();
-        if (baseUrl != null && !baseUrl.isEmpty()) {
-            builder.baseUrl(baseUrl);
-        }
-        
-        return builder.build();
-    }
+    // 注意：OpenAI和Grok模型的创建已移至各自的适配器类
+    // - OpenAiModelAdapter: 处理OpenAI官方和兼容API
+    // - GrokModelAdapter: 处理Grok (xAI) API
     
     /**
      * 创建Claude聊天模型
@@ -180,7 +144,7 @@ public class LangChain4jModelFactory {
         // TODO: 实现Claude模型创建
         // 需要添加langchain4j-claude依赖并实现
         log.warn("Claude模型支持尚未实现，使用OpenAI兼容模式");
-        return createOpenAiChatModel(model, apiKey);
+        return openAiModelAdapter.createChatModel(model, apiKey);
     }
     
     /**
@@ -189,7 +153,7 @@ public class LangChain4jModelFactory {
     private StreamingChatLanguageModel createClaudeStreamingChatModel(AiModel model, AiApiKey apiKey) {
         // TODO: 实现Claude流式模型创建
         log.warn("Claude流式模型支持尚未实现，使用OpenAI兼容模式");
-        return createOpenAiStreamingChatModel(model, apiKey);
+        return openAiModelAdapter.createStreamingChatModel(model, apiKey);
     }
     
     /**
@@ -214,7 +178,7 @@ public class LangChain4jModelFactory {
         compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
         compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
         
-        return createOpenAiChatModel(compatibleModel, compatibleKey);
+        return openAiModelAdapter.createChatModel(compatibleModel, compatibleKey);
     }
     
     /**
@@ -237,7 +201,7 @@ public class LangChain4jModelFactory {
         compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
         compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
         
-        return createOpenAiStreamingChatModel(compatibleModel, compatibleKey);
+        return openAiModelAdapter.createStreamingChatModel(compatibleModel, compatibleKey);
     }
     
     /**
@@ -281,7 +245,7 @@ public class LangChain4jModelFactory {
         compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
         compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
         
-        return createOpenAiChatModel(compatibleModel, compatibleKey);
+        return openAiModelAdapter.createChatModel(compatibleModel, compatibleKey);
     }
     
     /**
@@ -304,8 +268,11 @@ public class LangChain4jModelFactory {
         compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
         compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
         
-        return createOpenAiStreamingChatModel(compatibleModel, compatibleKey);
+        return openAiModelAdapter.createStreamingChatModel(compatibleModel, compatibleKey);
     }
+    
+    // 注意：Grok模型的创建已移至 GrokModelAdapter
+    // OpenAI模型的创建已移至 OpenAiModelAdapter
     
     /**
      * 清除缓存

@@ -169,5 +169,11 @@ export default {
         };
         return apiClient.post("/v1/image/generate", payload);
     },
+    /**
+     * 获取可用AI模型列表
+     */
+    getAvailableModels() {
+        return apiClient.get('/v1/conversations/models');
+    },
 };
 

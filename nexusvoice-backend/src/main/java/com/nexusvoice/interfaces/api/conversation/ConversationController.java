@@ -42,10 +42,14 @@ public class ConversationController {
 
     private final ConversationApplicationService conversationApplicationService;
     private final JwtUtils jwtUtils;
+    private final com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager modelBeanManager;
 
-    public ConversationController(ConversationApplicationService conversationApplicationService, JwtUtils jwtUtils) {
+    public ConversationController(ConversationApplicationService conversationApplicationService, 
+                                 JwtUtils jwtUtils,
+                                 com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager modelBeanManager) {
         this.conversationApplicationService = conversationApplicationService;
         this.jwtUtils = jwtUtils;
+        this.modelBeanManager = modelBeanManager;
     }
 
     @PostMapping
@@ -130,16 +134,51 @@ public class ConversationController {
     }
 
     @GetMapping("/models")
-    @Operation(summary = "获取可用模型列表", description = "获取系统支持的AI模型列表")
-    public Result<List<String>> getAvailableModels() {
-        // 返回支持的模型列表
-        List<String> models = List.of(
-                "gpt-4o-mini", 
-                "gpt-4o", 
-                "gpt-4-turbo", 
-                "gpt-3.5-turbo"
-        );
+    @Operation(summary = "获取可用模型列表", description = "获取系统支持的AI模型列表（从数据库动态加载）")
+    public Result<List<ModelInfo>> getAvailableModels() {
+        // 从动态模型管理器获取可用模型列表
+        List<com.nexusvoice.domain.ai.model.AiModel> models = modelBeanManager.getAvailableModels();
         
-        return Result.success(models);
+        // 转换为前端友好的格式
+        List<ModelInfo> modelInfos = models.stream()
+                .map(model -> ModelInfo.builder()
+                        .modelKey(model.getModelKey()) // provider:model格式
+                        .modelName(model.getModelName())
+                        .description(model.getDescription())
+                        .providerCode(model.getProviderCode())
+                        .modelCode(model.getModelCode())
+                        .contextWindow(model.getContextWindow())
+                        .build())
+                .collect(java.util.stream.Collectors.toList());
+        
+        log.info("返回可用模型列表，共{}个模型", modelInfos.size());
+        return Result.success(modelInfos);
+    }
+    
+    /**
+     * 模型信息内部类
+     */
+    @lombok.Data
+    @lombok.Builder
+    @lombok.NoArgsConstructor
+    @lombok.AllArgsConstructor
+    public static class ModelInfo {
+        @io.swagger.v3.oas.annotations.media.Schema(description = "模型键值（格式：provider:model）", example = "openai:gpt-4o-mini")
+        private String modelKey;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "模型名称", example = "GPT-4o Mini")
+        private String modelName;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "模型描述", example = "OpenAI GPT-4o迷你版，性价比最高")
+        private String description;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "提供商代码", example = "openai")
+        private String providerCode;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "模型代码", example = "gpt-4o-mini")
+        private String modelCode;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "上下文窗口大小", example = "128000")
+        private Integer contextWindow;
     }
 }

@@ -2,10 +2,13 @@ package com.nexusvoice.domain.conversation.model;
 
 import com.nexusvoice.domain.common.BaseEntity;
 import com.nexusvoice.domain.conversation.constant.ConversationStatus;
+import com.nexusvoice.enums.ErrorCodeEnum;
+import com.nexusvoice.exception.BizException;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +20,7 @@ import java.util.List;
  * @author NexusVoice
  * @since 2025-09-25
  */
+@Slf4j
 @Data
 @EqualsAndHashCode(callSuper = true)
 @NoArgsConstructor
@@ -123,5 +127,54 @@ public class Conversation extends BaseEntity {
             return null;
         }
         return messages.get(messages.size() - 1);
+    }
+    
+    /**
+     * 验证模型一致性
+     * 确保会话绑定的模型不被随意切换
+     * 
+     * @param requestModelName 请求中指定的模型名称
+     * @throws BizException 如果模型不一致
+     */
+    public void validateModelConsistency(String requestModelName) {
+        if (requestModelName == null || requestModelName.trim().isEmpty()) {
+            // 如果请求没有指定模型，使用会话默认模型，不需要验证
+            return;
+        }
+        
+        // 统一模型名称格式（添加provider前缀）
+        String normalizedRequestModel = normalizeModelName(requestModelName);
+        String normalizedSessionModel = normalizeModelName(this.modelName);
+        
+        // 检查模型是否一致
+        if (!normalizedRequestModel.equals(normalizedSessionModel)) {
+            log.warn("会话{}尝试切换模型：{} -> {}，拒绝切换", 
+                this.getId(), normalizedSessionModel, normalizedRequestModel);
+            
+            throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
+                String.format("当前会话已绑定模型[%s]，无法切换为[%s]。如需使用不同模型，请创建新会话", 
+                    normalizedSessionModel, normalizedRequestModel));
+        }
+    }
+    
+    /**
+     * 标准化模型名称
+     * 如果没有provider前缀，默认添加openai:
+     * 
+     * @param modelName 原始模型名称
+     * @return 标准化后的模型名称
+     */
+    private String normalizeModelName(String modelName) {
+        if (modelName == null || modelName.trim().isEmpty()) {
+            return "openai:gpt-4o-mini"; // 默认模型
+        }
+        
+        String trimmed = modelName.trim();
+        if (!trimmed.contains(":")) {
+            // 没有provider前缀，默认为openai
+            return "openai:" + trimmed;
+        }
+        
+        return trimmed;
     }
 }
