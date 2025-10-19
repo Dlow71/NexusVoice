@@ -6,6 +6,10 @@ spring:
   sql:
     init:
       mode: never  # 禁用Spring Boot的SQL初始化，避免与MyBatis-Plus冲突
+  flyway:
+    enabled: false  # 临时禁用Flyway，避免MySQL脚本在PostgreSQL运行出错
+    # 启用后可配置脚本位置：
+    # locations: classpath:db/migration/postgresql
   threads:
     virtual:
       enabled: true
@@ -165,11 +169,11 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    # MySQL数据库连接信息在 application-local.yml 中配置
+    # PostgreSQL数据库连接信息在 application-local.yml 中配置
     # url: 请在 application-local.yml 中配置
     # username: 请在 application-local.yml 中配置
     # password: 请在 application-local.yml 中配置
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
 
 # MyBatis-Plus开发环境配置
 mybatis-plus:
@@ -190,11 +194,11 @@ spring:
     activate:
       on-profile: test
   datasource:
-    # 测试环境MySQL数据库连接信息（可根据需要配置）
-    url: jdbc:mysql://localhost:3306/nexusvoice_test?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true
-    username: ${TEST_DB_USERNAME:root}
-    password: ${TEST_DB_PASSWORD:root}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 测试环境PostgreSQL数据库连接信息（可根据需要配置）
+    url: jdbc:postgresql://localhost:5432/nexusvoice_test?useSSL=false&serverTimezone=GMT+8
+    username: ${TEST_DB_USERNAME:postgres}
+    password: ${TEST_DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
 
 mybatis-plus:
   configuration:
@@ -213,10 +217,10 @@ spring:
     activate:
       on-profile: prod
   datasource:
-    url: ${DB_URL:jdbc:mysql://localhost:3306/nexusvoice_prod?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=true&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/nexusvoice_prod?useSSL=true&serverTimezone=GMT+8}
     username: ${DB_USERNAME:nexusvoice}
     password: ${DB_PASSWORD:}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    driver-class-name: org.postgresql.Driver
     druid:
       # 生产环境连接池配置
       initial-size: 10

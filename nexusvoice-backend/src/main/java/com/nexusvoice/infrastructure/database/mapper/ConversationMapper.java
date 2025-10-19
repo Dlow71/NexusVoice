@@ -30,7 +30,7 @@ public interface ConversationMapper extends BaseMapper<ConversationEntity> {
      * 根据用户ID和关键词搜索对话
      */
     @Select("SELECT * FROM conversations WHERE user_id = #{userId} AND deleted = 0 " +
-            "AND (title LIKE CONCAT('%', #{keyword}, '%') OR system_prompt LIKE CONCAT('%', #{keyword}, '%')) " +
+            "AND (title LIKE '%' || #{keyword} || '%' OR system_prompt LIKE '%' || #{keyword} || '%') " +
             "ORDER BY last_active_at DESC")
     List<ConversationEntity> searchByUserIdAndKeyword(@Param("userId") Long userId, @Param("keyword") String keyword);
 
@@ -44,7 +44,7 @@ public interface ConversationMapper extends BaseMapper<ConversationEntity> {
      * 批量更新对话状态
      */
     @Update("<script>" +
-            "UPDATE conversations SET status = #{status}, updated_at = NOW() WHERE id IN " +
+            "UPDATE conversations SET status = #{status}, updated_at = CURRENT_TIMESTAMP WHERE id IN " +
             "<foreach collection='ids' item='id' open='(' separator=',' close=')'>" +
             "#{id}" +
             "</foreach>" +
@@ -54,7 +54,7 @@ public interface ConversationMapper extends BaseMapper<ConversationEntity> {
     /**
      * 删除指定时间之前的已归档对话
      */
-    @Update("UPDATE conversations SET deleted = 1, updated_at = NOW() " +
+    @Update("UPDATE conversations SET deleted = 1, updated_at = CURRENT_TIMESTAMP " +
             "WHERE status = 'ARCHIVED' AND updated_at < #{dateTime}")
     void deleteArchivedConversationsBefore(@Param("dateTime") LocalDateTime dateTime);
 

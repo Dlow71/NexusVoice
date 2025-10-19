@@ -53,7 +53,7 @@ public class RoleApplicationService {
     public RoleDTO getPublicRoleDetail(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
-        if (!Boolean.TRUE.equals(role.getIsPublic())) {
+        if (role.getIsPublic() == null || role.getIsPublic() != 1) {
             throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, "该角色不是公共角色");
         }
         return RoleAssembler.toDTO(role);
@@ -70,7 +70,7 @@ public class RoleApplicationService {
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
         
         // 如果是公共角色，任何人都可以查看
-        if (Boolean.TRUE.equals(role.getIsPublic())) {
+        if (Integer.valueOf(1).equals(role.getIsPublic())) {
             return RoleAssembler.toDTO(role);
         }
         
@@ -90,7 +90,7 @@ public class RoleApplicationService {
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
         
         // 如果是公共角色，任何人都可以使用
-        if (Boolean.TRUE.equals(role.getIsPublic())) {
+        if (Integer.valueOf(1).equals(role.getIsPublic())) {
             return role;
         }
         
@@ -128,7 +128,7 @@ public class RoleApplicationService {
     public void updatePublicRole(Long roleId, RoleUpdateRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
-        if (!Boolean.TRUE.equals(role.getIsPublic())) {
+        if (role.getIsPublic() == null || role.getIsPublic() != 1) {
             throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, "只能编辑公共角色");
         }
         RoleAssembler.copyToRole(request, role);
@@ -143,7 +143,7 @@ public class RoleApplicationService {
     public void deletePublicRole(Long roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> BizException.of(ErrorCodeEnum.ROLE_NOT_FOUND, "角色不存在"));
-        if (!Boolean.TRUE.equals(role.getIsPublic())) {
+        if (role.getIsPublic() == null || role.getIsPublic() != 1) {
             throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, "只能删除公共角色");
         }
         roleRepository.deleteById(roleId);

@@ -7,10 +7,10 @@ spring:
     
   # 数据源配置 - 通过环境变量配置
   datasource:
-    url: jdbc:mysql://${DB_HOST:nexusvoice-mysql}:${DB_PORT:3306}/${DB_NAME:nexusvoice_dev}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=GMT%2B8&allowPublicKeyRetrieval=true&autoReconnect=true&failOverReadOnly=false&maxReconnects=10
-    username: ${DB_USERNAME:nexusvoice}
-    password: ${DB_PASSWORD:nexusvoice123}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:postgresql://${DB_HOST:nexusvoice-postgres}:${DB_PORT:5432}/${DB_NAME:nexusvoice_dev}?useSSL=false&serverTimezone=GMT+8
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
     
     # Druid 连接池配置（Docker 环境优化）
     druid:

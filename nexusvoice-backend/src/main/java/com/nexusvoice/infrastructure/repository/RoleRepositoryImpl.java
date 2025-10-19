@@ -63,7 +63,7 @@ public class RoleRepositoryImpl implements RoleRepository {
     @Override
     public PageResult<Role> pagePublicRoles(Integer page, Integer size, String keyword) {
         LambdaQueryWrapper<Role> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Role::getIsPublic, true);
+        wrapper.eq(Role::getIsPublic, 1);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(Role::getName, keyword).or().like(Role::getDescription, keyword));
         }
@@ -77,7 +77,7 @@ public class RoleRepositoryImpl implements RoleRepository {
     @Override
     public PageResult<Role> pageAllPrivateRoles(Integer page, Integer size, String keyword, Long userId) {
         LambdaQueryWrapper<Role> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Role::getIsPublic, false);
+        wrapper.eq(Role::getIsPublic, 0);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(Role::getName, keyword).or().like(Role::getDescription, keyword));
         }
@@ -94,7 +94,7 @@ public class RoleRepositoryImpl implements RoleRepository {
     @Override
     public PageResult<Role> pageUserPrivateRoles(Integer page, Integer size, String keyword, Long ownerUserId) {
         LambdaQueryWrapper<Role> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Role::getIsPublic, false);
+        wrapper.eq(Role::getIsPublic, 0);
         wrapper.eq(Role::getUserId, ownerUserId);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w.like(Role::getName, keyword).or().like(Role::getDescription, keyword));

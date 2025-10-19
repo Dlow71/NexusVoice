@@ -26,7 +26,7 @@ public class RoleAssembler {
         dto.setGreetingAudioUrl(role.getGreetingAudioUrl());
         dto.setAvatarUrl(role.getAvatarUrl());
         dto.setVoiceType(role.getVoiceType());
-        dto.setIsPublic(role.getIsPublic());
+        dto.setIsPublic(Integer.valueOf(1).equals(role.getIsPublic()));
         dto.setUserId(role.getUserId());
         dto.setCreatedAt(role.getCreatedAt());
         dto.setUpdatedAt(role.getUpdatedAt());

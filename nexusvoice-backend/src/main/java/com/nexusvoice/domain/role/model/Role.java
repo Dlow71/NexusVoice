@@ -54,9 +54,9 @@ public class Role extends BaseEntity {
     @TableField("voiceType")
     private String voiceType;
 
-    @Schema(description = "是否公共角色")
+    @Schema(description = "是否公共角色：0-私有 1-公共")
     @TableField("is_public")
-    private Boolean isPublic;
+    private Integer isPublic;
 
     @Schema(description = "创建者用户ID（私人角色）")
     @TableField("user_id")
@@ -68,7 +68,7 @@ public class Role extends BaseEntity {
      * 设为公共角色
      */
     public void makePublic() {
-        this.isPublic = true;
+        this.isPublic = 1;
         this.userId = null;
     }
 
@@ -77,7 +77,7 @@ public class Role extends BaseEntity {
      * @param ownerUserId 创建者用户ID
      */
     public void makePrivate(Long ownerUserId) {
-        this.isPublic = false;
+        this.isPublic = 0;
         this.userId = ownerUserId;
     }
 
@@ -147,11 +147,11 @@ public class Role extends BaseEntity {
         this.voiceType = voiceType;
     }
 
-    public Boolean getIsPublic() {
+    public Integer getIsPublic() {
         return isPublic;
     }
 
-    public void setIsPublic(Boolean aPublic) {
+    public void setIsPublic(Integer aPublic) {
         isPublic = aPublic;
     }
 

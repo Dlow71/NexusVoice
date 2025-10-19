@@ -40,7 +40,7 @@ public interface AiApiCallLogMapper extends BaseMapper<AiApiCallLog> {
     /**
      * 按模型统计使用次数
      */
-    @Select("SELECT CONCAT(provider_code, ':', model_code) as model_key, COUNT(*) as count " +
+    @Select("SELECT provider_code || ':' || model_code as model_key, COUNT(*) as count " +
             "FROM ai_api_call_logs " +
             "WHERE request_time >= #{startTime} AND request_time <= #{endTime} " +
             "GROUP BY provider_code, model_code")
@@ -73,7 +73,7 @@ public interface AiApiCallLogMapper extends BaseMapper<AiApiCallLog> {
      * 计算成功率
      */
     @Select("SELECT " +
-            "CAST(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS DOUBLE) / COUNT(*) * 100 " +
+            "CAST(SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) AS DOUBLE PRECISION) / COUNT(*) * 100 " +
             "FROM ai_api_call_logs " +
             "WHERE provider_code = #{providerCode} AND model_code = #{modelCode} " +
             "AND request_time >= #{startTime} AND request_time <= #{endTime}")
@@ -86,6 +86,6 @@ public interface AiApiCallLogMapper extends BaseMapper<AiApiCallLog> {
      * 删除过期日志
      */
     @Delete("DELETE FROM ai_api_call_logs " +
-            "WHERE created_at < DATE_SUB(NOW(), INTERVAL #{daysToKeep} DAY)")
+            "WHERE created_at < CURRENT_TIMESTAMP - INTERVAL '1 day' * #{daysToKeep}")
     void deleteOldLogs(@Param("daysToKeep") int daysToKeep);
 }

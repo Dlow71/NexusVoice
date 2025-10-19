@@ -126,24 +126,30 @@
     </dependency>
 
     <!-- Database Drivers -->
+    <!-- MySQL驱动 - 已切换到PostgreSQL -->
+    <!--
     <dependency>
       <groupId>com.mysql</groupId>
       <artifactId>mysql-connector-j</artifactId>
       <version>${mysql.version}</version>
       <scope>runtime</scope>
     </dependency>
-    <!-- 暂时不使用 PostgreSQL 与 PGVector（保留坐标，后续需要可恢复） -->
-    <!--
+    -->
+    
+    <!-- PostgreSQL驱动 -->
     <dependency>
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
-      <version>${postgresql.version}</version>
+      <version>42.7.3</version>
       <scope>runtime</scope>
     </dependency>
+    
+    <!-- PGVector扩展（用于向量存储，可选） -->
+    <!--
     <dependency>
       <groupId>com.pgvector</groupId>
       <artifactId>pgvector</artifactId>
-      <version>${pgvector.version}</version>
+      <version>0.1.6</version>
     </dependency>
     <dependency>
       <groupId>dev.langchain4j</groupId>

@@ -35,7 +35,7 @@ public class ConversationAssembler {
                 .description(role.getDescription())
                 .avatarUrl(role.getAvatarUrl())
                 .voiceType(role.getVoiceType())
-                .isPublic(role.getIsPublic())
+                .isPublic(Integer.valueOf(1).equals(role.getIsPublic()))
                 .greetingMessage(role.getGreetingMessage())
                 .greetingAudioUrl(role.getGreetingAudioUrl())
                 .build();

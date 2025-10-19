@@ -70,14 +70,14 @@ public interface ConversationMessageMapper extends BaseMapper<ConversationMessag
     /**
      * 删除对话的所有消息
      */
-    @Update("UPDATE conversation_messages SET deleted = 1, updated_at = NOW() WHERE conversation_id = #{conversationId}")
+    @Update("UPDATE conversation_messages SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE conversation_id = #{conversationId}")
     void deleteByConversationId(@Param("conversationId") Long conversationId);
 
     /**
      * 批量删除消息
      */
     @Update("<script>" +
-            "UPDATE conversation_messages SET deleted = 1, updated_at = NOW() WHERE id IN " +
+            "UPDATE conversation_messages SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE id IN " +
             "<foreach collection='messageIds' item='id' open='(' separator=',' close=')'>" +
             "#{id}" +
             "</foreach>" +
@@ -87,26 +87,26 @@ public interface ConversationMessageMapper extends BaseMapper<ConversationMessag
     /**
      * 更新消息内容
      */
-    @Update("UPDATE conversation_messages SET content = #{content}, updated_at = NOW() WHERE id = #{messageId}")
+    @Update("UPDATE conversation_messages SET content = #{content}, updated_at = CURRENT_TIMESTAMP WHERE id = #{messageId}")
     void updateContent(@Param("messageId") Long messageId, @Param("content") String content);
 
     /**
      * 更新消息状态
      */
-    @Update("UPDATE conversation_messages SET status = #{status}, updated_at = NOW() WHERE id = #{messageId}")
+    @Update("UPDATE conversation_messages SET status = #{status}, updated_at = CURRENT_TIMESTAMP WHERE id = #{messageId}")
     void updateStatus(@Param("messageId") Long messageId, @Param("status") String status);
 
     /**
      * 更新消息令牌数量
      */
-    @Update("UPDATE conversation_messages SET token_count = #{tokenCount}, updated_at = NOW() WHERE id = #{messageId}")
+    @Update("UPDATE conversation_messages SET token_count = #{tokenCount}, updated_at = CURRENT_TIMESTAMP WHERE id = #{messageId}")
     void updateTokenCount(@Param("messageId") Long messageId, @Param("tokenCount") Integer tokenCount);
 
     /**
      * 批量更新消息状态
      */
     @Update("<script>" +
-            "UPDATE conversation_messages SET status = #{status}, updated_at = NOW() WHERE id IN " +
+            "UPDATE conversation_messages SET status = #{status}, updated_at = CURRENT_TIMESTAMP WHERE id IN " +
             "<foreach collection='messageIds' item='id' open='(' separator=',' close=')'>" +
             "#{id}" +
             "</foreach>" +
@@ -116,7 +116,7 @@ public interface ConversationMessageMapper extends BaseMapper<ConversationMessag
     /**
      * 删除指定时间之前的消息
      */
-    @Update("UPDATE conversation_messages SET deleted = 1, updated_at = NOW() WHERE created_at < #{dateTime}")
+    @Update("UPDATE conversation_messages SET deleted = 1, updated_at = CURRENT_TIMESTAMP WHERE created_at < #{dateTime}")
     void deleteMessagesBefore(@Param("dateTime") LocalDateTime dateTime);
 
     /**
