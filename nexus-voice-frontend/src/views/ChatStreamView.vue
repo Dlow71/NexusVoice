@@ -408,9 +408,11 @@ const fetchAvailableModels = async () => {
   try {
     const response = await characterApi.getAvailableModels();
     if (response.data.success && response.data.data) {
-      // 只保留我们需要的两个模型
+      // 只保留我们需要的三个模型
       availableModels.value = response.data.data.filter(
-        model => model.modelKey === 'openai:gpt-oss-20b' || model.modelKey === 'grok:grok-4-fast'
+        model => model.modelKey === 'openai:gpt-oss-20b' || 
+                model.modelKey === 'grok:grok-4-fast' ||
+                model.modelKey === 'deepseek:deepseek-v3.1'
       );
       
       // 如果没有找到指定的模型，手动添加（作为备用）
@@ -426,6 +428,12 @@ const fetchAvailableModels = async () => {
             modelKey: 'grok:grok-4-fast',
             modelName: 'Grok 4 Fast',
             description: 'xAI Grok 4快速版',
+            contextWindow: 131072
+          },
+          {
+            modelKey: 'deepseek:deepseek-v3.1',
+            modelName: 'DeepSeek V3.1',
+            description: 'DeepSeek 深度思考模型',
             contextWindow: 131072
           }
         ];
@@ -445,6 +453,12 @@ const fetchAvailableModels = async () => {
         modelKey: 'grok:grok-4-fast',
         modelName: 'Grok 4 Fast',
         description: 'xAI Grok 4快速版',
+        contextWindow: 131072
+      },
+      {
+        modelKey: 'deepseek:deepseek-v3.1',
+        modelName: 'DeepSeek V3.1',
+        description: 'DeepSeek 深度思考模型',
         contextWindow: 131072
       }
     ];

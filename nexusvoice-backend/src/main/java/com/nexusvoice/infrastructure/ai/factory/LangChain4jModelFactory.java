@@ -4,6 +4,7 @@ import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.ai.model.DeepSeekModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.GrokModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.OpenAiModelAdapter;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -31,6 +32,9 @@ public class LangChain4jModelFactory {
     
     @Autowired
     private GrokModelAdapter grokModelAdapter;
+    
+    @Autowired
+    private DeepSeekModelAdapter deepSeekModelAdapter;
     
     /**
      * 模型实例缓存
@@ -63,6 +67,9 @@ public class LangChain4jModelFactory {
                 break;
             case "grok":
                 chatModel = grokModelAdapter.createChatModel(model, apiKey);
+                break;
+            case "deepseek":
+                chatModel = deepSeekModelAdapter.createChatModel(model, apiKey);
                 break;
             case "claude":
                 chatModel = createClaudeChatModel(model, apiKey);
@@ -108,6 +115,9 @@ public class LangChain4jModelFactory {
                 break;
             case "grok":
                 streamingModel = grokModelAdapter.createStreamingChatModel(model, apiKey);
+                break;
+            case "deepseek":
+                streamingModel = deepSeekModelAdapter.createStreamingChatModel(model, apiKey);
                 break;
             case "claude":
                 streamingModel = createClaudeStreamingChatModel(model, apiKey);
