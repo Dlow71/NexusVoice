@@ -7,9 +7,12 @@ spring:
     init:
       mode: never  # 禁用Spring Boot的SQL初始化，避免与MyBatis-Plus冲突
   flyway:
-    enabled: false  # 临时禁用Flyway，避免MySQL脚本在PostgreSQL运行出错
-    # 启用后可配置脚本位置：
-    # locations: classpath:db/migration/postgresql
+    enabled: false  # 默认关闭Flyway进行数据库版本管理
+    baseline-on-migrate: true  # 允许在非空数据库上执行迁移
+    locations: classpath:db/migration  # 迁移脚本位置
+    encoding: UTF-8
+    validate-on-migrate: true  # 迁移前验证脚本
+    out-of-order: false  # 不允许乱序迁移
   threads:
     virtual:
       enabled: true
