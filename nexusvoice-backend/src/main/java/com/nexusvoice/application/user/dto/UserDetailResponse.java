@@ -76,6 +76,26 @@ public class UserDetailResponse {
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
+    
+    // 兼容Integer类型的构造函数
+    public UserDetailResponse(Long id, String email, String nickname, String avatarUrl,
+                             String phone, UserType userType, UserStatus status,
+                             Integer emailVerified, String profileBio,
+                             LocalDateTime lastLoginAt, LocalDateTime createdAt,
+                             LocalDateTime updatedAt) {
+        this.id = id;
+        this.email = email;
+        this.nickname = nickname;
+        this.avatarUrl = avatarUrl;
+        this.phone = phone;
+        this.userType = userType;
+        this.status = status;
+        this.emailVerified = emailVerified != null && emailVerified == 1;
+        this.profileBio = profileBio;
+        this.lastLoginAt = lastLoginAt;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
 
     // Getter and Setter methods
     public Long getId() {

@@ -3,6 +3,10 @@ package com.nexusvoice.infrastructure.config;
 import com.nexusvoice.infrastructure.security.JwtAccessDeniedHandler;
 import com.nexusvoice.infrastructure.security.JwtAuthenticationEntryPoint;
 import com.nexusvoice.infrastructure.security.JwtAuthenticationFilter;
+import com.nexusvoice.infrastructure.security.OAuth2LoginSuccessHandler;
+import com.nexusvoice.infrastructure.security.OAuth2LoginFailureHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -33,6 +37,8 @@ import java.util.Arrays;
 @EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
+    private static final Logger log = LoggerFactory.getLogger(SecurityConfig.class);
+
     @Autowired
     private JwtAuthenticationFilter jwtAuthenticationFilter;
     
@@ -41,6 +47,12 @@ public class SecurityConfig {
     
     @Autowired
     private JwtAccessDeniedHandler jwtAccessDeniedHandler;
+    
+    @Autowired(required = false)
+    private OAuth2LoginSuccessHandler oauth2LoginSuccessHandler;
+    
+    @Autowired(required = false)
+    private OAuth2LoginFailureHandler oauth2LoginFailureHandler;
 
     /**
      * WebSocket安全配置
@@ -81,7 +93,10 @@ public class SecurityConfig {
                     "/swagger-resources/**",
                     "/webjars/**",
                     "/druid/**",
-                    "/error"
+                    "/error",
+                    // OAuth2端点
+                    "/oauth2/**",
+                    "/login/oauth2/**"
                 ).permitAll()
                 // 注意：/ws/** 已通过webSecurityCustomizer()完全忽略，不在此配置
                 
@@ -97,6 +112,15 @@ public class SecurityConfig {
             
             // 添加JWT过滤器
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            
+        // 配置OAuth2登录（如果启用）
+        if (oauth2LoginSuccessHandler != null && oauth2LoginFailureHandler != null) {
+            http.oauth2Login(oauth2 -> oauth2
+                .successHandler(oauth2LoginSuccessHandler)
+                .failureHandler(oauth2LoginFailureHandler)
+            );
+            log.info("OAuth2登录已启用");
+        }
             
         return http.build();
     }

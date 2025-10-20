@@ -150,7 +150,7 @@ public class AdminUserController {
         }
         
         if (request.getEmailVerified() != null) {
-            user.setEmailVerified(request.getEmailVerified());
+            user.setEmailVerified(Boolean.TRUE.equals(request.getEmailVerified()) ? 1 : 0);
         }
         
         userRepository.save(user);
@@ -202,7 +202,7 @@ public class AdminUserController {
         
         // 更新邮箱验证状态
         if (request.getEmailVerified() != null) {
-            user.setEmailVerified(request.getEmailVerified());
+            user.setEmailVerified(Boolean.TRUE.equals(request.getEmailVerified()) ? 1 : 0);
         }
         
         // 更新简介

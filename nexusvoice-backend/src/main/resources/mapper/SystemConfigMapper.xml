@@ -9,8 +9,8 @@
         <result column="config_value" property="configValue" jdbcType="VARCHAR"/>
         <result column="description" property="description" jdbcType="VARCHAR"/>
         <result column="config_group" property="configGroup" jdbcType="VARCHAR"/>
-        <result column="enabled" property="enabled" jdbcType="BOOLEAN"/>
-        <result column="readonly" property="readonly" jdbcType="BOOLEAN"/>
+        <result column="enabled" property="enabled" jdbcType="SMALLINT"/>
+        <result column="readonly" property="readonly" jdbcType="SMALLINT"/>
         <result column="sort_order" property="sortOrder" jdbcType="INTEGER"/>
         <result column="remark" property="remark" jdbcType="VARCHAR"/>
         <result column="created_at" property="createdAt" jdbcType="TIMESTAMP"/>
@@ -49,7 +49,7 @@
         SELECT 
         <include refid="Base_Column_List"/>
         FROM system_config
-        WHERE enabled = TRUE
+        WHERE enabled = 1
         AND deleted = 0
         ORDER BY sort_order ASC, id ASC
     </select>

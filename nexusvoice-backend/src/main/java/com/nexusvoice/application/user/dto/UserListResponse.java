@@ -61,6 +61,21 @@ public class UserListResponse {
         this.lastLoginAt = lastLoginAt;
         this.createdAt = createdAt;
     }
+    
+    // 兼容Integer类型的构造函数
+    public UserListResponse(Long id, String email, String nickname, String avatarUrl,
+                           UserType userType, UserStatus status, Integer emailVerified,
+                           LocalDateTime lastLoginAt, LocalDateTime createdAt) {
+        this.id = id;
+        this.email = email;
+        this.nickname = nickname;
+        this.avatarUrl = avatarUrl;
+        this.userType = userType;
+        this.status = status;
+        this.emailVerified = emailVerified != null && emailVerified == 1;
+        this.lastLoginAt = lastLoginAt;
+        this.createdAt = createdAt;
+    }
 
     // Getter and Setter methods
     public Long getId() {

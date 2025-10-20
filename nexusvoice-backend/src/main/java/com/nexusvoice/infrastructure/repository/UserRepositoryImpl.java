@@ -58,11 +58,37 @@ public class UserRepositoryImpl implements UserRepository {
 
     @Override
     public boolean existsByPhone(String phone) {
-        if (phone == null) {
+        if (!StringUtils.hasText(phone)) {
             return false;
         }
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(User::getPhone, phone);
+        wrapper.eq(User::getPhone, phone)
+                .eq(User::getDeleted, 0);
+        return userMapper.selectCount(wrapper) > 0;
+    }
+
+    @Override
+    public Optional<User> findByOAuthProviderAndId(String provider, String oauthId) {
+        if (!StringUtils.hasText(provider) || !StringUtils.hasText(oauthId)) {
+            return Optional.empty();
+        }
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getOauthProvider, provider)
+                .eq(User::getOauthId, oauthId)
+                .eq(User::getDeleted, 0);
+        User user = userMapper.selectOne(wrapper);
+        return Optional.ofNullable(user);
+    }
+
+    @Override
+    public boolean existsByOAuthProviderAndId(String provider, String oauthId) {
+        if (!StringUtils.hasText(provider) || !StringUtils.hasText(oauthId)) {
+            return false;
+        }
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(User::getOauthProvider, provider)
+                .eq(User::getOauthId, oauthId)
+                .eq(User::getDeleted, 0);
         return userMapper.selectCount(wrapper) > 0;
     }
 

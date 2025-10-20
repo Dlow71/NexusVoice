@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.nexusvoice.domain.common.BaseEntity;
+import com.nexusvoice.domain.user.constant.OAuthProvider;
 import com.nexusvoice.domain.user.constant.UserStatus;
 import com.nexusvoice.domain.user.constant.UserType;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -55,9 +56,9 @@ public class User extends BaseEntity {
     @TableField("status")
     private UserStatus status;
 
-    @Schema(description = "邮箱是否已验证")
+    @Schema(description = "邮箱是否已验证 (0-未验证, 1-已验证)")
     @TableField("email_verified")
-    private Boolean emailVerified;
+    private Integer emailVerified;
 
     @Schema(description = "最后登录时间")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
@@ -68,11 +69,52 @@ public class User extends BaseEntity {
     @TableField("profile_bio")
     private String profileBio;
 
+    @Schema(description = "OAuth提供商")
+    @TableField("oauth_provider")
+    private OAuthProvider oauthProvider;
+
+    @Schema(description = "OAuth用户ID")
+    @TableField("oauth_id")
+    private String oauthId;
+
+    @Schema(description = "OAuth用户名")
+    @TableField("oauth_username")
+    private String oauthUsername;
+
+    @Schema(description = "OAuth头像URL")
+    @TableField("oauth_avatar_url")
+    private String oauthAvatarUrl;
+
+    @Schema(description = "OAuth访问令牌", hidden = true)
+    @JsonIgnore
+    @TableField("oauth_access_token")
+    private String oauthAccessToken;
+
+    @Schema(description = "OAuth刷新令牌", hidden = true)
+    @JsonIgnore
+    @TableField("oauth_refresh_token")
+    private String oauthRefreshToken;
+
+    @Schema(description = "OAuth令牌过期时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("oauth_token_expires_at")
+    private LocalDateTime oauthTokenExpiresAt;
+
+    @Schema(description = "OAuth绑定时间")
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
+    @TableField("oauth_bind_time")
+    private LocalDateTime oauthBindTime;
+
+    @Schema(description = "OAuth原始数据")
+    @JsonIgnore
+    @TableField("oauth_raw_data")
+    private String oauthRawData;
+
     // 构造函数
     public User() {
         this.userType = UserType.USER;
         this.status = UserStatus.NORMAL;
-        this.emailVerified = false;
+        this.emailVerified = 0;
     }
 
     public User(String email, String passwordHash, String nickname) {
@@ -115,7 +157,7 @@ public class User extends BaseEntity {
      * 验证邮箱
      */
     public void verifyEmail() {
-        this.emailVerified = true;
+        this.emailVerified = 1;
     }
 
     /**
@@ -154,11 +196,105 @@ public class User extends BaseEntity {
 
     /**
      * 判断邮箱是否已验证
-     *
+     * 
      * @return true-已验证, false-未验证
      */
     public boolean hasEmailVerified() {
-        return Boolean.TRUE.equals(this.emailVerified);
+        return Integer.valueOf(1).equals(this.emailVerified);
+    }
+
+    /**
+     * 判断是否为OAuth用户
+     *
+     * @return true-OAuth用户, false-非OAuth用户
+     */
+    public boolean isOAuthUser() {
+        return oauthProvider != null && oauthId != null;
+    }
+
+    /**
+     * 判断是否为密码登录用户
+     *
+     * @return true-密码用户, false-非密码用户
+     */
+    public boolean isPasswordUser() {
+        return passwordHash != null;
+    }
+
+    /**
+     * 判断是否可以使用密码登录
+     *
+     * @return true-可以使用密码登录, false-不能使用密码登录
+     */
+    public boolean canLoginWithPassword() {
+        return isPasswordUser();
+    }
+
+    /**
+     * 判断是否可以使用OAuth登录
+     *
+     * @return true-可以使用OAuth登录, false-不能使用OAuth登录
+     */
+    public boolean canLoginWithOAuth() {
+        return isOAuthUser();
+    }
+
+    /**
+     * 绑定OAuth账号
+     *
+     * @param provider OAuth提供商
+     * @param oauthUserId OAuth用户ID
+     * @param oauthUsername OAuth用户名
+     */
+    public void bindOAuth(OAuthProvider provider, String oauthUserId, String oauthUsername) {
+        this.oauthProvider = provider;
+        this.oauthId = oauthUserId;
+        this.oauthUsername = oauthUsername;
+        this.oauthBindTime = LocalDateTime.now();
+    }
+
+    /**
+     * 解绑OAuth账号
+     */
+    public void unbindOAuth() {
+        // 只有当用户有密码时才能解绑OAuth
+        if (!isPasswordUser()) {
+            throw new IllegalStateException("无法解绑OAuth：用户未设置密码");
+        }
+        this.oauthProvider = null;
+        this.oauthId = null;
+        this.oauthUsername = null;
+        this.oauthAvatarUrl = null;
+        this.oauthAccessToken = null;
+        this.oauthRefreshToken = null;
+        this.oauthTokenExpiresAt = null;
+        this.oauthBindTime = null;
+        this.oauthRawData = null;
+    }
+
+    /**
+     * 更新OAuth令牌
+     *
+     * @param accessToken 访问令牌
+     * @param refreshToken 刷新令牌
+     * @param expiresAt 过期时间
+     */
+    public void updateOAuthTokens(String accessToken, String refreshToken, LocalDateTime expiresAt) {
+        this.oauthAccessToken = accessToken;
+        this.oauthRefreshToken = refreshToken;
+        this.oauthTokenExpiresAt = expiresAt;
+    }
+
+    /**
+     * 判断OAuth令牌是否过期
+     *
+     * @return true-已过期, false-未过期
+     */
+    public boolean isOAuthTokenExpired() {
+        if (oauthTokenExpiresAt == null) {
+            return true;
+        }
+        return LocalDateTime.now().isAfter(oauthTokenExpiresAt);
     }
 
     // Getter and Setter methods (ID方法继承自BaseEntity)
@@ -219,11 +355,11 @@ public class User extends BaseEntity {
         this.status = status;
     }
 
-    public Boolean getEmailVerified() {
+    public Integer getEmailVerified() {
         return emailVerified;
     }
 
-    public void setEmailVerified(Boolean emailVerified) {
+    public void setEmailVerified(Integer emailVerified) {
         this.emailVerified = emailVerified;
     }
 
@@ -241,6 +377,78 @@ public class User extends BaseEntity {
 
     public void setProfileBio(String profileBio) {
         this.profileBio = profileBio;
+    }
+
+    public OAuthProvider getOauthProvider() {
+        return oauthProvider;
+    }
+
+    public void setOauthProvider(OAuthProvider oauthProvider) {
+        this.oauthProvider = oauthProvider;
+    }
+
+    public String getOauthId() {
+        return oauthId;
+    }
+
+    public void setOauthId(String oauthId) {
+        this.oauthId = oauthId;
+    }
+
+    public String getOauthUsername() {
+        return oauthUsername;
+    }
+
+    public void setOauthUsername(String oauthUsername) {
+        this.oauthUsername = oauthUsername;
+    }
+
+    public String getOauthAvatarUrl() {
+        return oauthAvatarUrl;
+    }
+
+    public void setOauthAvatarUrl(String oauthAvatarUrl) {
+        this.oauthAvatarUrl = oauthAvatarUrl;
+    }
+
+    public String getOauthAccessToken() {
+        return oauthAccessToken;
+    }
+
+    public void setOauthAccessToken(String oauthAccessToken) {
+        this.oauthAccessToken = oauthAccessToken;
+    }
+
+    public String getOauthRefreshToken() {
+        return oauthRefreshToken;
+    }
+
+    public void setOauthRefreshToken(String oauthRefreshToken) {
+        this.oauthRefreshToken = oauthRefreshToken;
+    }
+
+    public LocalDateTime getOauthTokenExpiresAt() {
+        return oauthTokenExpiresAt;
+    }
+
+    public void setOauthTokenExpiresAt(LocalDateTime oauthTokenExpiresAt) {
+        this.oauthTokenExpiresAt = oauthTokenExpiresAt;
+    }
+
+    public LocalDateTime getOauthBindTime() {
+        return oauthBindTime;
+    }
+
+    public void setOauthBindTime(LocalDateTime oauthBindTime) {
+        this.oauthBindTime = oauthBindTime;
+    }
+
+    public String getOauthRawData() {
+        return oauthRawData;
+    }
+
+    public void setOauthRawData(String oauthRawData) {
+        this.oauthRawData = oauthRawData;
     }
 
     @Override

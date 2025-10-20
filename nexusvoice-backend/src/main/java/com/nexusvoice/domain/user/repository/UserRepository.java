@@ -38,6 +38,24 @@ public interface UserRepository {
     Optional<User> findByPhone(String phone);
 
     /**
+     * 根据OAuth提供商和OAuth用户ID查找用户
+     *
+     * @param provider OAuth提供商
+     * @param oauthId OAuth用户ID
+     * @return 用户
+     */
+    Optional<User> findByOAuthProviderAndId(String provider, String oauthId);
+
+    /**
+     * 检查OAuth账号是否已绑定
+     *
+     * @param provider OAuth提供商
+     * @param oauthId OAuth用户ID
+     * @return 是否已绑定
+     */
+    boolean existsByOAuthProviderAndId(String provider, String oauthId);
+
+    /**
      * 检查邮箱是否已存在
      *
      * @param email 邮箱

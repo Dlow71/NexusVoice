@@ -80,6 +80,17 @@ public class AuthResponse {
             this.userType = userType;
             this.emailVerified = emailVerified;
         }
+        
+        // 兼容Integer类型的构造函数
+        public UserInfo(Long id, String email, String nickname, String avatarUrl, 
+                       UserType userType, Integer emailVerified) {
+            this.id = id;
+            this.email = email;
+            this.nickname = nickname;
+            this.avatarUrl = avatarUrl;
+            this.userType = userType;
+            this.emailVerified = emailVerified != null && emailVerified == 1;
+        }
 
         // Getter and Setter methods
         public Long getId() {

@@ -16,8 +16,6 @@ import com.qiniu.util.Json;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.InputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -295,12 +293,15 @@ public class QiniuStorageRepositoryImpl extends AbstractStorageRepository<QiniuS
         log.info("七牛云存储服务已销毁");
     }
     
+    
     /**
      * 根据区域字符串获取Zone对象
+     * 注意：七牛云SDK的Zone API在新版本中建议直接使用Region API
      */
     private Zone getZone(String region) {
         if (region == null || region.isEmpty() || "auto".equalsIgnoreCase(region)) {
-            return Zone.autoZone();
+            // 默认使用华东区
+            return Zone.zone0();
         }
         
         switch (region.toLowerCase()) {
@@ -320,8 +321,8 @@ public class QiniuStorageRepositoryImpl extends AbstractStorageRepository<QiniuS
             case "as0":
                 return Zone.zoneAs0(); // 东南亚
             default:
-                log.warn("未知的七牛云区域：{}，使用自动选择", region);
-                return Zone.autoZone();
+                log.warn("未知的区域配置: {}，使用默认华东区域", region);
+                return Zone.zone0();
         }
     }
 }

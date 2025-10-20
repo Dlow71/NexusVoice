@@ -74,7 +74,7 @@ public class AuthService {
         user.setPhone(request.getPhone());
         user.setUserType(UserType.USER);
         user.setStatus(UserStatus.NORMAL);
-        user.setEmailVerified(false);
+        user.setEmailVerified(0);
 
         // 保存用户
         User savedUser = userRepository.save(user);

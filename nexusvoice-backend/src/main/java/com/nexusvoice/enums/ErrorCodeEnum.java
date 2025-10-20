@@ -129,6 +129,20 @@ public enum ErrorCodeEnum {
     TTS_CONNECTION_FAILED(2007, "TTS服务连接失败"),
     TTS_TIMEOUT(2008, "TTS处理超时"),
     
+    // OAuth相关 30xx
+    OAUTH_USER_NOT_FOUND(3001, "OAuth用户不存在"),
+    OAUTH_PROVIDER_NOT_SUPPORTED(3002, "不支持的OAuth提供商"),
+    OAUTH_EMAIL_ALREADY_BOUND(3003, "该邮箱已绑定其他账户"),
+    OAUTH_ACCOUNT_ALREADY_BOUND(3004, "该OAuth账号已被其他用户绑定"),
+    OAUTH_CALLBACK_FAILED(3005, "OAuth回调处理失败"),
+    OAUTH_TOKEN_EXCHANGE_FAILED(3006, "OAuth令牌交换失败"),
+    OAUTH_USER_INFO_FETCH_FAILED(3007, "获取OAuth用户信息失败"),
+    OAUTH_BIND_FAILED(3008, "OAuth账号绑定失败"),
+    OAUTH_UNBIND_FAILED(3009, "OAuth账号解绑失败"),
+    OAUTH_UNBIND_NO_PASSWORD(3010, "解绑失败：请先设置密码"),
+    OAUTH_STATE_MISMATCH(3011, "OAuth状态验证失败"),
+    OAUTH_ACCESS_DENIED(3012, "OAuth授权被拒绝"),
+    
     // 图像生成相关 21xx
     IMAGE_SERVICE_ERROR(2101, "图像生成服务错误"),
     IMAGE_PROMPT_INVALID(2102, "图像描述提示词无效"),

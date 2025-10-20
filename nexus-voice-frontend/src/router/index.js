@@ -3,6 +3,8 @@ import LoginView from '../views/LoginView.vue'
 // 角色选择页面
 import CharacterSelectionView from '../views/CharacterSelectionView.vue'
 import ChatStreamView from '../views/ChatStreamView.vue'
+import LabView from '../views/LabView.vue'
+import OAuthCallbackView from '../views/OAuthCallbackView.vue'
 import {useAuthStore} from "../stores/auth.js";
 
 // 定义应用的路由规则
@@ -33,11 +35,15 @@ const routes = [
         meta: { requiresAuth: true }
     },
     {
-        // 实验室页面路由
         path: '/lab',
         name: 'Lab',
-        component: () => import('../views/LabView.vue'),
-        meta: { requiresAuth: true },
+        component: LabView,
+        meta: { requiresAuth: true }
+    },
+    {
+        path: '/oauth/callback',
+        name: 'OAuthCallback',
+        component: OAuthCallbackView
     }
 ]
 
