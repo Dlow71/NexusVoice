@@ -33,6 +33,11 @@ public interface AiModelRepository {
     List<AiModel> findAllEnabled();
     
     /**
+     * 查询指定类型的所有启用模型
+     */
+    List<AiModel> findByTypeEnabled(String modelType);
+    
+    /**
      * 查询指定厂商的所有模型
      */
     List<AiModel> findByProvider(String providerCode);

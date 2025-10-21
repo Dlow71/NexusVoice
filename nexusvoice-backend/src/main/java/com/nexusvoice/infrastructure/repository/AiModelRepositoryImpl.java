@@ -73,6 +73,19 @@ public class AiModelRepositoryImpl implements AiModelRepository {
     }
     
     @Override
+    public List<AiModel> findByTypeEnabled(String modelType) {
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getModelType, modelType)
+                .eq(AiModelPO::getStatus, 1)
+                .eq(AiModelPO::getDeleted, 0)
+                .orderByAsc(AiModelPO::getPriority);
+        
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
+    }
+    
+    @Override
     public List<AiModel> findByProvider(String providerCode) {
         LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(AiModelPO::getProviderCode, providerCode)

@@ -1,10 +1,14 @@
 package com.nexusvoice.domain.ai.model;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusvoice.domain.common.BaseDomainEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * AI模型配置实体
@@ -12,9 +16,12 @@ import java.math.BigDecimal;
  * @author NexusVoice
  * @since 2025-10-16
  */
+@Slf4j
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class AiModel extends BaseDomainEntity {
+    
+    private static final ObjectMapper objectMapper = new ObjectMapper();
     
     /**
      * 厂商代码：openai/claude/qwen等
@@ -25,6 +32,11 @@ public class AiModel extends BaseDomainEntity {
      * 模型代码：gpt-4o-mini/claude-3-opus等
      */
     private String modelCode;
+    
+    /**
+     * 模型类型：chat/embedding/rerank
+     */
+    private String modelType;
     
     /**
      * 模型显示名称
@@ -127,5 +139,53 @@ public class AiModel extends BaseDomainEntity {
      */
     public boolean isEnabled() {
         return status != null && status == 1;
+    }
+    
+    /**
+     * 获取模型类型枚举
+     */
+    public AiModelType getModelTypeEnum() {
+        return AiModelType.fromCode(modelType);
+    }
+    
+    /**
+     * 是否为对话模型
+     */
+    public boolean isChatModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isChat();
+    }
+    
+    /**
+     * 是否为向量模型
+     */
+    public boolean isEmbeddingModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isEmbedding();
+    }
+    
+    /**
+     * 是否为重排序模型
+     */
+    public boolean isRerankModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isRerank();
+    }
+    
+    /**
+     * 获取配置Map
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getConfigMap() {
+        if (configJson == null || configJson.isEmpty()) {
+            return new HashMap<>();
+        }
+        
+        try {
+            return objectMapper.readValue(configJson, Map.class);
+        } catch (Exception e) {
+            log.error("解析配置JSON失败，模型：{}，配置：{}", getModelKey(), configJson, e);
+            return new HashMap<>();
+        }
     }
 }

@@ -6,7 +6,15 @@ import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.ai.repository.AiApiKeyRepository;
 import com.nexusvoice.domain.ai.repository.AiModelRepository;
 import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
+import com.nexusvoice.infrastructure.ai.manager.DynamicAiEmbeddingBeanManager;
+import com.nexusvoice.infrastructure.ai.manager.DynamicAiRerankBeanManager;
+import com.nexusvoice.infrastructure.ai.model.EmbeddingRequest;
+import com.nexusvoice.infrastructure.ai.model.EmbeddingResponse;
+import com.nexusvoice.infrastructure.ai.model.RerankRequest;
+import com.nexusvoice.infrastructure.ai.model.RerankResponse;
 import com.nexusvoice.infrastructure.ai.pool.ApiKeyPoolManager;
+import com.nexusvoice.infrastructure.ai.service.AiEmbeddingService;
+import com.nexusvoice.infrastructure.ai.service.AiRerankService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
@@ -42,6 +50,12 @@ public class AiModelTestController {
     
     @Autowired
     private ApiKeyPoolManager apiKeyPoolManager;
+    
+    @Autowired(required = false)
+    private DynamicAiEmbeddingBeanManager embeddingBeanManager;
+    
+    @Autowired(required = false)
+    private DynamicAiRerankBeanManager rerankBeanManager;
     
     /**
      * 获取所有模型配置
@@ -244,5 +258,131 @@ public class AiModelTestController {
         log.info("添加新模型配置：{}:{}", model.getProviderCode(), model.getModelCode());
         
         return Result.success(model);
+    }
+    
+    /**
+     * 测试向量模型
+     */
+    @PostMapping("/test-embedding")
+    @Operation(summary = "测试向量模型")
+    public Result<Map<String, Object>> testEmbedding(@RequestParam String providerCode,
+                                                     @RequestParam String modelCode,
+                                                     @RequestParam(defaultValue = "人工智能技术") String text) {
+        try {
+            if (embeddingBeanManager == null) {
+                return Result.error("向量模型管理器未初始化");
+            }
+            
+            // 构建请求
+            EmbeddingRequest request = EmbeddingRequest.builder()
+                    .text(text)
+                    .userId(1L)
+                    .bizId("test")
+                    .build();
+            
+            // 获取服务并调用
+            AiEmbeddingService service = embeddingBeanManager.getService(providerCode, modelCode);
+            EmbeddingResponse response = service.embed(request);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", response.getSuccess());
+            result.put("model", response.getModel());
+            result.put("vectorDimension", response.getVector() != null ? response.getVector().size() : 0);
+            result.put("vectorSample", response.getVector() != null && response.getVector().size() > 5 ? 
+                    response.getVector().subList(0, 5) : response.getVector());
+            result.put("usage", response.getTokenUsage());
+            result.put("duration", response.getDuration());
+            result.put("errorMessage", response.getErrorMessage());
+            
+            log.info("测试向量模型成功，模型：{}:{}，维度：{}，耗时：{}ms", 
+                    providerCode, modelCode, result.get("vectorDimension"), response.getDuration());
+            
+            return Result.success(result);
+            
+        } catch (Exception e) {
+            log.error("测试向量模型失败", e);
+            return Result.error("调用失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 测试重排序模型
+     */
+    @PostMapping("/test-rerank")
+    @Operation(summary = "测试重排序模型")
+    public Result<Map<String, Object>> testRerank(@RequestParam String providerCode,
+                                                   @RequestParam String modelCode,
+                                                   @RequestParam(defaultValue = "什么是人工智能") String query,
+                                                   @RequestParam(defaultValue = "人工智能是计算机科学的一个分支,机器学习是AI的核心技术,深度学习推动了AI的发展") String documents,
+                                                   @RequestParam(defaultValue = "3") Integer topN) {
+        try {
+            if (rerankBeanManager == null) {
+                return Result.error("重排序模型管理器未初始化");
+            }
+            
+            // 将逗号分隔的文档转为列表
+            List<String> docList = List.of(documents.split(","));
+            
+            // 构建请求
+            RerankRequest request = RerankRequest.builder()
+                    .query(query)
+                    .documents(docList)
+                    .topN(topN)
+                    .userId(1L)
+                    .bizId("test")
+                    .returnScore(true)
+                    .build();
+            
+            // 获取服务并调用
+            AiRerankService service = rerankBeanManager.getService(providerCode, modelCode);
+            RerankResponse response = service.rerank(request);
+            
+            Map<String, Object> result = new HashMap<>();
+            result.put("success", response.getSuccess());
+            result.put("model", response.getModel());
+            result.put("results", response.getResults());
+            result.put("usage", response.getTokenUsage());
+            result.put("duration", response.getDuration());
+            result.put("errorMessage", response.getErrorMessage());
+            
+            log.info("测试重排序模型成功，模型：{}:{}，结果数：{}，耗时：{}ms", 
+                    providerCode, modelCode, 
+                    response.getResults() != null ? response.getResults().size() : 0, 
+                    response.getDuration());
+            
+            return Result.success(result);
+            
+        } catch (Exception e) {
+            log.error("测试重排序模型失败", e);
+            return Result.error("调用失败：" + e.getMessage());
+        }
+    }
+    
+    /**
+     * 获取向量模型列表
+     */
+    @GetMapping("/embedding-models")
+    @Operation(summary = "获取向量模型列表")
+    public Result<List<AiModel>> getEmbeddingModels() {
+        if (embeddingBeanManager == null) {
+            return Result.error("向量模型管理器未初始化");
+        }
+        List<AiModel> models = embeddingBeanManager.getAvailableModels();
+        log.info("查询到{}个可用的向量模型", models.size());
+        return Result.success(models);
+    }
+    
+    /**
+     * 获取重排序模型列表
+     */
+    @GetMapping("/rerank-models")
+    @Operation(summary = "获取重排序模型列表")
+    public Result<List<AiModel>> getRerankModels() {
+        if (rerankBeanManager == null) {
+            return Result.error("重排序模型管理器未初始化");
+        }
+        List<AiModel> models = rerankBeanManager.getAvailableModels();
+        log.info("查询到{}个可用的重排序模型", models.size());
+        return Result.success(models);
     }
 }

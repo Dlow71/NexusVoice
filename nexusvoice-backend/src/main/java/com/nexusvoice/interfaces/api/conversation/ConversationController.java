@@ -1,6 +1,6 @@
 package com.nexusvoice.interfaces.api.conversation;
 
-import cn.hutool.core.collection.ListUtil;
+import cn.hutool.core.collection.CollectionUtil;
 import com.nexusvoice.annotation.RequireAuth;
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
@@ -9,11 +9,9 @@ import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
 import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
-import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.utils.SecurityUtils;
 import com.nexusvoice.utils.JwtUtils;
-import com.qiniu.util.StringUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,8 +21,8 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-
-import java.util.ArrayList;
+import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 
 /**

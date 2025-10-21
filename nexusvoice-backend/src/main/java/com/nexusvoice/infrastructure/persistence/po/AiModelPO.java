@@ -32,6 +32,12 @@ public class AiModelPO extends BasePO {
     private String modelCode;
 
     /**
+     * 模型类型：chat/embedding/rerank
+     */
+    @TableField("model_type")
+    private String modelType;
+
+    /**
      * 模型显示名称
      */
     @TableField("model_name")

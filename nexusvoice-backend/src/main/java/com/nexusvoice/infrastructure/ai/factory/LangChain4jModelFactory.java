@@ -7,8 +7,10 @@ import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.model.DeepSeekModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.GrokModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.OpenAiModelAdapter;
+import com.nexusvoice.infrastructure.ai.model.SiliconFlowEmbeddingAdapter;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -36,12 +38,16 @@ public class LangChain4jModelFactory {
     @Autowired
     private DeepSeekModelAdapter deepSeekModelAdapter;
     
+    @Autowired
+    private SiliconFlowEmbeddingAdapter siliconFlowEmbeddingAdapter;
+    
     /**
      * 模型实例缓存
      * key: modelKey + ":" + apiKeyId
      */
     private final Map<String, ChatLanguageModel> modelCache = new ConcurrentHashMap<>();
     private final Map<String, StreamingChatLanguageModel> streamingModelCache = new ConcurrentHashMap<>();
+    private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
     
     /**
      * 创建聊天模型
@@ -146,6 +152,44 @@ public class LangChain4jModelFactory {
     // 注意：OpenAI和Grok模型的创建已移至各自的适配器类
     // - OpenAiModelAdapter: 处理OpenAI官方和兼容API
     // - GrokModelAdapter: 处理Grok (xAI) API
+    
+    /**
+     * 创建向量模型
+     * 
+     * @param model AI模型配置
+     * @param apiKey API密钥配置
+     * @return LangChain4j向量模型
+     */
+    public EmbeddingModel createEmbeddingModel(AiModel model, AiApiKey apiKey) {
+        String cacheKey = model.getModelKey() + ":" + apiKey.getId();
+        
+        // 检查缓存
+        EmbeddingModel cachedModel = embeddingModelCache.get(cacheKey);
+        if (cachedModel != null) {
+            return cachedModel;
+        }
+        
+        // 根据提供商创建不同的模型实例
+        EmbeddingModel embeddingModel;
+        switch (model.getProviderCode().toLowerCase()) {
+            case "siliconflow":
+                embeddingModel = siliconFlowEmbeddingAdapter.createEmbeddingModel(model, apiKey);
+                break;
+            case "openai":
+                // OpenAI官方embedding模型
+                embeddingModel = siliconFlowEmbeddingAdapter.createEmbeddingModel(model, apiKey);
+                break;
+            default:
+                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
+                    "不支持的向量模型提供商：" + model.getProviderCode());
+        }
+        
+        // 缓存模型实例
+        embeddingModelCache.put(cacheKey, embeddingModel);
+        log.info("创建向量模型实例，模型：{}，密钥ID：{}", model.getModelKey(), apiKey.getId());
+        
+        return embeddingModel;
+    }
     
     /**
      * 创建Claude聊天模型
@@ -285,12 +329,13 @@ public class LangChain4jModelFactory {
     // OpenAI模型的创建已移至 OpenAiModelAdapter
     
     /**
-     * 清除缓存
+     * 清除所有缓存
      */
     public void clearCache() {
         modelCache.clear();
         streamingModelCache.clear();
-        log.info("清除模型实例缓存");
+        embeddingModelCache.clear();
+        log.info("清除所有模型实例缓存");
     }
     
     /**
@@ -299,6 +344,7 @@ public class LangChain4jModelFactory {
     public void clearModelCache(String modelKey) {
         modelCache.entrySet().removeIf(entry -> entry.getKey().startsWith(modelKey + ":"));
         streamingModelCache.entrySet().removeIf(entry -> entry.getKey().startsWith(modelKey + ":"));
+        embeddingModelCache.entrySet().removeIf(entry -> entry.getKey().startsWith(modelKey + ":"));
         log.info("清除模型{}的实例缓存", modelKey);
     }
 }
