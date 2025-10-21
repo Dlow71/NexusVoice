@@ -23,34 +23,34 @@ import java.util.Optional;
 @Repository
 public class RoleRepositoryImpl implements RoleRepository {
 
-    private final RolePOMapper rolePOMapper;
-    private final RolePOConverter rolePOConverter;
+    private final RolePOMapper mapper;
+    private final RolePOConverter converter;
     
     /**
      * 构造器注入
      */
-    public RoleRepositoryImpl(RolePOMapper rolePOMapper, RolePOConverter rolePOConverter) {
-        this.rolePOMapper = rolePOMapper;
-        this.rolePOConverter = rolePOConverter;
+    public RoleRepositoryImpl(RolePOMapper mapper, RolePOConverter converter) {
+        this.mapper = mapper;
+        this.converter = converter;
     }
 
     @Override
     public Optional<Role> findById(Long id) {
-        RolePO po = rolePOMapper.selectById(id);
-        return Optional.ofNullable(rolePOConverter.toDomain(po));
+        RolePO po = mapper.selectById(id);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
     public Role save(Role role) {
-        RolePO po = rolePOConverter.toPO(role);
+        RolePO po = converter.toPO(role);
         if (role.getId() == null) {
-            int result = rolePOMapper.insert(po);
+            int result = mapper.insert(po);
             if (result <= 0) {
                 throw new RuntimeException("保存角色失败");
             }
             role.setId(po.getId());
         } else {
-            int result = rolePOMapper.updateById(po);
+            int result = mapper.updateById(po);
             if (result <= 0) {
                 throw new RuntimeException("更新角色失败");
             }
@@ -60,8 +60,8 @@ public class RoleRepositoryImpl implements RoleRepository {
 
     @Override
     public Role update(Role role) {
-        RolePO po = rolePOConverter.toPO(role);
-        int result = rolePOMapper.updateById(po);
+        RolePO po = converter.toPO(role);
+        int result = mapper.updateById(po);
         if (result <= 0) {
             throw new RuntimeException("更新角色失败");
         }
@@ -70,7 +70,7 @@ public class RoleRepositoryImpl implements RoleRepository {
 
     @Override
     public void deleteById(Long id) {
-        rolePOMapper.deleteById(id);
+        int result = mapper.deleteById(id);
     }
 
     @Override
@@ -83,11 +83,11 @@ public class RoleRepositoryImpl implements RoleRepository {
         wrapper.orderByDesc(RolePO::getCreatedAt);
 
         Page<RolePO> pageParam = new Page<>(page, size);
-        IPage<RolePO> pageResult = rolePOMapper.selectPage(pageParam, wrapper);
+        IPage<RolePO> pageResult = mapper.selectPage(pageParam, wrapper);
         
         // Convert POs to Domain entities
         java.util.List<Role> roles = pageResult.getRecords().stream()
-                .map(rolePOConverter::toDomain)
+                .map(converter::toDomain)
                 .collect(java.util.stream.Collectors.toList());
         return new PageResult<>(roles, pageResult.getTotal(), (int) pageResult.getCurrent(), (int) pageResult.getSize());
     }
@@ -105,11 +105,11 @@ public class RoleRepositoryImpl implements RoleRepository {
         wrapper.orderByDesc(RolePO::getCreatedAt);
 
         Page<RolePO> pageParam = new Page<>(page, size);
-        IPage<RolePO> pageResult = rolePOMapper.selectPage(pageParam, wrapper);
+        IPage<RolePO> pageResult = mapper.selectPage(pageParam, wrapper);
         
         // Convert POs to Domain entities
         java.util.List<Role> roles = pageResult.getRecords().stream()
-                .map(rolePOConverter::toDomain)
+                .map(converter::toDomain)
                 .collect(java.util.stream.Collectors.toList());
         return new PageResult<>(roles, pageResult.getTotal(), (int) pageResult.getCurrent(), (int) pageResult.getSize());
     }
@@ -125,11 +125,11 @@ public class RoleRepositoryImpl implements RoleRepository {
         wrapper.orderByDesc(RolePO::getCreatedAt);
 
         Page<RolePO> pageParam = new Page<>(page, size);
-        IPage<RolePO> pageResult = rolePOMapper.selectPage(pageParam, wrapper);
+        IPage<RolePO> pageResult = mapper.selectPage(pageParam, wrapper);
         
         // Convert POs to Domain entities
         java.util.List<Role> roles = pageResult.getRecords().stream()
-                .map(rolePOConverter::toDomain)
+                .map(converter::toDomain)
                 .collect(java.util.stream.Collectors.toList());
         return new PageResult<>(roles, pageResult.getTotal(), (int) pageResult.getCurrent(), (int) pageResult.getSize());
     }

@@ -56,7 +56,7 @@ public class RolePO extends BasePO {
     /**
      * TTS声音类型
      */
-    @TableField("voiceType")
+    @TableField("voicetype")
     private String voiceType;
 
     /**

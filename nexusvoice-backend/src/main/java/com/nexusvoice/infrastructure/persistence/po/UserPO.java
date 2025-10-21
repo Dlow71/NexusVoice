@@ -3,6 +3,8 @@ package com.nexusvoice.infrastructure.persistence.po;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 
@@ -14,6 +16,8 @@ import java.time.LocalDateTime;
  * @author NexusVoice
  * @since 2025-10-21
  */
+@Data
+@EqualsAndHashCode(callSuper = true)
 @TableName("users")
 public class UserPO extends BasePO {
 
@@ -135,157 +139,4 @@ public class UserPO extends BasePO {
      */
     @TableField("oauth_raw_data")
     private String oauthRawData;
-
-    // Getter and Setter methods
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPasswordHash() {
-        return passwordHash;
-    }
-
-    public void setPasswordHash(String passwordHash) {
-        this.passwordHash = passwordHash;
-    }
-
-    public String getNickname() {
-        return nickname;
-    }
-
-    public void setNickname(String nickname) {
-        this.nickname = nickname;
-    }
-
-    public String getAvatarUrl() {
-        return avatarUrl;
-    }
-
-    public void setAvatarUrl(String avatarUrl) {
-        this.avatarUrl = avatarUrl;
-    }
-
-    public String getPhone() {
-        return phone;
-    }
-
-    public void setPhone(String phone) {
-        this.phone = phone;
-    }
-
-    public String getUserType() {
-        return userType;
-    }
-
-    public void setUserType(String userType) {
-        this.userType = userType;
-    }
-
-    public Integer getStatus() {
-        return status;
-    }
-
-    public void setStatus(Integer status) {
-        this.status = status;
-    }
-
-    public Integer getEmailVerified() {
-        return emailVerified;
-    }
-
-    public void setEmailVerified(Integer emailVerified) {
-        this.emailVerified = emailVerified;
-    }
-
-    public LocalDateTime getLastLoginAt() {
-        return lastLoginAt;
-    }
-
-    public void setLastLoginAt(LocalDateTime lastLoginAt) {
-        this.lastLoginAt = lastLoginAt;
-    }
-
-    public String getProfileBio() {
-        return profileBio;
-    }
-
-    public void setProfileBio(String profileBio) {
-        this.profileBio = profileBio;
-    }
-
-    public String getOauthProvider() {
-        return oauthProvider;
-    }
-
-    public void setOauthProvider(String oauthProvider) {
-        this.oauthProvider = oauthProvider;
-    }
-
-    public String getOauthId() {
-        return oauthId;
-    }
-
-    public void setOauthId(String oauthId) {
-        this.oauthId = oauthId;
-    }
-
-    public String getOauthUsername() {
-        return oauthUsername;
-    }
-
-    public void setOauthUsername(String oauthUsername) {
-        this.oauthUsername = oauthUsername;
-    }
-
-    public String getOauthAvatarUrl() {
-        return oauthAvatarUrl;
-    }
-
-    public void setOauthAvatarUrl(String oauthAvatarUrl) {
-        this.oauthAvatarUrl = oauthAvatarUrl;
-    }
-
-    public String getOauthAccessToken() {
-        return oauthAccessToken;
-    }
-
-    public void setOauthAccessToken(String oauthAccessToken) {
-        this.oauthAccessToken = oauthAccessToken;
-    }
-
-    public String getOauthRefreshToken() {
-        return oauthRefreshToken;
-    }
-
-    public void setOauthRefreshToken(String oauthRefreshToken) {
-        this.oauthRefreshToken = oauthRefreshToken;
-    }
-
-    public LocalDateTime getOauthTokenExpiresAt() {
-        return oauthTokenExpiresAt;
-    }
-
-    public void setOauthTokenExpiresAt(LocalDateTime oauthTokenExpiresAt) {
-        this.oauthTokenExpiresAt = oauthTokenExpiresAt;
-    }
-
-    public LocalDateTime getOauthBindTime() {
-        return oauthBindTime;
-    }
-
-    public void setOauthBindTime(LocalDateTime oauthBindTime) {
-        this.oauthBindTime = oauthBindTime;
-    }
-
-    public String getOauthRawData() {
-        return oauthRawData;
-    }
-
-    public void setOauthRawData(String oauthRawData) {
-        this.oauthRawData = oauthRawData;
-    }
 }

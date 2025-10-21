@@ -5,6 +5,7 @@ import com.nexusvoice.domain.user.constant.UserStatus;
 import com.nexusvoice.domain.user.constant.UserType;
 import com.nexusvoice.domain.user.model.User;
 import com.nexusvoice.infrastructure.persistence.po.UserPO;
+import org.springframework.stereotype.Component;
 
 /**
  * 用户PO与领域对象转换器
@@ -13,6 +14,7 @@ import com.nexusvoice.infrastructure.persistence.po.UserPO;
  * @author NexusVoice
  * @since 2025-10-21
  */
+@Component
 public class UserPOConverter {
 
     /**
@@ -21,7 +23,7 @@ public class UserPOConverter {
      * @param user 领域用户对象
      * @return 持久化用户对象
      */
-    public static UserPO toPO(User user) {
+    public UserPO toPO(User user) {
         if (user == null) {
             return null;
         }
@@ -74,7 +76,7 @@ public class UserPOConverter {
      * @param po 持久化用户对象
      * @return 领域用户对象
      */
-    public static User toDomain(UserPO po) {
+    public User toDomain(UserPO po) {
         if (po == null) {
             return null;
         }
@@ -128,7 +130,7 @@ public class UserPOConverter {
      * @param user 源领域对象
      * @return 更新后的持久化对象
      */
-    public static UserPO updatePO(UserPO po, User user) {
+    public UserPO updatePO(UserPO po, User user) {
         if (po == null || user == null) {
             return po;
         }

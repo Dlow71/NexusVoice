@@ -27,42 +27,44 @@ import java.util.stream.Collectors;
 @Repository
 public class UserRepositoryImpl implements UserRepository {
 
-    private final UserPOMapper userPOMapper;
+    private final UserPOMapper mapper;
+    private final UserPOConverter converter;
 
     /**
      * 构造器注入（替代@Autowired字段注入）
      */
-    public UserRepositoryImpl(UserPOMapper userPOMapper) {
-        this.userPOMapper = userPOMapper;
+    public UserRepositoryImpl(UserPOMapper mapper, UserPOConverter converter) {
+        this.mapper = mapper;
+        this.converter = converter;
     }
 
     @Override
     public Optional<User> findById(Long id) {
-        UserPO po = userPOMapper.selectById(id);
-        return Optional.ofNullable(UserPOConverter.toDomain(po));
+        UserPO po = mapper.selectById(id);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
     public Optional<User> findByEmail(String email) {
         LambdaQueryWrapper<UserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserPO::getEmail, email);
-        UserPO po = userPOMapper.selectOne(wrapper);
-        return Optional.ofNullable(UserPOConverter.toDomain(po));
+        UserPO po = mapper.selectOne(wrapper);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
     public Optional<User> findByPhone(String phone) {
         LambdaQueryWrapper<UserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserPO::getPhone, phone);
-        UserPO po = userPOMapper.selectOne(wrapper);
-        return Optional.ofNullable(UserPOConverter.toDomain(po));
+        UserPO po = mapper.selectOne(wrapper);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
     public boolean existsByEmail(String email) {
         LambdaQueryWrapper<UserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserPO::getEmail, email);
-        return userPOMapper.selectCount(wrapper) > 0;
+        return mapper.selectCount(wrapper) > 0;
     }
 
     @Override
@@ -73,7 +75,7 @@ public class UserRepositoryImpl implements UserRepository {
         LambdaQueryWrapper<UserPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(UserPO::getPhone, phone)
                 .eq(UserPO::getDeleted, 0);
-        return userPOMapper.selectCount(wrapper) > 0;
+        return mapper.selectCount(wrapper) > 0;
     }
 
     @Override
@@ -85,8 +87,8 @@ public class UserRepositoryImpl implements UserRepository {
         wrapper.eq(UserPO::getOauthProvider, provider)
                 .eq(UserPO::getOauthId, oauthId)
                 .eq(UserPO::getDeleted, 0);
-        UserPO po = userPOMapper.selectOne(wrapper);
-        return Optional.ofNullable(UserPOConverter.toDomain(po));
+        UserPO po = mapper.selectOne(wrapper);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
@@ -98,15 +100,15 @@ public class UserRepositoryImpl implements UserRepository {
         wrapper.eq(UserPO::getOauthProvider, provider)
                 .eq(UserPO::getOauthId, oauthId)
                 .eq(UserPO::getDeleted, 0);
-        return userPOMapper.selectCount(wrapper) > 0;
+        return mapper.selectCount(wrapper) > 0;
     }
 
     @Override
     public User save(User user) {
         if (user.getId() == null) {
             // 新增
-            UserPO po = UserPOConverter.toPO(user);
-            int result = userPOMapper.insert(po);
+            UserPO po = converter.toPO(user);
+            int result = mapper.insert(po);
             if (result <= 0) {
                 throw new RuntimeException("保存用户失败");
             }
@@ -116,8 +118,8 @@ public class UserRepositoryImpl implements UserRepository {
             user.setUpdatedAt(po.getUpdatedAt());
         } else {
             // 更新
-            UserPO po = UserPOConverter.toPO(user);
-            int result = userPOMapper.updateById(po);
+            UserPO po = converter.toPO(user);
+            int result = mapper.updateById(po);
             if (result <= 0) {
                 throw new RuntimeException("更新用户失败");
             }
@@ -128,8 +130,8 @@ public class UserRepositoryImpl implements UserRepository {
 
     @Override
     public User update(User user) {
-        UserPO po = UserPOConverter.toPO(user);
-        int result = userPOMapper.updateById(po);
+        UserPO po = converter.toPO(user);
+        int result = mapper.updateById(po);
         if (result <= 0) {
             throw new RuntimeException("更新用户失败");
         }
@@ -139,12 +141,12 @@ public class UserRepositoryImpl implements UserRepository {
 
     @Override
     public void deleteById(Long id) {
-        userPOMapper.deleteById(id);
+        mapper.deleteById(id);
     }
 
     @Override
     public long count() {
-        return userPOMapper.selectCount(null);
+        return mapper.selectCount(null);
     }
 
     @Override
@@ -171,11 +173,11 @@ public class UserRepositoryImpl implements UserRepository {
         
         // 分页查询
         Page<UserPO> pageParam = new Page<>(page, size);
-        IPage<UserPO> pageResult = userPOMapper.selectPage(pageParam, wrapper);
+        IPage<UserPO> pageResult = mapper.selectPage(pageParam, wrapper);
         
         // 转换为领域对象列表
         var users = pageResult.getRecords().stream()
-                .map(UserPOConverter::toDomain)
+                .map(converter::toDomain)
                 .collect(Collectors.toList());
         
         // 转换为自定义分页结果
