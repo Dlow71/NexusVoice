@@ -2,24 +2,26 @@ package com.nexusvoice.domain.config.service;
 
 import com.nexusvoice.domain.config.constant.SystemConfigKey;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
  * 系统配置领域服务
  * 提供便捷的配置获取方法
- * 缓存由SystemConfigCacheService统一管理
+ * 缓存由Repository层统一管理
  *
  * @author NexusVoice
  * @since 2025-10-17
- * @updated 2025-10-18 集成SystemConfigCacheService
+ * @updated 2025-10-21 使用SystemConfigDomainService
  */
 @Slf4j
 @Service
 public class SystemConfigService {
 
-    @Autowired
-    private SystemConfigCacheService cacheService;
+    private final SystemConfigDomainService domainService;
+
+    public SystemConfigService(SystemConfigDomainService domainService) {
+        this.domainService = domainService;
+    }
 
     /**
      * 获取配置值（字符串类型）
@@ -30,7 +32,7 @@ public class SystemConfigService {
      */
     public String getString(String configKey, String defaultValue) {
         try {
-            String value = cacheService.getConfigValue(configKey);
+            String value = domainService.getConfigValue(configKey);
             if (value != null) {
                 return value;
             }
@@ -121,24 +123,28 @@ public class SystemConfigService {
     }
 
     /**
-     * 刷新缓存
+     * 刷新缓存（委托给Repository层）
+     * 注意：缓存管理方法已移至Application层和Infrastructure层
      */
+    @Deprecated
     public void refreshCache() {
-        cacheService.warmUpCache();
+        log.warn("refreshCache()方法已废弃，请使用SystemConfigApplicationService");
     }
 
     /**
-     * 清空缓存
+     * 清空缓存（委托给Repository层）
      */
+    @Deprecated
     public void clearCache() {
-        cacheService.evictAllConfigs();
+        log.warn("clearCache()方法已废弃，请使用SystemConfigApplicationService");
     }
     
     /**
-     * 失效指定配置的缓存
+     * 失效指定配置的缓存（委托给Repository层）
      */
+    @Deprecated
     public void evictConfig(String configKey) {
-        cacheService.evictConfig(configKey);
+        log.warn("evictConfig()方法已废弃，请使用SystemConfigApplicationService");
     }
 
     // ==================== 便捷方法：获取常用配置 ====================

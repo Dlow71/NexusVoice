@@ -1,48 +1,61 @@
 package com.nexusvoice.domain.config.model;
 
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.baomidou.mybatisplus.annotation.Version;
-import com.nexusvoice.domain.common.BaseEntity;
-import io.swagger.v3.oas.annotations.media.Schema;
+import com.nexusvoice.domain.common.BaseDomainEntity;
 
 /**
  * 系统配置领域实体
+ * 纯净的领域模型，不包含任何技术框架注解
  * 
  * @author NexusVoice
  * @since 2025-09-27
  */
-@Schema(description = "系统配置")
-@TableName("system_config")
-public class SystemConfig extends BaseEntity {
+public class SystemConfig extends BaseDomainEntity {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "配置键", example = "ai.model.default")
+    /**
+     * 配置键
+     */
     private String configKey;
 
-    @Schema(description = "配置值", example = "gpt-4")
+    /**
+     * 配置值
+     */
     private String configValue;
 
-    @Schema(description = "配置描述", example = "默认AI模型")
+    /**
+     * 配置描述
+     */
     private String description;
 
-    @Schema(description = "配置分组", example = "ai")
+    /**
+     * 配置分组
+     */
     private String configGroup;
 
-    @Schema(description = "是否启用", example = "true")
+    /**
+     * 是否启用
+     */
     private Boolean enabled;
 
-    @Schema(description = "是否只读", example = "false")
+    /**
+     * 是否只读
+     */
     private Boolean readonly;
 
-    @Schema(description = "排序", example = "1")
+    /**
+     * 排序
+     */
     private Integer sortOrder;
 
-    @Schema(description = "备注")
+    /**
+     * 备注
+     */
     private String remark;
     
-    @Version
-    @Schema(description = "版本号（乐观锁）", hidden = true)
+    /**
+     * 版本号（用于乐观锁）
+     */
     private Integer version;
 
     // 构造函数

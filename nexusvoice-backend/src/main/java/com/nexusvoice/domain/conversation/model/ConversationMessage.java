@@ -1,17 +1,7 @@
 package com.nexusvoice.domain.conversation.model;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
-import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
-import com.nexusvoice.domain.common.BaseEntity;
+import com.nexusvoice.domain.common.BaseDomainEntity;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
-import lombok.Data;
-import lombok.Builder;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -21,12 +11,7 @@ import java.time.LocalDateTime;
  * @author NexusVoice
  * @since 2025-09-25
  */
-@Data
-@Builder
-@EqualsAndHashCode(callSuper = true)
-@NoArgsConstructor
-@AllArgsConstructor
-public class ConversationMessage extends BaseEntity {
+public class ConversationMessage extends BaseDomainEntity {
 
     /**
      * 对话ID
@@ -76,8 +61,6 @@ public class ConversationMessage extends BaseEntity {
     /**
      * 消息发送时间
      */
-    @JsonDeserialize(using = LocalDateTimeDeserializer.class)
-    @JsonSerialize(using = LocalDateTimeSerializer.class)
     private LocalDateTime sentAt;
 
     /**
@@ -183,5 +166,86 @@ public class ConversationMessage extends BaseEntity {
      */
     public boolean isFromAssistant() {
         return MessageRole.ASSISTANT.equals(this.role);
+    }
+    
+    // Getter and Setter methods
+    public Long getConversationId() {
+        return conversationId;
+    }
+    
+    public void setConversationId(Long conversationId) {
+        this.conversationId = conversationId;
+    }
+    
+    public MessageRole getRole() {
+        return role;
+    }
+    
+    public void setRole(MessageRole role) {
+        this.role = role;
+    }
+    
+    public String getContent() {
+        return content;
+    }
+    
+    public void setContent(String content) {
+        this.content = content;
+    }
+    
+    public String getAudioUrl() {
+        return audioUrl;
+    }
+    
+    public void setAudioUrl(String audioUrl) {
+        this.audioUrl = audioUrl;
+    }
+    
+    public Integer getSequence() {
+        return sequence;
+    }
+    
+    public void setSequence(Integer sequence) {
+        this.sequence = sequence;
+    }
+    
+    public Integer getTokenCount() {
+        return tokenCount;
+    }
+    
+    public void setTokenCount(Integer tokenCount) {
+        this.tokenCount = tokenCount;
+    }
+    
+    public String getStatus() {
+        return status;
+    }
+    
+    public void setStatus(String status) {
+        this.status = status;
+    }
+    
+    public String getErrorMessage() {
+        return errorMessage;
+    }
+    
+    public void setErrorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+    
+    public String getMetadata() {
+        return metadata;
+    }
+    
+    public void setMetadata(String metadata) {
+        this.metadata = metadata;
+    }
+    
+    public LocalDateTime getSentAt() {
+        return sentAt;
+    }
+    
+    public void setSentAt(LocalDateTime sentAt) {
+        this.sentAt = sentAt;
     }
 }

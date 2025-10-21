@@ -1,14 +1,9 @@
 package com.nexusvoice.domain.conversation.model;
 
-import com.nexusvoice.domain.common.BaseEntity;
+import com.nexusvoice.domain.common.BaseDomainEntity;
 import com.nexusvoice.domain.conversation.constant.ConversationStatus;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -20,12 +15,7 @@ import java.util.List;
  * @author NexusVoice
  * @since 2025-09-25
  */
-@Slf4j
-@Data
-@EqualsAndHashCode(callSuper = true)
-@NoArgsConstructor
-@AllArgsConstructor
-public class Conversation extends BaseEntity {
+public class Conversation extends BaseDomainEntity {
 
     /**
      * 对话标题
@@ -148,8 +138,8 @@ public class Conversation extends BaseEntity {
         
         // 检查模型是否一致
         if (!normalizedRequestModel.equals(normalizedSessionModel)) {
-            log.warn("会话{}尝试切换模型：{} -> {}，拒绝切换", 
-                this.getId(), normalizedSessionModel, normalizedRequestModel);
+            // log.warn("会话{}尝试切换模型：{} -> {}，拒绝切换", 
+            //     this.getId(), normalizedSessionModel, normalizedRequestModel);
             
             throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
                 String.format("当前会话已绑定模型[%s]，无法切换为[%s]。如需使用不同模型，请创建新会话", 
@@ -176,5 +166,78 @@ public class Conversation extends BaseEntity {
         }
         
         return trimmed;
+    }
+    
+    // Getter and Setter methods
+    public String getTitle() {
+        return title;
+    }
+    
+    public void setTitle(String title) {
+        this.title = title;
+    }
+    
+    public Long getUserId() {
+        return userId;
+    }
+    
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+    
+    public Long getRoleId() {
+        return roleId;
+    }
+    
+    public void setRoleId(Long roleId) {
+        this.roleId = roleId;
+    }
+    
+    public String getModelName() {
+        return modelName;
+    }
+    
+    public void setModelName(String modelName) {
+        this.modelName = modelName;
+    }
+    
+    public ConversationStatus getStatus() {
+        return status;
+    }
+    
+    public void setStatus(ConversationStatus status) {
+        this.status = status;
+    }
+    
+    public String getSystemPrompt() {
+        return systemPrompt;
+    }
+    
+    public void setSystemPrompt(String systemPrompt) {
+        this.systemPrompt = systemPrompt;
+    }
+    
+    public String getConfigParams() {
+        return configParams;
+    }
+    
+    public void setConfigParams(String configParams) {
+        this.configParams = configParams;
+    }
+    
+    public LocalDateTime getLastActiveAt() {
+        return lastActiveAt;
+    }
+    
+    public void setLastActiveAt(LocalDateTime lastActiveAt) {
+        this.lastActiveAt = lastActiveAt;
+    }
+    
+    public List<ConversationMessage> getMessages() {
+        return messages;
+    }
+    
+    public void setMessages(List<ConversationMessage> messages) {
+        this.messages = messages;
     }
 }

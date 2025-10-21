@@ -1,9 +1,11 @@
 package com.nexusvoice.infrastructure.ai.template;
 
+import com.nexusvoice.domain.ai.model.AiChatRequest;
 import com.nexusvoice.domain.ai.model.AiModelInfo;
 import com.nexusvoice.domain.ai.model.EnhancementContext;
 import com.nexusvoice.domain.ai.enums.AiProviderEnum;
 import com.nexusvoice.infrastructure.ai.chain.ChatEnhancementChain;
+import com.nexusvoice.infrastructure.ai.converter.AiModelConverter;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
@@ -55,7 +57,8 @@ public abstract class AbstractAiChatService implements AiChatService {
             // 5. 执行请求增强链
             if (context.hasEnhancements()) {
                 context = enhancementChain.enhance(context);
-                request = context.getEnhancedRequest();
+                // 将增强后的领域请求转换回基础设施请求
+                request = AiModelConverter.toInfrastructureRequest(context.getEnhancedRequest());
             }
             
             // 6. 执行具体的聊天处理
@@ -106,7 +109,8 @@ public abstract class AbstractAiChatService implements AiChatService {
             // 4. 执行请求增强链（包含联网搜索、RAG等）
             if (context.hasEnhancements()) {
                 context = enhancementChain.enhance(context);
-                request = context.getEnhancedRequest();
+                // 将增强后的领域请求转换回基础设施请求
+                request = AiModelConverter.toInfrastructureRequest(context.getEnhancedRequest());
                 log.info("流式聊天请求增强完成，联网搜索：{}，RAG：{}", 
                         context.getEnableWebSearch(), context.getEnableRag());
             }
@@ -180,12 +184,14 @@ public abstract class AbstractAiChatService implements AiChatService {
      * 创建增强上下文
      */
     protected EnhancementContext createEnhancementContext(ChatRequest request) {
+        // 将基础设施请求转换为领域请求
+        AiChatRequest domainRequest = AiModelConverter.toDomainRequest(request);
         return EnhancementContext.builder()
-                .originalRequest(request)
-                .enhancedRequest(request)
-                .enableWebSearch(request.getEnableWebSearch())
-                .enableRag(request.getEnableRag())
-                .enableMultiModal(request.getEnableMultiModal())
+                .originalRequest(domainRequest)
+                .enhancedRequest(domainRequest)
+                .enableWebSearch(domainRequest.getEnableWebSearch())
+                .enableRag(domainRequest.getEnableRag())
+                .enableMultiModal(domainRequest.getEnableMultiModal())
                 .build();
     }
     

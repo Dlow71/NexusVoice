@@ -147,4 +147,18 @@ public interface SystemConfigRepository {
      * @return 更新成功的数量
      */
     int batchUpdateStatus(List<Long> ids, Boolean enabled);
+
+    /**
+     * 刷新指定配置的缓存
+     * 缓存技术细节在infrastructure层实现
+     * 
+     * @param configKey 配置键
+     */
+    void refreshCache(String configKey);
+
+    /**
+     * 刷新所有配置缓存
+     * 缓存技术细节在infrastructure层实现
+     */
+    void refreshAllCache();
 }

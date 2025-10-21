@@ -1,11 +1,8 @@
 package com.nexusvoice.domain.ai.model;
 
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.nexusvoice.domain.common.BaseEntity;
+import com.nexusvoice.domain.common.BaseDomainEntity;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
-import lombok.experimental.Accessors;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -19,158 +16,131 @@ import java.time.LocalDateTime;
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
-@Accessors(chain = true)
-@TableName("ai_api_keys")
-public class AiApiKey extends BaseEntity {
+public class AiApiKey extends BaseDomainEntity {
     
     /**
      * 厂商代码
      */
-    @TableField("provider_code")
     private String providerCode;
     
     /**
      * 模型代码
      */
-    @TableField("model_code")
     private String modelCode;
     
     /**
      * API密钥（加密存储）
      */
-    @TableField("api_key")
     private String apiKey;
     
     /**
      * API Secret（某些厂商需要）
      */
-    @TableField("api_secret")
     private String apiSecret;
     
     /**
      * 自定义端点URL
      */
-    @TableField("base_url")
     private String baseUrl;
     
     /**
      * 代理URL
      */
-    @TableField("proxy_url")
     private String proxyUrl;
     
     /**
      * 权重（用于加权轮询）
      */
-    @TableField("weight")
     private Integer weight;
     
     /**
      * 每分钟请求数限制
      */
-    @TableField("rate_limit")
     private Integer rateLimit;
     
     /**
      * 并发请求数限制
      */
-    @TableField("concurrent_limit")
     private Integer concurrentLimit;
     
     /**
      * 状态：0-异常 1-正常 2-禁用
      */
-    @TableField("status")
     private Integer status;
     
     /**
      * 连续失败次数
      */
-    @TableField("fail_count")
     private Integer failCount;
     
     /**
      * 最后失败时间
      */
-    @TableField("last_fail_time")
     private LocalDateTime lastFailTime;
     
     /**
      * 最后成功时间
      */
-    @TableField("last_success_time")
     private LocalDateTime lastSuccessTime;
     
     /**
      * 最后健康检查时间
      */
-    @TableField("health_check_time")
     private LocalDateTime healthCheckTime;
     
     /**
      * 总请求数
      */
-    @TableField("total_requests")
     private Long totalRequests;
     
     /**
      * 总token使用量
      */
-    @TableField("total_tokens_used")
     private Long totalTokensUsed;
     
     /**
      * 总费用（元）
      */
-    @TableField("total_cost")
     private BigDecimal totalCost;
     
     /**
      * 最后使用时间
      */
-    @TableField("last_used_at")
     private LocalDateTime lastUsedAt;
     
     /**
      * 当月请求数
      */
-    @TableField("monthly_requests")
     private Integer monthlyRequests;
     
     /**
      * 当月token使用量
      */
-    @TableField("monthly_tokens_used")
     private Long monthlyTokensUsed;
     
     /**
      * 当月费用（元）
      */
-    @TableField("monthly_cost")
     private BigDecimal monthlyCost;
     
     /**
      * 月度重置日期
      */
-    @TableField("monthly_reset_date")
     private LocalDate monthlyResetDate;
     
     /**
      * 每日配额限制（tokens）
      */
-    @TableField("daily_quota_limit")
     private Long dailyQuotaLimit;
     
     /**
      * 月度配额限制（tokens）
      */
-    @TableField("monthly_quota_limit")
     private Long monthlyQuotaLimit;
     
     /**
      * 今日已用tokens
      */
-    @TableField("daily_tokens_used")
     private Long dailyTokensUsed;
     
     /**

@@ -9,6 +9,7 @@ import com.nexusvoice.domain.ai.repository.AiModelRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.chain.ChatEnhancementChain;
+import com.nexusvoice.infrastructure.ai.converter.AiModelConverter;
 import com.nexusvoice.infrastructure.ai.factory.LangChain4jModelFactory;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
@@ -304,24 +305,30 @@ public class DynamicAiModelBeanManager {
             
             try {
                 // 1. 执行请求增强链（联网搜索、RAG等）
-                ChatRequest enhancedRequest = request;
+                // 将基础设施请求转换为领域请求
+                com.nexusvoice.domain.ai.model.AiChatRequest domainRequest = AiModelConverter.toDomainRequest(request);
+                com.nexusvoice.domain.ai.model.AiChatRequest enhancedDomainRequest = domainRequest;
+                
                 if (enhancementChain != null) {
                     EnhancementContext context = EnhancementContext.builder()
-                            .originalRequest(request)
-                            .enhancedRequest(request)
-                            .enableWebSearch(request.getEnableWebSearch())
-                            .enableRag(request.getEnableRag())
-                            .enableMultiModal(request.getEnableMultiModal())
+                            .originalRequest(domainRequest)
+                            .enhancedRequest(domainRequest)
+                            .enableWebSearch(domainRequest.getEnableWebSearch())
+                            .enableRag(domainRequest.getEnableRag())
+                            .enableMultiModal(domainRequest.getEnableMultiModal())
                             .build();
                     
                     if (context.hasEnhancements()) {
                         log.info("开始执行流式聊天增强链，模型：{}，联网搜索：{}", 
-                                model.getModelKey(), request.getEnableWebSearch());
+                                model.getModelKey(), domainRequest.getEnableWebSearch());
                         context = enhancementChain.enhance(context);
-                        enhancedRequest = context.getEnhancedRequest();
+                        enhancedDomainRequest = context.getEnhancedRequest();
                         log.info("流式聊天增强链执行完成，模型：{}", model.getModelKey());
                     }
                 }
+                
+                // 将增强后的领域请求转换回基础设施请求
+                ChatRequest enhancedRequest = AiModelConverter.toInfrastructureRequest(enhancedDomainRequest);
                 final ChatRequest finalRequest = enhancedRequest;
                 
                 // 2. 获取API密钥

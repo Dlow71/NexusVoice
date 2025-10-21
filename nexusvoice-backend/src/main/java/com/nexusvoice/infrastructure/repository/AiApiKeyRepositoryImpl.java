@@ -4,9 +4,10 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.repository.AiApiKeyRepository;
-import com.nexusvoice.infrastructure.database.mapper.AiApiKeyMapper;
+import com.nexusvoice.infrastructure.persistence.converter.AiApiKeyPOConverter;
+import com.nexusvoice.infrastructure.persistence.mapper.AiApiKeyPOMapper;
+import com.nexusvoice.infrastructure.persistence.po.AiApiKeyPO;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -14,9 +15,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * AI API密钥仓储实现
+ * 使用PO层进行持久化操作
  *
  * @author NexusVoice
  * @since 2025-10-16
@@ -25,56 +28,67 @@ import java.util.Optional;
 @Repository
 public class AiApiKeyRepositoryImpl implements AiApiKeyRepository {
     
-    @Autowired
-    private AiApiKeyMapper aiApiKeyMapper;
+    private final AiApiKeyPOMapper mapper;
+    private final AiApiKeyPOConverter converter;
+    
+    public AiApiKeyRepositoryImpl(AiApiKeyPOMapper mapper, AiApiKeyPOConverter converter) {
+        this.mapper = mapper;
+        this.converter = converter;
+    }
     
     @Override
     public Optional<AiApiKey> findById(Long id) {
-        AiApiKey apiKey = aiApiKeyMapper.selectById(id);
-        return Optional.ofNullable(apiKey);
+        AiApiKeyPO po = mapper.selectById(id);
+        return Optional.ofNullable(converter.toDomain(po));
     }
     
     @Override
     public List<AiApiKey> findAvailableByModel(String providerCode, String modelCode) {
-        LambdaQueryWrapper<AiApiKey> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiApiKey::getProviderCode, providerCode)
-                .eq(AiApiKey::getModelCode, modelCode)
-                .eq(AiApiKey::getStatus, 1)
-                .eq(AiApiKey::getDeleted, 0)
-                .orderByAsc(AiApiKey::getLastUsedAt);
+        LambdaQueryWrapper<AiApiKeyPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiApiKeyPO::getProviderCode, providerCode)
+                .eq(AiApiKeyPO::getModelCode, modelCode)
+                .eq(AiApiKeyPO::getStatus, 1)
+                .eq(AiApiKeyPO::getDeleted, 0)
+                .orderByAsc(AiApiKeyPO::getLastUsedAt);
         
-        return aiApiKeyMapper.selectList(wrapper);
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
     public List<AiApiKey> findAllByModel(String providerCode, String modelCode) {
-        LambdaQueryWrapper<AiApiKey> wrapper = new LambdaQueryWrapper<>();
+        LambdaQueryWrapper<AiApiKeyPO> wrapper = new LambdaQueryWrapper<>();
         
         // 如果providerCode和modelCode都为null，查询所有
         if (providerCode != null && modelCode != null) {
-            wrapper.eq(AiApiKey::getProviderCode, providerCode)
-                    .eq(AiApiKey::getModelCode, modelCode);
+            wrapper.eq(AiApiKeyPO::getProviderCode, providerCode)
+                    .eq(AiApiKeyPO::getModelCode, modelCode);
         }
         
-        wrapper.eq(AiApiKey::getDeleted, 0)
-                .orderByDesc(AiApiKey::getStatus)
-                .orderByAsc(AiApiKey::getLastUsedAt);
+        wrapper.eq(AiApiKeyPO::getDeleted, 0)
+                .orderByDesc(AiApiKeyPO::getStatus)
+                .orderByAsc(AiApiKeyPO::getLastUsedAt);
         
-        return aiApiKeyMapper.selectList(wrapper);
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
     public AiApiKey save(AiApiKey apiKey) {
-        if (apiKey.getId() == null) {
+        AiApiKeyPO po = converter.toPO(apiKey);
+        if (po.getId() == null) {
             // 新增
-            apiKey.setCreatedAt(LocalDateTime.now());
-            aiApiKeyMapper.insert(apiKey);
+            po.setCreatedAt(LocalDateTime.now());
+            mapper.insert(po);
+            apiKey.setId(po.getId());
         } else {
             // 更新
-            apiKey.setUpdatedAt(LocalDateTime.now());
-            aiApiKeyMapper.updateById(apiKey);
+            po.setUpdatedAt(LocalDateTime.now());
+            mapper.updateById(po);
         }
-        return apiKey;
+        return converter.toDomain(po);
     }
     
     @Override
@@ -86,133 +100,155 @@ public class AiApiKeyRepositoryImpl implements AiApiKeyRepository {
     
     @Override
     public void updateStatus(Long id, Integer status) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getStatus, status)
-                .set(AiApiKey::getUpdatedAt, LocalDateTime.now());
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getStatus, status)
+                .set(AiApiKeyPO::getUpdatedAt, LocalDateTime.now());
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
         log.info("更新API密钥状态，ID：{}，状态：{}", id, status);
     }
     
     @Override
     public void updateUsageStats(Long id, Integer tokens, BigDecimal cost) {
-        aiApiKeyMapper.updateUsageStats(id, tokens, cost, LocalDateTime.now());
+        // 使用LambdaUpdateWrapper代替自定义方法
+        AiApiKeyPO po = mapper.selectById(id);
+        if (po != null) {
+            AiApiKey domain = converter.toDomain(po);
+            domain.updateUsageStats(tokens, cost);
+            mapper.updateById(converter.toPO(domain));
+        }
     }
     
     @Override
     public void markFailed(Long id) {
-        aiApiKeyMapper.markFailed(id, LocalDateTime.now());
+        AiApiKeyPO po = mapper.selectById(id);
+        if (po != null) {
+            AiApiKey domain = converter.toDomain(po);
+            domain.markFailed();
+            mapper.updateById(converter.toPO(domain));
+        }
     }
     
     @Override
     public void markSuccess(Long id) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getFailCount, 0)
-                .set(AiApiKey::getLastSuccessTime, LocalDateTime.now())
-                .set(AiApiKey::getStatus, 1);
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getFailCount, 0)
+                .set(AiApiKeyPO::getLastSuccessTime, LocalDateTime.now())
+                .set(AiApiKeyPO::getStatus, 1);
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
     }
     
     @Override
     public void updateLastUsedTime(Long id, LocalDateTime time) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getLastUsedAt, time);
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getLastUsedAt, time);
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
     }
     
     @Override
     public void resetDailyQuota(Long id) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getDailyTokensUsed, 0);
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getDailyTokensUsed, 0);
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
     }
     
     @Override
     public void resetMonthlyQuota(Long id) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getMonthlyRequests, 0)
-                .set(AiApiKey::getMonthlyTokensUsed, 0)
-                .set(AiApiKey::getMonthlyCost, BigDecimal.ZERO)
-                .set(AiApiKey::getMonthlyResetDate, LocalDate.now());
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getMonthlyRequests, 0)
+                .set(AiApiKeyPO::getMonthlyTokensUsed, 0)
+                .set(AiApiKeyPO::getMonthlyCost, BigDecimal.ZERO)
+                .set(AiApiKeyPO::getMonthlyResetDate, LocalDate.now());
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
     }
     
     @Override
     public void resetAllDailyQuota() {
-        aiApiKeyMapper.resetAllDailyQuota();
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.set(AiApiKeyPO::getDailyTokensUsed, 0);
+        mapper.update(null, wrapper);
         log.info("重置所有API密钥的每日配额");
     }
     
     @Override
     public void resetMonthlyQuotaByDate(LocalDate date) {
-        aiApiKeyMapper.resetMonthlyQuota();
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.set(AiApiKeyPO::getMonthlyRequests, 0)
+                .set(AiApiKeyPO::getMonthlyTokensUsed, 0)
+                .set(AiApiKeyPO::getMonthlyCost, BigDecimal.ZERO)
+                .set(AiApiKeyPO::getMonthlyResetDate, date);
+        mapper.update(null, wrapper);
         log.info("重置月度配额，日期：{}", date);
     }
     
     @Override
     public void updateHealthCheckTime(Long id, LocalDateTime time) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getHealthCheckTime, time);
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getHealthCheckTime, time);
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
     }
     
     @Override
     public List<AiApiKey> findNeedHealthCheck(int minutesSinceLastCheck) {
         LocalDateTime checkTime = LocalDateTime.now().minusMinutes(minutesSinceLastCheck);
         
-        LambdaQueryWrapper<AiApiKey> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiApiKey::getDeleted, 0)
-                .and(w -> w.isNull(AiApiKey::getHealthCheckTime)
+        LambdaQueryWrapper<AiApiKeyPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiApiKeyPO::getDeleted, 0)
+                .and(w -> w.isNull(AiApiKeyPO::getHealthCheckTime)
                          .or()
-                         .lt(AiApiKey::getHealthCheckTime, checkTime))
-                .orderByAsc(AiApiKey::getHealthCheckTime);
+                         .lt(AiApiKeyPO::getHealthCheckTime, checkTime))
+                .orderByAsc(AiApiKeyPO::getHealthCheckTime);
         
-        return aiApiKeyMapper.selectList(wrapper);
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
     public List<AiApiKey> findNeedCircuitBreakerRecovery(int minutesSinceFail) {
         LocalDateTime recoverTime = LocalDateTime.now().minusMinutes(minutesSinceFail);
         
-        LambdaQueryWrapper<AiApiKey> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiApiKey::getDeleted, 0)
-                .eq(AiApiKey::getStatus, 0)
-                .ge(AiApiKey::getFailCount, 5)
-                .le(AiApiKey::getLastFailTime, recoverTime);
+        LambdaQueryWrapper<AiApiKeyPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiApiKeyPO::getDeleted, 0)
+                .eq(AiApiKeyPO::getStatus, 0)
+                .ge(AiApiKeyPO::getFailCount, 5)
+                .le(AiApiKeyPO::getLastFailTime, recoverTime);
         
-        return aiApiKeyMapper.selectList(wrapper);
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
     public void delete(Long id) {
-        LambdaUpdateWrapper<AiApiKey> wrapper = new LambdaUpdateWrapper<>();
-        wrapper.eq(AiApiKey::getId, id)
-                .set(AiApiKey::getDeleted, 1)
-                .set(AiApiKey::getUpdatedAt, LocalDateTime.now());
+        LambdaUpdateWrapper<AiApiKeyPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiApiKeyPO::getId, id)
+                .set(AiApiKeyPO::getDeleted, 1)
+                .set(AiApiKeyPO::getUpdatedAt, LocalDateTime.now());
         
-        aiApiKeyMapper.update(null, wrapper);
+        mapper.update(null, wrapper);
         log.info("逻辑删除API密钥，ID：{}", id);
     }
     
     @Override
     public int countAvailable(String providerCode, String modelCode) {
-        LambdaQueryWrapper<AiApiKey> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiApiKey::getProviderCode, providerCode)
-                .eq(AiApiKey::getModelCode, modelCode)
-                .eq(AiApiKey::getStatus, 1)
-                .eq(AiApiKey::getDeleted, 0);
+        LambdaQueryWrapper<AiApiKeyPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiApiKeyPO::getProviderCode, providerCode)
+                .eq(AiApiKeyPO::getModelCode, modelCode)
+                .eq(AiApiKeyPO::getStatus, 1)
+                .eq(AiApiKeyPO::getDeleted, 0);
         
-        return aiApiKeyMapper.selectCount(wrapper).intValue();
+        return mapper.selectCount(wrapper).intValue();
     }
 }

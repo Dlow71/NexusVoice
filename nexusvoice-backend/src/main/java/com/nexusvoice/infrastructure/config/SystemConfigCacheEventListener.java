@@ -1,7 +1,7 @@
 package com.nexusvoice.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nexusvoice.domain.config.service.SystemConfigCacheService;
+import com.nexusvoice.infrastructure.cache.SystemConfigCacheInfraService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +34,7 @@ public class SystemConfigCacheEventListener {
     private static final String CACHE_EVICT_CHANNEL = "system:config:evict";
 
     @Autowired
-    private SystemConfigCacheService cacheService;
+    private SystemConfigCacheInfraService cacheService;
 
     @Autowired
     private ObjectMapper objectMapper;

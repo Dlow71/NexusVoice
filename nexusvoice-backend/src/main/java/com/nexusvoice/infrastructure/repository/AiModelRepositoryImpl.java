@@ -3,17 +3,20 @@ package com.nexusvoice.infrastructure.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.ai.repository.AiModelRepository;
-import com.nexusvoice.infrastructure.database.mapper.AiModelMapper;
+import com.nexusvoice.infrastructure.persistence.converter.AiModelPOConverter;
+import com.nexusvoice.infrastructure.persistence.mapper.AiModelPOMapper;
+import com.nexusvoice.infrastructure.persistence.po.AiModelPO;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * AI模型仓储实现
+ * 使用PO层进行持久化操作
  *
  * @author NexusVoice
  * @since 2025-10-16
@@ -22,24 +25,29 @@ import java.util.Optional;
 @Repository
 public class AiModelRepositoryImpl implements AiModelRepository {
     
-    @Autowired
-    private AiModelMapper aiModelMapper;
+    private final AiModelPOMapper mapper;
+    private final AiModelPOConverter converter;
+    
+    public AiModelRepositoryImpl(AiModelPOMapper mapper, AiModelPOConverter converter) {
+        this.mapper = mapper;
+        this.converter = converter;
+    }
     
     @Override
     public Optional<AiModel> findById(Long id) {
-        AiModel model = aiModelMapper.selectById(id);
-        return Optional.ofNullable(model);
+        AiModelPO po = mapper.selectById(id);
+        return Optional.ofNullable(converter.toDomain(po));
     }
     
     @Override
     public Optional<AiModel> findByProviderAndModel(String providerCode, String modelCode) {
-        LambdaQueryWrapper<AiModel> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiModel::getProviderCode, providerCode)
-                .eq(AiModel::getModelCode, modelCode)
-                .eq(AiModel::getDeleted, 0);
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getProviderCode, providerCode)
+                .eq(AiModelPO::getModelCode, modelCode)
+                .eq(AiModelPO::getDeleted, 0);
         
-        AiModel model = aiModelMapper.selectOne(wrapper);
-        return Optional.ofNullable(model);
+        AiModelPO po = mapper.selectOne(wrapper);
+        return Optional.ofNullable(converter.toDomain(po));
     }
     
     @Override
@@ -54,36 +62,42 @@ public class AiModelRepositoryImpl implements AiModelRepository {
     
     @Override
     public List<AiModel> findAllEnabled() {
-        LambdaQueryWrapper<AiModel> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiModel::getStatus, 1)
-                .eq(AiModel::getDeleted, 0)
-                .orderByAsc(AiModel::getPriority);
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getStatus, 1)
+                .eq(AiModelPO::getDeleted, 0)
+                .orderByAsc(AiModelPO::getPriority);
         
-        return aiModelMapper.selectList(wrapper);
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
     public List<AiModel> findByProvider(String providerCode) {
-        LambdaQueryWrapper<AiModel> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiModel::getProviderCode, providerCode)
-                .eq(AiModel::getDeleted, 0)
-                .orderByAsc(AiModel::getPriority);
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getProviderCode, providerCode)
+                .eq(AiModelPO::getDeleted, 0)
+                .orderByAsc(AiModelPO::getPriority);
         
-        return aiModelMapper.selectList(wrapper);
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
     public AiModel save(AiModel model) {
-        if (model.getId() == null) {
+        AiModelPO po = converter.toPO(model);
+        if (po.getId() == null) {
             // 新增
-            model.setCreatedAt(LocalDateTime.now());
-            aiModelMapper.insert(model);
+            po.setCreatedAt(LocalDateTime.now());
+            mapper.insert(po);
+            model.setId(po.getId());
         } else {
             // 更新
-            model.setUpdatedAt(LocalDateTime.now());
-            aiModelMapper.updateById(model);
+            po.setUpdatedAt(LocalDateTime.now());
+            mapper.updateById(po);
         }
-        return model;
+        return converter.toDomain(po);
     }
     
     @Override
@@ -95,46 +109,46 @@ public class AiModelRepositoryImpl implements AiModelRepository {
     
     @Override
     public void updateStatus(Long id, Integer status) {
-        AiModel model = new AiModel();
-        model.setId(id);
-        model.setStatus(status);
-        model.setUpdatedAt(LocalDateTime.now());
-        aiModelMapper.updateById(model);
+        AiModelPO po = new AiModelPO();
+        po.setId(id);
+        po.setStatus(status);
+        po.setUpdatedAt(LocalDateTime.now());
+        mapper.updateById(po);
         
         log.info("更新AI模型状态，ID：{}，状态：{}", id, status);
     }
     
     @Override
     public void delete(Long id) {
-        AiModel model = new AiModel();
-        model.setId(id);
-        model.setDeleted(1);
-        model.setUpdatedAt(LocalDateTime.now());
-        aiModelMapper.updateById(model);
+        AiModelPO po = new AiModelPO();
+        po.setId(id);
+        po.setDeleted(1);
+        po.setUpdatedAt(LocalDateTime.now());
+        mapper.updateById(po);
         
         log.info("逻辑删除AI模型，ID：{}", id);
     }
     
     @Override
     public boolean exists(String providerCode, String modelCode) {
-        LambdaQueryWrapper<AiModel> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiModel::getProviderCode, providerCode)
-                .eq(AiModel::getModelCode, modelCode)
-                .eq(AiModel::getDeleted, 0);
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getProviderCode, providerCode)
+                .eq(AiModelPO::getModelCode, modelCode)
+                .eq(AiModelPO::getDeleted, 0);
         
-        return aiModelMapper.selectCount(wrapper) > 0;
+        return mapper.selectCount(wrapper) > 0;
     }
     
     @Override
     public List<String> findAllProviderCodes() {
-        LambdaQueryWrapper<AiModel> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(AiModel::getDeleted, 0)
-                .select(AiModel::getProviderCode)
-                .groupBy(AiModel::getProviderCode);
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getDeleted, 0)
+                .select(AiModelPO::getProviderCode)
+                .groupBy(AiModelPO::getProviderCode);
         
-        List<AiModel> models = aiModelMapper.selectList(wrapper);
-        return models.stream()
-                .map(AiModel::getProviderCode)
+        List<AiModelPO> pos = mapper.selectList(wrapper);
+        return pos.stream()
+                .map(AiModelPO::getProviderCode)
                 .distinct()
                 .toList();
     }

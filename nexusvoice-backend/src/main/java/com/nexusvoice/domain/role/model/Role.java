@@ -1,11 +1,6 @@
 package com.nexusvoice.domain.role.model;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.nexusvoice.domain.common.BaseEntity;
-import io.swagger.v3.oas.annotations.media.Schema;
+import com.nexusvoice.domain.common.BaseDomainEntity;
 
 import java.util.Objects;
 
@@ -20,46 +15,53 @@ import java.util.Objects;
  * @author NexusVoice
  * @since 2025-09-25
  */
-@Schema(description = "AI角色实体")
-@TableName("roles")
-public class Role extends BaseEntity {
+public class Role extends BaseDomainEntity {
 
     private static final long serialVersionUID = 1L;
 
-    @Schema(description = "角色名称")
-    @TableField("name")
+    /**
+     * 角色名称
+     */
     private String name;
 
-    @Schema(description = "角色描述")
-    @TableField("description")
+    /**
+     * 角色描述
+     */
     private String description;
 
-    @Schema(description = "角色人设提示词")
-    @TableField("persona_prompt")
+    /**
+     * 角色人设提示词
+     */
     private String personaPrompt;
 
-    @Schema(description = "开场白文本")
-    @TableField("greeting_message")
+    /**
+     * 开场白文本
+     */
     private String greetingMessage;
 
-    @Schema(description = "开场白音频URL")
-    @TableField("greeting_audio_url")
+    /**
+     * 开场白音频URL
+     */
     private String greetingAudioUrl;
 
-    @Schema(description = "头像URL")
-    @TableField("avatar_url")
+    /**
+     * 头像URL
+     */
     private String avatarUrl;
 
-    @Schema(description = "TTS声音类型")
-    @TableField("voiceType")
+    /**
+     * TTS声音类型
+     */
     private String voiceType;
 
-    @Schema(description = "是否公共角色：0-私有 1-公共")
-    @TableField("is_public")
+    /**
+     * 是否公共角色：0-私有 1-公共
+     */
     private Integer isPublic;
 
-    @Schema(description = "创建者用户ID（私人角色）")
-    @TableField("user_id")
+    /**
+     * 创建者用户ID（私人角色）
+     */
     private Long userId;
 
     // ============ 业务方法 ============

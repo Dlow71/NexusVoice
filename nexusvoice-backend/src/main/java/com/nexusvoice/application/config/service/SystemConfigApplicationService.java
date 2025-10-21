@@ -8,7 +8,6 @@ import com.nexusvoice.application.config.dto.SystemConfigUpdateRequest;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.domain.config.model.SystemConfig;
 import com.nexusvoice.domain.config.repository.SystemConfigRepository;
-import com.nexusvoice.domain.config.service.SystemConfigCacheService;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import org.slf4j.Logger;
@@ -37,9 +36,6 @@ public class SystemConfigApplicationService {
 
     @Autowired
     private SystemConfigRepository systemConfigRepository;
-    
-    @Autowired
-    private SystemConfigCacheService cacheService;
 
     /**
      * 创建系统配置
@@ -65,15 +61,15 @@ public class SystemConfigApplicationService {
                     @Override
                     public void afterCommit() {
                         // 第一次删除缓存（立即删除）
-                        cacheService.evictConfig(savedConfig.getConfigKey());
-                        logger.info("第一次删除缓存: {}", savedConfig.getConfigKey());
+                        systemConfigRepository.refreshCache(savedConfig.getConfigKey());
+                        logger.info("第一次刷新缓存: {}", savedConfig.getConfigKey());
                         
                         // 延迟双删：500ms后再次删除，确保清除延迟读取的老数据
                         CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                                 .execute(() -> {
                                     try {
-                                        cacheService.evictConfig(savedConfig.getConfigKey());
-                                        logger.info("延迟双删：第二次删除缓存: {}", savedConfig.getConfigKey());
+                                        systemConfigRepository.refreshCache(savedConfig.getConfigKey());
+                                        logger.info("延迟双删：第二次刷新缓存: {}", savedConfig.getConfigKey());
                                     } catch (Exception e) {
                                         logger.error("延迟双删失败: {}", savedConfig.getConfigKey(), e);
                                     }
@@ -82,12 +78,12 @@ public class SystemConfigApplicationService {
                 });
             } else {
                 // 非事务环境也使用双删策略
-                cacheService.evictConfig(savedConfig.getConfigKey());
+                systemConfigRepository.refreshCache(savedConfig.getConfigKey());
                 CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                         .execute(() -> {
                             try {
-                                cacheService.evictConfig(savedConfig.getConfigKey());
-                                logger.info("延迟双删：第二次删除缓存: {}", savedConfig.getConfigKey());
+                                systemConfigRepository.refreshCache(savedConfig.getConfigKey());
+                                logger.info("延迟双删：第二次刷新缓存: {}", savedConfig.getConfigKey());
                             } catch (Exception e) {
                                 logger.error("延迟双删失败: {}", savedConfig.getConfigKey(), e);
                             }
@@ -149,9 +145,9 @@ public class SystemConfigApplicationService {
                     @Override
                     public void afterCommit() {
                         // 第一次删除
-                        cacheService.evictConfig(updatedConfig.getConfigKey());
+                        systemConfigRepository.refreshCache(updatedConfig.getConfigKey());
                         if (!oldConfigKey.equals(updatedConfig.getConfigKey())) {
-                            cacheService.evictConfig(oldConfigKey);
+                            systemConfigRepository.refreshCache(oldConfigKey);
                         }
                         logger.info("第一次删除缓存: {}", updatedConfig.getConfigKey());
                         
@@ -159,9 +155,9 @@ public class SystemConfigApplicationService {
                         CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                                 .execute(() -> {
                                     try {
-                                        cacheService.evictConfig(updatedConfig.getConfigKey());
+                                        systemConfigRepository.refreshCache(updatedConfig.getConfigKey());
                                         if (!oldConfigKey.equals(updatedConfig.getConfigKey())) {
-                                            cacheService.evictConfig(oldConfigKey);
+                                            systemConfigRepository.refreshCache(oldConfigKey);
                                         }
                                         logger.info("延迟双删：第二次删除缓存: {}", updatedConfig.getConfigKey());
                                     } catch (Exception e) {
@@ -172,16 +168,16 @@ public class SystemConfigApplicationService {
                 });
             } else {
                 // 非事务环境也使用双删
-                cacheService.evictConfig(updatedConfig.getConfigKey());
+                systemConfigRepository.refreshCache(updatedConfig.getConfigKey());
                 if (!oldConfigKey.equals(updatedConfig.getConfigKey())) {
-                    cacheService.evictConfig(oldConfigKey);
+                    systemConfigRepository.refreshCache(oldConfigKey);
                 }
                 CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                         .execute(() -> {
                             try {
-                                cacheService.evictConfig(updatedConfig.getConfigKey());
+                                systemConfigRepository.refreshCache(updatedConfig.getConfigKey());
                                 if (!oldConfigKey.equals(updatedConfig.getConfigKey())) {
-                                    cacheService.evictConfig(oldConfigKey);
+                                    systemConfigRepository.refreshCache(oldConfigKey);
                                 }
                                 logger.info("延迟双删：第二次删除缓存: {}", updatedConfig.getConfigKey());
                             } catch (Exception e) {
@@ -241,14 +237,14 @@ public class SystemConfigApplicationService {
                     @Override
                     public void afterCommit() {
                         // 第一次删除
-                        cacheService.evictConfig(configKey);
+                        systemConfigRepository.refreshCache(configKey);
                         logger.info("第一次删除缓存: {}", configKey);
                         
                         // 延迟双删
                         CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                                 .execute(() -> {
                                     try {
-                                        cacheService.evictConfig(configKey);
+                                        systemConfigRepository.refreshCache(configKey);
                                         logger.info("延迟双删：第二次删除缓存: {}", configKey);
                                     } catch (Exception e) {
                                         logger.error("延迟双删失败: {}", configKey, e);
@@ -258,11 +254,11 @@ public class SystemConfigApplicationService {
                 });
             } else {
                 // 非事务环境也使用双删
-                cacheService.evictConfig(configKey);
+                systemConfigRepository.refreshCache(configKey);
                 CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                         .execute(() -> {
                             try {
-                                cacheService.evictConfig(configKey);
+                                systemConfigRepository.refreshCache(configKey);
                                 logger.info("延迟双删：第二次删除缓存: {}", configKey);
                             } catch (Exception e) {
                                 logger.error("延迟双删失败: {}", configKey, e);
@@ -426,14 +422,14 @@ public class SystemConfigApplicationService {
                         @Override
                         public void afterCommit() {
                             // 第一次删除
-                            cacheService.evictConfigs(affectedKeys);
+                            affectedKeys.forEach(systemConfigRepository::refreshCache);
                             logger.info("第一次批量删除缓存: {}", affectedKeys);
                             
                             // 延迟双删
                             CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                                     .execute(() -> {
                                         try {
-                                            cacheService.evictConfigs(affectedKeys);
+                                            affectedKeys.forEach(systemConfigRepository::refreshCache);
                                             logger.info("延迟双删：第二次批量删除缓存: {}", affectedKeys);
                                         } catch (Exception e) {
                                             logger.error("延迟双删失败", e);
@@ -443,11 +439,11 @@ public class SystemConfigApplicationService {
                     });
                 } else {
                     // 非事务环境也使用双删
-                    cacheService.evictConfigs(affectedKeys);
+                    affectedKeys.forEach(systemConfigRepository::refreshCache);
                     CompletableFuture.delayedExecutor(500, TimeUnit.MILLISECONDS)
                             .execute(() -> {
                                 try {
-                                    cacheService.evictConfigs(affectedKeys);
+                                    affectedKeys.forEach(systemConfigRepository::refreshCache);
                                     logger.info("延迟双删：第二次批量删除缓存: {}", affectedKeys);
                                 } catch (Exception e) {
                                     logger.error("延迟双删失败", e);
@@ -477,12 +473,13 @@ public class SystemConfigApplicationService {
         try {
             if (configKeys == null || configKeys.isEmpty()) {
                 // 刷新全部
-                cacheService.evictAllConfigs();
-                cacheService.warmUpCache();
+                systemConfigRepository.refreshAllCache();
                 logger.info("已刷新全部配置缓存");
             } else {
                 // 刷新指定配置
-                cacheService.evictConfigs(new HashSet<>(configKeys));
+                for (String key : configKeys) {
+                    systemConfigRepository.refreshCache(key);
+                }
                 logger.info("已刷新指定配置缓存: {}", configKeys);
             }
             
@@ -499,7 +496,9 @@ public class SystemConfigApplicationService {
      */
     public Result<Map<String, Object>> getCacheStats() {
         try {
-            Map<String, Object> stats = cacheService.getCacheStats();
+            // 缓存统计信息已移到infrastructure层，这里返回简单信息
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("message", "缓存统计功能已移除");
             return Result.success(stats);
         } catch (Exception e) {
             logger.error("获取缓存统计信息失败", e);

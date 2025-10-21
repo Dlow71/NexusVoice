@@ -1,113 +1,119 @@
 package com.nexusvoice.domain.user.model;
 
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableName;
-import com.fasterxml.jackson.annotation.JsonFormat;
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.nexusvoice.domain.common.BaseEntity;
+import com.nexusvoice.domain.common.BaseDomainEntity;
 import com.nexusvoice.domain.user.constant.OAuthProvider;
 import com.nexusvoice.domain.user.constant.UserStatus;
 import com.nexusvoice.domain.user.constant.UserType;
-import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
 
 /**
- * 用户实体类
+ * 用户领域实体
+ * 纯净的领域模型，不包含任何技术框架注解
  * 
  * @author NexusVoice
  * @since 2025-09-23
  */
-@Schema(description = "用户实体")
-@TableName("users")
-public class User extends BaseEntity {
+public class User extends BaseDomainEntity {
 
     private static final long serialVersionUID = 1L;
 
-    // ID字段继承自BaseEntity (Long类型)
+    // ID字段继承自BaseDomainEntity (Long类型)
 
-    @Schema(description = "用户登录邮箱")
-    @TableField("email")
+    /**
+     * 用户登录邮箱
+     */
     private String email;
 
-    @Schema(description = "加密后的用户密码", hidden = true)
-    @JsonIgnore
-    @TableField("password_hash")
+    /**
+     * 加密后的用户密码
+     */
     private String passwordHash;
 
-    @Schema(description = "用户昵称")
-    @TableField("nickname")
+    /**
+     * 用户昵称
+     */
     private String nickname;
 
-    @Schema(description = "用户头像图片的URL")
-    @TableField("avatar_url")
+    /**
+     * 用户头像图片的URL
+     */
     private String avatarUrl;
 
-    @Schema(description = "手机号码")
-    @TableField("phone")
+    /**
+     * 手机号码
+     */
     private String phone;
 
-    @Schema(description = "用户类型")
-    @TableField("user_type")
+    /**
+     * 用户类型
+     */
     private UserType userType;
 
-    @Schema(description = "账户状态")
-    @TableField("status")
+    /**
+     * 账户状态
+     */
     private UserStatus status;
 
-    @Schema(description = "邮箱是否已验证 (0-未验证, 1-已验证)")
-    @TableField("email_verified")
+    /**
+     * 邮箱是否已验证 (0-未验证, 1-已验证)
+     */
     private Integer emailVerified;
 
-    @Schema(description = "最后登录时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("last_login_at")
+    /**
+     * 最后登录时间
+     */
     private LocalDateTime lastLoginAt;
 
-    @Schema(description = "用户简介")
-    @TableField("profile_bio")
+    /**
+     * 用户简介
+     */
     private String profileBio;
 
-    @Schema(description = "OAuth提供商")
-    @TableField("oauth_provider")
+    /**
+     * OAuth提供商
+     */
     private OAuthProvider oauthProvider;
 
-    @Schema(description = "OAuth用户ID")
-    @TableField("oauth_id")
+    /**
+     * OAuth用户ID
+     */
     private String oauthId;
 
-    @Schema(description = "OAuth用户名")
-    @TableField("oauth_username")
+    /**
+     * OAuth用户名
+     */
     private String oauthUsername;
 
-    @Schema(description = "OAuth头像URL")
-    @TableField("oauth_avatar_url")
+    /**
+     * OAuth头像URL
+     */
     private String oauthAvatarUrl;
 
-    @Schema(description = "OAuth访问令牌", hidden = true)
-    @JsonIgnore
-    @TableField("oauth_access_token")
+    /**
+     * OAuth访问令牌
+     */
     private String oauthAccessToken;
 
-    @Schema(description = "OAuth刷新令牌", hidden = true)
-    @JsonIgnore
-    @TableField("oauth_refresh_token")
+    /**
+     * OAuth刷新令牌
+     */
     private String oauthRefreshToken;
 
-    @Schema(description = "OAuth令牌过期时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("oauth_token_expires_at")
+    /**
+     * OAuth令牌过期时间
+     */
     private LocalDateTime oauthTokenExpiresAt;
 
-    @Schema(description = "OAuth绑定时间")
-    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    @TableField("oauth_bind_time")
+    /**
+     * OAuth绑定时间
+     */
     private LocalDateTime oauthBindTime;
 
-    @Schema(description = "OAuth原始数据")
-    @JsonIgnore
-    @TableField("oauth_raw_data")
+    /**
+     * OAuth原始数据
+     */
     private String oauthRawData;
 
     // 构造函数

@@ -576,8 +576,8 @@ public class ConversationApplicationService {
         for (int i = buffer.size() - 1; i >= 0; i--) {
             ConversationMessage msg = buffer.get(i);
             switch (msg.getRole()) {
-                case USER -> target.add(ChatMessage.user(msg.getContent()));
-                case ASSISTANT -> target.add(ChatMessage.assistant(msg.getContent()));
+                case com.nexusvoice.domain.conversation.constant.MessageRole.USER -> target.add(ChatMessage.user(msg.getContent()));
+                case com.nexusvoice.domain.conversation.constant.MessageRole.ASSISTANT -> target.add(ChatMessage.assistant(msg.getContent()));
                 default -> {}
             }
         }

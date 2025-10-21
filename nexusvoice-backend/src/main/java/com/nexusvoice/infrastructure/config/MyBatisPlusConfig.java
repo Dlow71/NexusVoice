@@ -25,7 +25,7 @@ import java.time.LocalDateTime;
  * @since 2025-09-23
  */
 @Configuration
-@MapperScan("com.nexusvoice.infrastructure.database.mapper")
+@MapperScan("com.nexusvoice.infrastructure.persistence.mapper")
 public class MyBatisPlusConfig {
 
     /**

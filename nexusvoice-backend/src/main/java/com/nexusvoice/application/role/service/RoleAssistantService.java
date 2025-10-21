@@ -444,13 +444,12 @@ public class RoleAssistantService {
 
     private void saveSystemNote(Long conversationId, String content, String metadata) {
         // 使用领域服务确保顺序号与对话活跃时间正确更新
-        ConversationMessage sys = ConversationMessage.builder()
-                .conversationId(conversationId)
-                .role(com.nexusvoice.domain.conversation.constant.MessageRole.SYSTEM)
-                .content(content)
-                .status("sent")
-                .sentAt(LocalDateTime.now())
-                .build();
+        ConversationMessage sys = new ConversationMessage();
+        sys.setConversationId(conversationId);
+        sys.setRole(com.nexusvoice.domain.conversation.constant.MessageRole.SYSTEM);
+        sys.setContent(content);
+        sys.setStatus("sent");
+        sys.setSentAt(LocalDateTime.now());
         sys.setMetadata(metadata);
         conversationDomainService.addMessageToConversation(conversationId, sys);
     }

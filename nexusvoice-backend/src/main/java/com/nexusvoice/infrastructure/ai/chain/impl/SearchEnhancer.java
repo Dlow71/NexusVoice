@@ -2,6 +2,7 @@ package com.nexusvoice.infrastructure.ai.chain.impl;
 
 import com.nexusvoice.domain.ai.model.EnhancementContext;
 import com.nexusvoice.infrastructure.ai.chain.AbstractChatEnhancer;
+import com.nexusvoice.infrastructure.ai.converter.AiModelConverter;
 import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.tool.SimpleWebSearchTool;
@@ -40,7 +41,12 @@ public class SearchEnhancer extends AbstractChatEnhancer {
         }
         
         try {
-            ChatRequest request = context.getEnhancedRequest();
+            // 从领域上下文获取基础设施请求
+            ChatRequest request = AiModelConverter.getInfrastructureRequest(context);
+            if (request == null) {
+                log.debug("无法获取请求，跳过搜索增强");
+                return context;
+            }
             
             // 提取用户查询
             String userQuery = extractLastUserMessage(request.getMessages());
@@ -87,7 +93,8 @@ public class SearchEnhancer extends AbstractChatEnhancer {
                         .knowledgeBaseIds(request.getKnowledgeBaseIds())
                         .build();
                 
-                context.setEnhancedRequest(enhancedRequest);
+                // 将增强后的基础设施请求更新到领域上下文
+                AiModelConverter.updateContextRequest(context, enhancedRequest);
                 log.info("搜索增强完成，结果长度：{}", searchResults.length());
             }
             

@@ -985,14 +985,15 @@ public class ChatStreamHandler implements WebSocketHandler {
         for (int i = buffer.size() - 1; i >= 0; i--) {
             ConversationMessage msg = buffer.get(i);
             switch (msg.getRole()) {
-                case USER:
+                case com.nexusvoice.domain.conversation.constant.MessageRole.USER -> {
                     target.add(ChatMessage.user(msg.getContent()));
-                    break;
-                case ASSISTANT:
+                }
+                case com.nexusvoice.domain.conversation.constant.MessageRole.ASSISTANT -> {
                     target.add(ChatMessage.assistant(msg.getContent()));
-                    break;
-                default:
-                    break;
+                }
+                default -> {
+                    // Ignore other message roles
+                }
             }
         }
     }

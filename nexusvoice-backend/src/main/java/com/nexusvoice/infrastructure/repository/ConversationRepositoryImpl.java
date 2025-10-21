@@ -6,9 +6,9 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.nexusvoice.domain.conversation.constant.ConversationStatus;
 import com.nexusvoice.domain.conversation.model.Conversation;
 import com.nexusvoice.domain.conversation.repository.ConversationRepository;
-import com.nexusvoice.infrastructure.database.entity.ConversationEntity;
-import com.nexusvoice.infrastructure.database.mapper.ConversationMapper;
-import org.springframework.beans.BeanUtils;
+import com.nexusvoice.infrastructure.persistence.converter.ConversationPOConverter;
+import com.nexusvoice.infrastructure.persistence.mapper.ConversationPOMapper;
+import com.nexusvoice.infrastructure.persistence.po.ConversationPO;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 
 /**
  * 对话仓储实现类
+ * 使用PO层进行持久化操作
  *
  * @author NexusVoice
  * @since 2025-09-25
@@ -25,175 +26,187 @@ import java.util.stream.Collectors;
 @Repository
 public class ConversationRepositoryImpl implements ConversationRepository {
 
-    private final ConversationMapper conversationMapper;
+    private final ConversationPOMapper mapper;
+    private final ConversationPOConverter converter;
 
-    public ConversationRepositoryImpl(ConversationMapper conversationMapper) {
-        this.conversationMapper = conversationMapper;
+    public ConversationRepositoryImpl(ConversationPOMapper mapper, ConversationPOConverter converter) {
+        this.mapper = mapper;
+        this.converter = converter;
     }
 
     @Override
     public Conversation save(Conversation conversation) {
-        ConversationEntity entity = convertToEntity(conversation);
+        ConversationPO po = converter.toPO(conversation);
         
-        if (entity.getId() == null) {
-            // 新增
-            conversationMapper.insert(entity);
+        if (po.getId() == null) {
+            mapper.insert(po);
+            conversation.setId(po.getId());
         } else {
-            // 更新
-            conversationMapper.updateById(entity);
+            mapper.updateById(po);
         }
         
-        return convertToDomain(entity);
+        return converter.toDomain(po);
     }
 
     @Override
     public Optional<Conversation> findById(Long conversationId) {
-        ConversationEntity entity = conversationMapper.selectById(conversationId);
-        return entity != null ? Optional.of(convertToDomain(entity)) : Optional.empty();
+        ConversationPO po = mapper.selectById(conversationId);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
     public Optional<Conversation> findByIdAndUserId(Long conversationId, Long userId) {
-        LambdaQueryWrapper<ConversationEntity> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ConversationEntity::getId, conversationId)
-                    .eq(ConversationEntity::getUserId, userId)
-                    .eq(ConversationEntity::getDeleted, 0);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getId, conversationId)
+                    .eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0);
         
-        ConversationEntity entity = conversationMapper.selectOne(queryWrapper);
-        return entity != null ? Optional.of(convertToDomain(entity)) : Optional.empty();
+        ConversationPO po = mapper.selectOne(queryWrapper);
+        return Optional.ofNullable(converter.toDomain(po));
     }
 
     @Override
     public List<Conversation> findByUserId(Long userId) {
-        LambdaQueryWrapper<ConversationEntity> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ConversationEntity::getUserId, userId)
-                    .eq(ConversationEntity::getDeleted, 0)
-                    .orderByDesc(ConversationEntity::getLastActiveAt);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0)
+                    .orderByDesc(ConversationPO::getLastActiveAt);
         
-        List<ConversationEntity> entities = conversationMapper.selectList(queryWrapper);
-        return entities.stream()
-                      .map(this::convertToDomain)
+        return mapper.selectList(queryWrapper).stream()
+                      .map(converter::toDomain)
                       .collect(Collectors.toList());
     }
 
     @Override
     public List<Conversation> findByUserIdAndStatus(Long userId, ConversationStatus status) {
-        LambdaQueryWrapper<ConversationEntity> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ConversationEntity::getUserId, userId)
-                    .eq(ConversationEntity::getStatus, status.name())
-                    .eq(ConversationEntity::getDeleted, 0)
-                    .orderByDesc(ConversationEntity::getLastActiveAt);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getStatus, convertStatusToString(status))
+                    .eq(ConversationPO::getDeleted, 0)
+                    .orderByDesc(ConversationPO::getLastActiveAt);
         
-        List<ConversationEntity> entities = conversationMapper.selectList(queryWrapper);
-        return entities.stream()
-                      .map(this::convertToDomain)
+        return mapper.selectList(queryWrapper).stream()
+                      .map(converter::toDomain)
                       .collect(Collectors.toList());
     }
 
     @Override
     public List<Conversation> findByUserIdWithPaging(Long userId, Integer page, Integer size) {
-        Page<ConversationEntity> pageRequest = new Page<>(page, size);
-        LambdaQueryWrapper<ConversationEntity> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ConversationEntity::getUserId, userId)
-                    .eq(ConversationEntity::getDeleted, 0)
-                    .orderByDesc(ConversationEntity::getLastActiveAt);
+        Page<ConversationPO> pageRequest = new Page<>(page, size);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0)
+                    .orderByDesc(ConversationPO::getLastActiveAt);
         
-        Page<ConversationEntity> result = conversationMapper.selectPage(pageRequest, queryWrapper);
+        Page<ConversationPO> result = mapper.selectPage(pageRequest, queryWrapper);
         return result.getRecords().stream()
-                     .map(this::convertToDomain)
+                     .map(converter::toDomain)
                      .collect(Collectors.toList());
     }
 
     @Override
     public List<Conversation> findRecentByUserId(Long userId, Integer limit) {
-        List<ConversationEntity> entities = conversationMapper.findRecentByUserId(userId, limit);
-        return entities.stream()
-                      .map(this::convertToDomain)
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0)
+                    .orderByDesc(ConversationPO::getLastActiveAt)
+                    .last("LIMIT " + limit);
+        
+        return mapper.selectList(queryWrapper).stream()
+                      .map(converter::toDomain)
                       .collect(Collectors.toList());
     }
 
     @Override
     public List<Conversation> searchByUserIdAndKeyword(Long userId, String keyword) {
-        List<ConversationEntity> entities = conversationMapper.searchByUserIdAndKeyword(userId, keyword);
-        return entities.stream()
-                      .map(this::convertToDomain)
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0)
+                    .and(wrapper -> wrapper.like(ConversationPO::getTitle, keyword)
+                                          .or()
+                                          .like(ConversationPO::getSystemPrompt, keyword))
+                    .orderByDesc(ConversationPO::getLastActiveAt);
+        
+        return mapper.selectList(queryWrapper).stream()
+                      .map(converter::toDomain)
                       .collect(Collectors.toList());
     }
 
     @Override
     public Long countByUserId(Long userId) {
-        LambdaQueryWrapper<ConversationEntity> queryWrapper = new LambdaQueryWrapper<>();
-        queryWrapper.eq(ConversationEntity::getUserId, userId)
-                    .eq(ConversationEntity::getDeleted, 0);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0);
         
-        return conversationMapper.selectCount(queryWrapper);
+        return mapper.selectCount(queryWrapper);
     }
 
     @Override
     public Long countByUserIdAndStatus(Long userId, ConversationStatus status) {
-        return conversationMapper.countByUserIdAndStatus(userId, status.name());
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getStatus, convertStatusToString(status))
+                    .eq(ConversationPO::getDeleted, 0);
+        
+        return mapper.selectCount(queryWrapper);
     }
 
     @Override
     public void deleteById(Long conversationId) {
-        conversationMapper.deleteById(conversationId);
+        mapper.deleteById(conversationId);
     }
 
     @Override
     public void logicalDeleteById(Long conversationId) {
-        LambdaUpdateWrapper<ConversationEntity> updateWrapper = new LambdaUpdateWrapper<>();
-        updateWrapper.eq(ConversationEntity::getId, conversationId)
-                     .set(ConversationEntity::getDeleted, 1)
-                     .set(ConversationEntity::getUpdatedAt, LocalDateTime.now());
+        LambdaUpdateWrapper<ConversationPO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(ConversationPO::getId, conversationId)
+                     .set(ConversationPO::getDeleted, 1)
+                     .set(ConversationPO::getUpdatedAt, LocalDateTime.now());
         
-        conversationMapper.update(null, updateWrapper);
+        mapper.update(null, updateWrapper);
     }
 
     @Override
     public void updateStatusByIds(List<Long> conversationIds, ConversationStatus status) {
-        conversationMapper.updateStatusByIds(conversationIds, status.name());
+        LambdaUpdateWrapper<ConversationPO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.in(ConversationPO::getId, conversationIds)
+                     .set(ConversationPO::getStatus, convertStatusToString(status))
+                     .set(ConversationPO::getUpdatedAt, LocalDateTime.now());
+        
+        mapper.update(null, updateWrapper);
     }
 
     @Override
     public void deleteArchivedConversationsBefore(LocalDateTime dateTime) {
-        conversationMapper.deleteArchivedConversationsBefore(dateTime);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getStatus, "ARCHIVED")
+                    .lt(ConversationPO::getUpdatedAt, dateTime);
+        
+        mapper.delete(queryWrapper);
     }
 
     @Override
     public boolean existsById(Long conversationId) {
-        return conversationMapper.selectById(conversationId) != null;
+        return mapper.selectById(conversationId) != null;
     }
 
     @Override
     public boolean existsByIdAndUserId(Long conversationId, Long userId) {
-        return conversationMapper.existsByIdAndUserId(conversationId, userId);
+        LambdaQueryWrapper<ConversationPO> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(ConversationPO::getId, conversationId)
+                    .eq(ConversationPO::getUserId, userId)
+                    .eq(ConversationPO::getDeleted, 0);
+        
+        return mapper.selectCount(queryWrapper) > 0;
     }
 
     /**
-     * 将领域对象转换为数据库实体
+     * 状态枚举转String
      */
-    private ConversationEntity convertToEntity(Conversation conversation) {
-        ConversationEntity entity = new ConversationEntity();
-        BeanUtils.copyProperties(conversation, entity);
-        
-        if (conversation.getStatus() != null) {
-            entity.setStatus(conversation.getStatus().name());
+    private String convertStatusToString(ConversationStatus status) {
+        if (status == null) {
+            return "ACTIVE";
         }
-        
-        return entity;
-    }
-
-    /**
-     * 将数据库实体转换为领域对象
-     */
-    private Conversation convertToDomain(ConversationEntity entity) {
-        Conversation conversation = new Conversation();
-        BeanUtils.copyProperties(entity, conversation);
-        
-        if (entity.getStatus() != null) {
-            conversation.setStatus(ConversationStatus.valueOf(entity.getStatus()));
-        }
-        
-        return conversation;
+        return status.name();
     }
 }
