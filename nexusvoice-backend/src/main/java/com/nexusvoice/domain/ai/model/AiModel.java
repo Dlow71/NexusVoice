@@ -7,7 +7,10 @@ import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -105,6 +108,24 @@ public class AiModel extends BaseDomainEntity {
     private Integer priority;
     
     /**
+     * 模型支持的能力列表（数组）
+     * 如：ocr, vision, thinking, tool_call, multimodal
+     */
+    private String[] capabilities;
+    
+    /**
+     * 支持的输入类型（数组）
+     * 如：text, image, video, audio
+     */
+    private String[] inputTypes;
+    
+    /**
+     * 支持的输出类型（数组）
+     * 如：text, image, audio
+     */
+    private String[] outputTypes;
+    
+    /**
      * 获取模型唯一标识
      */
     public String getModelKey() {
@@ -187,5 +208,106 @@ public class AiModel extends BaseDomainEntity {
             log.error("解析配置JSON失败，模型：{}，配置：{}", getModelKey(), configJson, e);
             return new HashMap<>();
         }
+    }
+    
+    /**
+     * 获取能力列表
+     */
+    public List<String> getCapabilitiesList() {
+        return capabilities != null ? Arrays.asList(capabilities) : Collections.emptyList();
+    }
+    
+    /**
+     * 获取输入类型列表
+     */
+    public List<String> getInputTypesList() {
+        return inputTypes != null ? Arrays.asList(inputTypes) : Collections.emptyList();
+    }
+    
+    /**
+     * 获取输出类型列表
+     */
+    public List<String> getOutputTypesList() {
+        return outputTypes != null ? Arrays.asList(outputTypes) : Collections.emptyList();
+    }
+    
+    /**
+     * 检查是否支持指定能力
+     * @param capability 能力名称（ocr/vision/thinking/tool_call/multimodal）
+     * @return 是否支持
+     */
+    public boolean hasCapability(String capability) {
+        if (capabilities == null || capability == null) {
+            return false;
+        }
+        return Arrays.asList(capabilities).contains(capability.toLowerCase());
+    }
+    
+    /**
+     * 检查是否支持OCR能力
+     */
+    public boolean supportsOcr() {
+        return hasCapability("ocr");
+    }
+    
+    /**
+     * 检查是否支持视觉理解能力
+     */
+    public boolean supportsVision() {
+        return hasCapability("vision");
+    }
+    
+    /**
+     * 检查是否支持深度思考能力
+     */
+    public boolean supportsThinking() {
+        return hasCapability("thinking");
+    }
+    
+    /**
+     * 检查是否支持工具调用能力
+     */
+    public boolean supportsToolCall() {
+        return hasCapability("tool_call");
+    }
+    
+    /**
+     * 检查是否为多模态模型
+     */
+    public boolean isMultimodal() {
+        return hasCapability("multimodal");
+    }
+    
+    /**
+     * 检查是否支持指定输入类型
+     * @param inputType 输入类型（text/image/video/audio）
+     * @return 是否支持
+     */
+    public boolean supportsInputType(String inputType) {
+        if (inputTypes == null || inputType == null) {
+            return false;
+        }
+        return Arrays.asList(inputTypes).contains(inputType.toLowerCase());
+    }
+    
+    /**
+     * 检查是否支持图像输入
+     */
+    public boolean supportsImageInput() {
+        return supportsInputType("image");
+    }
+    
+    /**
+     * 检查是否支持视频输入
+     */
+    public boolean supportsVideoInput() {
+        return supportsInputType("video");
+    }
+    
+    /**
+     * 检查是否支持音频输入
+     */
+    public boolean supportsAudioInput() {
+        return supportsInputType("audio");
     }
 }

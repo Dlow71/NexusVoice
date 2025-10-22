@@ -67,7 +67,20 @@
             <div class="message-bubble">
               <!-- 用户消息 -->
               <div v-if="message.type === 'user'" class="message-content">
-                {{ message.content }}
+                <!-- 图片预览 -->
+                <div v-if="message.images && message.images.length > 0" class="message-images">
+                  <img 
+                    v-for="(imgSrc, idx) in message.images" 
+                    :key="idx" 
+                    :src="imgSrc" 
+                    alt="用户上传的图片" 
+                    class="message-image"
+                  />
+                </div>
+                <!-- 文本内容 -->
+                <div v-if="message.content" class="message-text">
+                  {{ message.content }}
+                </div>
               </div>
               
               <!-- AI消息 -->
@@ -136,25 +149,23 @@
             <label class="model-label">
               <span class="model-icon">🤖</span>
               <span v-if="isModelLocked" class="lock-icon" title="会话已绑定模型，无法切换">🔒</span>
-              模型：
             </label>
-            <div class="model-buttons">
-              <button 
-                v-for="model in availableModels" 
+            <el-select 
+              v-model="selectedModel" 
+              placeholder="选择模型"
+              :disabled="isModelLocked"
+              class="model-select"
+              size="small"
+              placement="top"
+              popper-class="model-select-popper"
+            >
+              <el-option
+                v-for="model in availableModels"
                 :key="model.modelKey"
-                @click="!isModelLocked && (selectedModel = model.modelKey)"
-                :class="{ 
-                  'active': selectedModel === model.modelKey,
-                  'disabled': isModelLocked
-                }"
-                :disabled="isModelLocked"
-                class="model-btn"
-                :title="isModelLocked ? '当前会话已绑定' + model.modelName : model.description"
-              >
-                <span class="model-name">{{ model.modelName }}</span>
-                <span v-if="selectedModel === model.modelKey" class="check-mark">✓</span>
-              </button>
-            </div>
+                :label="model.modelName"
+                :value="model.modelKey"
+              />
+            </el-select>
           </div>
           
           <div class="search-toggle-container">
@@ -173,8 +184,34 @@
           </div>
         </div>
         
+        <!-- 图片预览区域 -->
+        <div v-if="selectedImages.length > 0" class="image-preview-container">
+          <div v-for="(img, index) in selectedImages" :key="index" class="image-preview-item">
+            <img :src="img.preview" alt="预览图" class="preview-image" />
+            <button @click="removeImage(index)" class="remove-image-btn">×</button>
+          </div>
+        </div>
+        
         <!-- 输入框和发送按钮 -->
         <div class="input-area">
+          <!-- 隐藏的图片input -->
+          <input 
+            ref="imageInput"
+            type="file" 
+            accept="image/*" 
+            multiple 
+            @change="handleImageSelect"
+            style="display: none;"
+          />
+          <!-- 图片上传按钮 -->
+          <button 
+            @click="triggerImageSelect" 
+            :disabled="!isConnected || selectedImages.length >= maxImages"
+            class="image-upload-btn"
+            :title="selectedImages.length >= maxImages ? `最多上传${maxImages}张图片` : '上传图片'"
+          >
+            📷
+          </button>
           <input 
             v-model="inputMessage" 
             @keypress.enter="sendMessage"
@@ -184,7 +221,7 @@
           />
           <button 
             @click="sendMessage" 
-            :disabled="!isConnected || isSending || !inputMessage.trim()"
+            :disabled="!isConnected || isSending || (!inputMessage.trim() && selectedImages.length === 0)"
             class="send-btn"
           >
             {{ isSending ? '发送中...' : '发送' }}
@@ -387,8 +424,13 @@ const roleId = computed(() => route.params.roleId); // 从路由获取动态role
 
 // 模型选择相关
 const availableModels = ref([]); // 可用模型列表
-const selectedModel = ref('openai:gpt-oss-20b'); // 默认选中gpt-oss-20b
+const selectedModel = ref('deepseek:deepseek-v3.1'); // 默认选中DeepSeek V3.1
 const isModelLocked = computed(() => !!conversationId.value); // 有对话后锁定模型
+
+// 图片上传相关
+const selectedImages = ref([]); // 已选择的图片列表 [{file: File, preview: string}]
+const imageInput = ref(null); // 图片input引用
+const maxImages = 5; // 最大图片数量
 
 // 角色信息
 const currentCharacter = ref(null);
@@ -408,61 +450,63 @@ const fetchAvailableModels = async () => {
   try {
     const response = await characterApi.getAvailableModels();
     if (response.data.success && response.data.data) {
-      // 只保留我们需要的三个模型
-      availableModels.value = response.data.data.filter(
-        model => model.modelKey === 'openai:gpt-oss-20b' || 
-                model.modelKey === 'grok:grok-4-fast' ||
-                model.modelKey === 'deepseek:deepseek-v3.1'
-      );
-      
-      // 如果没有找到指定的模型，手动添加（作为备用）
-      if (availableModels.value.length === 0) {
-        availableModels.value = [
-          {
-            modelKey: 'openai:gpt-oss-20b',
-            modelName: 'GPT OSS 20B',
-            description: 'OpenAI兼容的开源模型',
-            contextWindow: 128000
-          },
-          {
-            modelKey: 'grok:grok-4-fast',
-            modelName: 'Grok 4 Fast',
-            description: 'xAI Grok 4快速版',
-            contextWindow: 131072
-          },
-          {
-            modelKey: 'deepseek:deepseek-v3.1',
-            modelName: 'DeepSeek V3.1',
-            description: 'DeepSeek 深度思考模型',
-            contextWindow: 131072
-          }
-        ];
-      }
+      // 显示所有可用模型，不再过滤
+      availableModels.value = response.data.data;
+      console.log('加载到', availableModels.value.length, '个可用模型');
     }
   } catch (error) {
     console.error('加载模型列表失败:', error);
-    // 如果调用失败，使用默认配置
-    availableModels.value = [
-      {
-        modelKey: 'openai:gpt-oss-20b',
-        modelName: 'GPT OSS 20B',
-        description: 'OpenAI兼容的开源模型',
-        contextWindow: 128000
-      },
-      {
-        modelKey: 'grok:grok-4-fast',
-        modelName: 'Grok 4 Fast',
-        description: 'xAI Grok 4快速版',
-        contextWindow: 131072
-      },
-      {
-        modelKey: 'deepseek:deepseek-v3.1',
-        modelName: 'DeepSeek V3.1',
-        description: 'DeepSeek 深度思考模型',
-        contextWindow: 131072
-      }
-    ];
+    ElMessage.error('加载模型列表失败');
   }
+};
+
+// 图片上传相关方法
+const triggerImageSelect = () => {
+  imageInput.value?.click();
+};
+
+const handleImageSelect = async (event) => {
+  const files = Array.from(event.target.files || []);
+  
+  // 检查数量限制
+  const remainingSlots = maxImages - selectedImages.value.length;
+  if (remainingSlots <= 0) {
+    ElMessage.warning(`最多只能上传${maxImages}张图片`);
+    return;
+  }
+  
+  const filesToAdd = files.slice(0, remainingSlots);
+  
+  for (const file of filesToAdd) {
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      ElMessage.warning(`文件 ${file.name} 不是图片格式`);
+      continue;
+    }
+    
+    // 检查文件大小（限制为10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      ElMessage.warning(`图片 ${file.name} 大小超过10MB`);
+      continue;
+    }
+    
+    // 创建预览
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      selectedImages.value.push({
+        file: file,
+        preview: e.target.result
+      });
+    };
+    reader.readAsDataURL(file);
+  }
+  
+  // 清空input，允许重复选择同一文件
+  event.target.value = '';
+};
+
+const removeImage = (index) => {
+  selectedImages.value.splice(index, 1);
 };
 
 // 音频播放相关
@@ -558,10 +602,11 @@ const initWebSocket = () => {
     
     ws.value.onmessage = (event) => {
       try {
+        console.log('[WebSocket原始消息]', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
         const data = JSON.parse(event.data);
         handleWebSocketMessage(data);
       } catch (error) {
-        console.error('解析WebSocket消息失败:', error);
+        console.error('解析WebSocket消息失败:', error, event.data);
       }
     };
     
@@ -605,6 +650,11 @@ const initWebSocket = () => {
 const handleWebSocketMessage = (data) => {
   console.log(`[收到消息] 类型: ${data.type}`, data);
   
+  // 增强日志：显示消息详情
+  if (data.type === 'CONTENT' && data.delta) {
+    console.log('[内容增量]', data.delta.substring(0, 100) + (data.delta.length > 100 ? '...' : ''));
+  }
+  
   switch (data.type) {
     case 'START':
       handleStartMessage(data);
@@ -634,7 +684,7 @@ const handleWebSocketMessage = (data) => {
 
 // 处理START消息
 const handleStartMessage = (data) => {
-  console.log('[开始流式输出]', data);
+  console.log('[开始流式输出] 🚀', data);
   isAIThinking.value = false;
   systemMessage.value = `${currentCharacter.value?.name || 'AI'} 正在回复...`;
   
@@ -648,6 +698,8 @@ const handleStartMessage = (data) => {
     model: data.model
   };
   messages.value.push(aiMessage);
+  console.log('[START] 创建新消息，isStreaming=true，消息ID:', aiMessage.id);
+  console.log('[START] 消息数组长度:', messages.value.length);
   scrollToBottom();
   
   // 记录开始时间
@@ -663,31 +715,50 @@ const handleStartMessage = (data) => {
 
 // 处理CONTENT消息
 const handleContentMessage = (data) => {
-  const lastMessage = messages.value[messages.value.length - 1];
-  if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
-    const delta = data.delta || '';
-    lastMessage.content += delta;
-    
-    // 更新最后收到内容的时间
-    if (delta.length > 0) {
-      lastContentTime = Date.now();
-      
-      // 检测是否有完整的句子结束标记
-      const fullContent = lastMessage.content;
-      hasCompleteSentence = /[。！？.!?]\s*$/.test(fullContent) || 
-                           /[。！？.!?][\s\n]/.test(fullContent) ||
-                           fullContent.includes('\n\n');
-      
-      if (hasCompleteSentence) {
-        console.log('[句子检测] 检测到完整句子结束');
-      }
-    }
-    
-    scrollToBottom();
-    
-    // 重置超时定时器（收到新内容，说明还在正常处理）
-    startMessageTimeout();
+  let lastMessage = messages.value[messages.value.length - 1];
+  console.log('[当前消息数组长度]', messages.value.length);
+  console.log('[最后消息]', lastMessage);
+  console.log('[isStreaming状态]', lastMessage?.isStreaming);
+  
+  // 如果最后一条消息不是流式消息，或者不存在，创建一个新的
+  if (!lastMessage || lastMessage.type !== 'assistant' || !lastMessage.isStreaming) {
+    console.warn('[异常] 收到CONTENT但没有活跃的流式消息，创建新消息');
+    const aiMessage = {
+      id: `msg-${Date.now()}`,
+      type: 'assistant',
+      content: '',
+      isStreaming: true,
+      audioSegments: [],
+      timestamp: new Date(),
+      model: data.model
+    };
+    messages.value.push(aiMessage);
+    lastMessage = aiMessage;
   }
+  
+  const delta = data.delta || '';
+  lastMessage.content += delta;
+  console.log('[累计内容长度]', lastMessage.content.length);
+  
+  // 更新最后收到内容的时间
+  if (delta.length > 0) {
+    lastContentTime = Date.now();
+    
+    // 检测是否有完整的句子结束标记
+    const fullContent = lastMessage.content;
+    hasCompleteSentence = /[。！？.!?]\s*$/.test(fullContent) || 
+                         /[。！？.!?][\s\n]/.test(fullContent) ||
+                         fullContent.includes('\n\n');
+    
+    if (hasCompleteSentence) {
+      console.log('[句子检测] 检测到完整句子结束');
+    }
+  }
+  
+  scrollToBottom();
+  
+  // 重置超时定时器（收到新内容，说明还在正常处理）
+  startMessageTimeout();
 };
 
 // 处理TTS_SEGMENT消息
@@ -732,6 +803,8 @@ const handleEndMessage = (data) => {
   
   const lastMessage = messages.value[messages.value.length - 1];
   if (lastMessage && lastMessage.type === 'assistant') {
+    console.log('[最终消息内容]', lastMessage.content);
+    console.log('[消息长度]', lastMessage.content.length);
     lastMessage.isStreaming = false;
     
     // 保存conversationId
@@ -841,7 +914,8 @@ const handleErrorMessage = (data) => {
 
 // 发送消息
 const sendMessage = async () => {
-  if (!inputMessage.value.trim() || !isConnected.value) {
+  // 修改：允许只发送图片或只发送文本
+  if ((!inputMessage.value.trim() && selectedImages.value.length === 0) || !isConnected.value) {
     return;
   }
   
@@ -879,15 +953,18 @@ const sendMessage = async () => {
   }
   
   const messageText = inputMessage.value.trim();
+  const imagesToSend = [...selectedImages.value]; // 保存当前选中的图片
   inputMessage.value = '';
+  selectedImages.value = []; // 清空图片列表
   
   stopAudioPlayback();
   
-  // 添加用户消息到列表
+  // 添加用户消息到列表（包含图片）
   messages.value.push({
     id: `msg-${Date.now()}`,
     type: 'user',
     content: messageText,
+    images: imagesToSend.map(img => img.preview), // 保存图片预览用于显示
     timestamp: new Date()
   });
   
@@ -899,13 +976,23 @@ const sendMessage = async () => {
   // 构建请求消息（注意：WebSocket使用conversationId而不是roleId）
   const requestData = {
     conversationId: conversationId.value,  // 使用已创建的对话ID
-    message: messageText,
+    message: messageText || '请看图片', // 如果没有文本，提供默认文本
     enableWebSearch: enableWebSearch.value,
-    enableAudio: enableAudio.value  // 建议：如果后端TTS有问题，可以先设为false
+    enableAudio: enableAudio.value,  // 建议：如果后端TTS有问题，可以先设为false
+    // 添加图片数据（如果有）
+    imageUrls: imagesToSend.length > 0 ? imagesToSend.map(img => img.preview) : undefined
     // 不需要roleId，因为对话已经关联了角色
   };
   
-  console.log('[发送WebSocket消息]', requestData);
+  // 日志输出（不显示完整Base64以避免控制台卡顿）
+  if (imagesToSend.length > 0) {
+    console.log('[发送WebSocket消息] 包含', imagesToSend.length, '张图片');
+    imagesToSend.forEach((img, idx) => {
+      const preview = img.preview.substring(0, 50) + '...';
+      console.log(`  图片${idx + 1}:`, preview);
+    });
+  }
+  console.log('[发送WebSocket消息]', { ...requestData, imageUrls: requestData.imageUrls ? `${requestData.imageUrls.length}张图片` : undefined });
   
   // 发送到WebSocket
   if (ws.value && ws.value.readyState === WebSocket.OPEN) {
@@ -1601,6 +1688,7 @@ const previewVoice = () => {
     currentPreviewAudio.play();
   }
 };
+
 
 // 生命周期
 onMounted(async () => {
@@ -2599,5 +2687,193 @@ input:checked + .slider:before {
 .btn-preview:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ==================== 模型选择器样式 ==================== */
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.model-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.model-icon {
+  font-size: 1.2rem;
+}
+
+.lock-icon {
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+/* Element Plus 下拉框样式 */
+.model-select {
+  min-width: 150px;
+}
+
+.model-select :deep(.el-input__wrapper) {
+  background-color: #374151 !important;
+  border: 1px solid #4b5563 !important;
+  box-shadow: none !important;
+}
+
+.model-select :deep(.el-input__inner) {
+  color: #e5e7eb !important;
+}
+
+.model-select :deep(.el-input__wrapper:hover) {
+  border-color: #6b7280 !important;
+}
+
+.model-select :deep(.el-input__wrapper.is-focus) {
+  border-color: #10b981 !important;
+}
+
+.model-select :deep(.el-select__caret) {
+  color: #9ca3af !important;
+}
+
+.model-selector.locked .model-select {
+  opacity: 0.6;
+}
+
+
+/* ==================== 图片上传相关样式 ==================== */
+.image-upload-btn {
+  padding: 0.5rem 0.8rem;
+  background-color: #374151;
+  border: 1px solid #4b5563;
+  border-radius: 8px;
+  color: #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 1.2rem;
+}
+
+.image-upload-btn:hover:not(:disabled) {
+  background-color: #4b5563;
+  border-color: #6b7280;
+  transform: scale(1.1);
+}
+
+.image-upload-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.image-preview-container {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: #1f2937;
+  border-radius: 8px;
+  margin-bottom: 0.5rem;
+  overflow-x: auto;
+}
+
+.image-preview-item {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.preview-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 2px solid #4b5563;
+}
+
+.remove-image-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  color: white;
+  border: 2px solid white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.remove-image-btn:hover {
+  background-color: #dc2626;
+  transform: scale(1.1);
+}
+
+/* 消息中的图片显示 */
+.message-images {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.message-image {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.message-image:hover {
+  transform: scale(1.05);
+}
+
+.message-text {
+  word-wrap: break-word;
+}
+</style>
+
+<!-- 全局样式：覆盖Element Plus下拉菜单（不使用scoped） -->
+<style>
+/* 下拉菜单深色主题 */
+.model-select-popper.el-select-dropdown {
+  background-color: #1f2937 !important;
+  border: 1px solid #4b5563 !important;
+}
+
+.model-select-popper .el-select-dropdown__item {
+  color: #e5e7eb !important;
+  background-color: transparent !important;
+}
+
+.model-select-popper .el-select-dropdown__item:hover {
+  background-color: #374151 !important;
+}
+
+.model-select-popper .el-select-dropdown__item.selected {
+  color: #10b981 !important;
+  font-weight: 600 !important;
+}
+
+.model-select-popper .el-select-dropdown__item.selected::after {
+  content: "✓";
+  margin-left: 8px;
+  color: #10b981;
+}
+
+/* 滚动条样式 */
+.model-select-popper .el-select-dropdown__wrap {
+  background-color: #1f2937 !important;
+}
+
+.model-select-popper .el-scrollbar__thumb {
+  background-color: #4b5563 !important;
 }
 </style>

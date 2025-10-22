@@ -94,6 +94,16 @@ public class ChatRequest {
      * RAG知识库ID列表
      */
     private List<Long> knowledgeBaseIds;
+    
+    /**
+     * 图像URL列表（支持多图输入）
+     */
+    private List<String> imageUrls;
+    
+    /**
+     * Base64编码的图像数据（单图输入）
+     */
+    private String imageBase64;
 
     /**
      * 创建默认配置的请求

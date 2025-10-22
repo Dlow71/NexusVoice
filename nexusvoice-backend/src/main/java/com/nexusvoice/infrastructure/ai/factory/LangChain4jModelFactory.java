@@ -5,6 +5,7 @@ import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.model.DeepSeekModelAdapter;
+import com.nexusvoice.infrastructure.ai.model.DoubaoModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.GrokModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.OpenAiModelAdapter;
 import com.nexusvoice.infrastructure.ai.model.SiliconFlowEmbeddingAdapter;
@@ -37,6 +38,9 @@ public class LangChain4jModelFactory {
     
     @Autowired
     private DeepSeekModelAdapter deepSeekModelAdapter;
+    
+    @Autowired
+    private DoubaoModelAdapter doubaoModelAdapter;
     
     @Autowired
     private SiliconFlowEmbeddingAdapter siliconFlowEmbeddingAdapter;
@@ -76,6 +80,9 @@ public class LangChain4jModelFactory {
                 break;
             case "deepseek":
                 chatModel = deepSeekModelAdapter.createChatModel(model, apiKey);
+                break;
+            case "doubao":
+                chatModel = doubaoModelAdapter.createChatModel(model, apiKey);
                 break;
             case "claude":
                 chatModel = createClaudeChatModel(model, apiKey);
@@ -124,6 +131,9 @@ public class LangChain4jModelFactory {
                 break;
             case "deepseek":
                 streamingModel = deepSeekModelAdapter.createStreamingChatModel(model, apiKey);
+                break;
+            case "doubao":
+                streamingModel = doubaoModelAdapter.createStreamingChatModel(model, apiKey);
                 break;
             case "claude":
                 streamingModel = createClaudeStreamingChatModel(model, apiKey);

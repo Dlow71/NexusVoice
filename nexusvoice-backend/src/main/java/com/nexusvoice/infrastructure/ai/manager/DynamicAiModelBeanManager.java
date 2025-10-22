@@ -16,10 +16,7 @@ import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
 import com.nexusvoice.infrastructure.ai.pool.ApiKeyPoolManager;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.*;
 import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
@@ -301,6 +298,10 @@ public class DynamicAiModelBeanManager {
             LocalDateTime requestTime = LocalDateTime.now();
             String requestId = UUID.randomUUID().toString();
             
+            log.info("开始流式聊天，模型：{}，包含图片：{}", 
+                model.getModelKey(), 
+                request.getImageUrls() != null ? request.getImageUrls().size() : 0);
+            
             AiApiKey apiKey = null;
             
             try {
@@ -446,6 +447,7 @@ public class DynamicAiModelBeanManager {
         
         /**
          * 转换消息格式
+         * 支持多模态输入（文本+图像）
          */
         private List<ChatMessage> convertMessages(ChatRequest request) {
             List<ChatMessage> messages = new ArrayList<>();
@@ -456,7 +458,34 @@ public class DynamicAiModelBeanManager {
                         messages.add(SystemMessage.from(msg.getContent()));
                         break;
                     case USER:
-                        messages.add(UserMessage.from(msg.getContent()));
+                        // 检查是否需要添加图像（仅对最后一条用户消息添加图像）
+                        boolean isLastUserMessage = request.getMessages().indexOf(msg) == request.getMessages().size() - 1;
+                        if (isLastUserMessage && request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+                            // 创建多模态消息（文本+图像）
+                            List<Content> contents = new ArrayList<>();
+                            
+                            // 添加文本内容
+                            if (msg.getContent() != null && !msg.getContent().isEmpty()) {
+                                contents.add(TextContent.from(msg.getContent()));
+                            }
+                            
+                            // 添加图像内容（Base64格式）
+                            for (int i = 0; i < request.getImageUrls().size(); i++) {
+                                String imageUrl = request.getImageUrls().get(i);
+                                // 记录图片URL的前缀信息（不记录完整Base64以避免日志过大）
+                                String prefix = imageUrl.length() > 50 ? imageUrl.substring(0, 50) + "..." : imageUrl;
+                                log.debug("添加图像{}，格式：{}", i + 1, prefix);
+                                contents.add(ImageContent.from(imageUrl));
+                            }
+                            
+                            messages.add(UserMessage.from(contents));
+                            log.info("✅ 创建多模态用户消息成功 - 文本内容：{}，图像数量：{}", 
+                                msg.getContent() != null && !msg.getContent().isEmpty() ? "有" : "无",
+                                request.getImageUrls().size());
+                        } else {
+                            // 纯文本消息
+                            messages.add(UserMessage.from(msg.getContent()));
+                        }
                         break;
                     case ASSISTANT:
                         messages.add(AiMessage.from(msg.getContent()));

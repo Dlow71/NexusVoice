@@ -86,6 +86,16 @@ public class AiChatRequest {
      * RAG知识库ID列表
      */
     private List<Long> knowledgeBaseIds;
+    
+    /**
+     * 图像URL列表（支持多图输入）
+     */
+    private List<String> imageUrls;
+    
+    /**
+     * Base64编码的图像数据（单图输入）
+     */
+    private String imageBase64;
 
     /**
      * 构建器
@@ -202,6 +212,16 @@ public class AiChatRequest {
             request.knowledgeBaseIds = knowledgeBaseIds;
             return this;
         }
+        
+        public Builder imageUrls(List<String> imageUrls) {
+            request.imageUrls = imageUrls;
+            return this;
+        }
+        
+        public Builder imageBase64(String imageBase64) {
+            request.imageBase64 = imageBase64;
+            return this;
+        }
 
         public AiChatRequest build() {
             return request;
@@ -268,6 +288,14 @@ public class AiChatRequest {
     public List<Long> getKnowledgeBaseIds() {
         return knowledgeBaseIds;
     }
+    
+    public List<String> getImageUrls() {
+        return imageUrls;
+    }
+    
+    public String getImageBase64() {
+        return imageBase64;
+    }
 
     // Setter methods
     public void setMessages(List<AiMessage> messages) {
@@ -328,5 +356,13 @@ public class AiChatRequest {
 
     public void setKnowledgeBaseIds(List<Long> knowledgeBaseIds) {
         this.knowledgeBaseIds = knowledgeBaseIds;
+    }
+    
+    public void setImageUrls(List<String> imageUrls) {
+        this.imageUrls = imageUrls;
+    }
+    
+    public void setImageBase64(String imageBase64) {
+        this.imageBase64 = imageBase64;
     }
 }

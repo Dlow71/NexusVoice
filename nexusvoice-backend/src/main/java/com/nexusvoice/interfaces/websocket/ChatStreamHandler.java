@@ -121,9 +121,12 @@ public class ChatStreamHandler implements WebSocketHandler {
         try {
             // 解析请求消息
             String payload = (String) message.getPayload();
+            log.debug("接收到WebSocket消息，大小：{} 字节", payload.length());
             ChatRequestDto requestDto = objectMapper.readValue(payload, ChatRequestDto.class);
             
-            log.info("收到流式聊天请求，会话ID：{}，对话ID：{}", sessionId, requestDto.getConversationId());
+            log.info("收到流式聊天请求，会话ID：{}，对话ID：{}，包含图片：{}", 
+                sessionId, requestDto.getConversationId(), 
+                requestDto.getImageUrls() != null ? requestDto.getImageUrls().size() : 0);
             
             // 从WebSocket会话属性中获取用户ID（已通过JWT认证拦截器验证）
             Long userId = getUserIdFromSession(session);
@@ -933,7 +936,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             modelName = "openai:" + modelName;
         }
 
-        // 完全对标HTTP实现，添加RAG和知识库支持
+        // 完全对标HTTP实现，添加RAG和知识库支持，以及图像输入支持
         return ChatRequest.builder()
                 .messages(messages)
                 .model(modelName)
@@ -945,6 +948,8 @@ public class ChatStreamHandler implements WebSocketHandler {
                 .enableWebSearch(enableWebSearch)
                 .enableRag(requestDto.getEnableRag() != null ? requestDto.getEnableRag() : false)
                 .knowledgeBaseIds(requestDto.getKnowledgeBaseIds())
+                .imageUrls(requestDto.getImageUrls())
+                .imageBase64(requestDto.getImageBase64())
                 .build();
     }
 

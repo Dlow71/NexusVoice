@@ -137,7 +137,7 @@ public class ConversationController {
         // 从动态模型管理器获取可用模型列表
         List<com.nexusvoice.domain.ai.model.AiModel> models = modelBeanManager.getAvailableModels();
         
-        // 转换为前端友好的格式
+        // 转换为前端友好的格式，包含模型能力信息
         List<ModelInfo> modelInfos = models.stream()
                 .map(model -> ModelInfo.builder()
                         .modelKey(model.getModelKey()) // provider:model格式
@@ -146,6 +146,14 @@ public class ConversationController {
                         .providerCode(model.getProviderCode())
                         .modelCode(model.getModelCode())
                         .contextWindow(model.getContextWindow())
+                        // 能力字段
+                        .supportsOcr(model.supportsOcr())
+                        .supportsVision(model.supportsVision())
+                        .supportsThinking(model.supportsThinking())
+                        .supportsToolCall(model.supportsToolCall())
+                        .supportsImageInput(model.supportsImageInput())
+                        .supportsVideoInput(model.supportsVideoInput())
+                        .supportsAudioInput(model.supportsAudioInput())
                         .build())
                 .collect(java.util.stream.Collectors.toList());
         
@@ -178,5 +186,26 @@ public class ConversationController {
         
         @io.swagger.v3.oas.annotations.media.Schema(description = "上下文窗口大小", example = "128000")
         private Integer contextWindow;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持OCR识别", example = "true")
+        private Boolean supportsOcr;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持视觉理解", example = "true")
+        private Boolean supportsVision;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持深度思考", example = "true")
+        private Boolean supportsThinking;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持工具调用", example = "true")
+        private Boolean supportsToolCall;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持图像输入", example = "true")
+        private Boolean supportsImageInput;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持视频输入", example = "false")
+        private Boolean supportsVideoInput;
+        
+        @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持音频输入", example = "false")
+        private Boolean supportsAudioInput;
     }
 }

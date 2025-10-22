@@ -56,4 +56,10 @@ public class ChatRequestDto {
     
     @Schema(description = "知识库ID列表，启用RAG时使用", example = "[1, 2, 3]")
     private java.util.List<Long> knowledgeBaseIds;
+    
+    @Schema(description = "图像URL列表，支持多图输入（仅OCR/视觉模型支持）", example = "[\"https://example.com/image1.jpg\", \"https://example.com/image2.jpg\"]")
+    private java.util.List<String> imageUrls;
+    
+    @Schema(description = "Base64编码的图像数据，单图输入（优先级低于imageUrls）", example = "data:image/jpeg;base64,/9j/4AAQSkZJRg...")
+    private String imageBase64;
 }
