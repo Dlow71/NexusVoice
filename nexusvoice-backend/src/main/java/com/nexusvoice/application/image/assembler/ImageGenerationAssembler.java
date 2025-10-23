@@ -2,7 +2,6 @@ package com.nexusvoice.application.image.assembler;
 
 import com.nexusvoice.application.image.dto.ImageGenerationRequestDTO;
 import com.nexusvoice.application.image.dto.ImageGenerationResponseDTO;
-import com.nexusvoice.domain.image.constant.ImageModelEnum;
 import com.nexusvoice.domain.image.constant.ImageSizeEnum;
 import com.nexusvoice.domain.image.model.ImageGenerationRequest;
 import com.nexusvoice.domain.image.model.ImageGenerationResult;
@@ -35,12 +34,8 @@ public class ImageGenerationAssembler {
 
         ImageGenerationRequest request = new ImageGenerationRequest();
 
-        // 转换模型枚举
-        try {
-            request.setModel(ImageModelEnum.getByModelName(requestDTO.getModel()));
-        } catch (IllegalArgumentException e) {
-            throw BizException.of(ErrorCodeEnum.IMAGE_MODEL_NOT_SUPPORTED, e.getMessage());
-        }
+        // 直接设置modelKey（格式：provider:model）
+        request.setModelKey(requestDTO.getModel());
 
         // 设置提示词
         request.setPrompt(requestDTO.getPrompt());
@@ -54,8 +49,8 @@ public class ImageGenerationAssembler {
                 throw BizException.of(ErrorCodeEnum.IMAGE_SIZE_INVALID, e.getMessage());
             }
         } else {
-            // 使用模型默认尺寸
-            request.setImageSize(ImageSizeEnum.getDefaultSizeForModel(request.getModel()));
+            // 使用默认尺寸
+            request.setImageSize(ImageSizeEnum.KOLORS_1024x1024);
         }
 
         // 设置其他参数，使用默认值如果为null
@@ -63,16 +58,9 @@ public class ImageGenerationAssembler {
         request.setSeed(requestDTO.getSeed());
         request.setNumInferenceSteps(requestDTO.getNumInferenceSteps() != null ? requestDTO.getNumInferenceSteps() : 20);
         
-        // 根据模型特性设置特定参数
-        if (request.getModel().supportsGuidanceScale()) {
-            // Kolors模型支持guidanceScale参数
-            request.setGuidanceScale(requestDTO.getGuidanceScale() != null ? requestDTO.getGuidanceScale() : 7.5);
-        }
-        
-        if (request.getModel().supportsCFG()) {
-            // 只有支持CFG的模型才设置cfg参数
-            request.setCfg(requestDTO.getCfg() != null ? requestDTO.getCfg() : 4.0);
-        }
+        // 设置模型参数（不再依赖枚举判断）
+        request.setGuidanceScale(requestDTO.getGuidanceScale() != null ? requestDTO.getGuidanceScale() : 7.5);
+        request.setCfg(requestDTO.getCfg() != null ? requestDTO.getCfg() : 4.0);
 
         // 设置输入图像
         request.setInputImage(requestDTO.getInputImage());

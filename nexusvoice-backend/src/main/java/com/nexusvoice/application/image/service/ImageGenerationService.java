@@ -5,14 +5,16 @@ import com.nexusvoice.application.image.dto.ImageGenerationRequestDTO;
 import com.nexusvoice.application.image.dto.ImageGenerationResponseDTO;
 import com.nexusvoice.domain.image.model.ImageGenerationRequest;
 import com.nexusvoice.domain.image.model.ImageGenerationResult;
-import com.nexusvoice.domain.image.repository.ImageGenerationRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
+import com.nexusvoice.infrastructure.ai.service.AiImageService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 图像生成应用服务
@@ -26,7 +28,7 @@ import java.util.List;
 public class ImageGenerationService {
 
     @Resource
-    private ImageGenerationRepository imageGenerationRepository;
+    private DynamicAiModelBeanManager modelBeanManager;
 
     @Resource
     private ImageGenerationAssembler imageGenerationAssembler;
@@ -45,16 +47,20 @@ public class ImageGenerationService {
         validateRequest(requestDTO);
 
         try {
-            // 转换为领域模型
+            // 1. 从DynamicAiModelBeanManager获取图像生成服务
+            // requestDTO.getModel()格式应为 "siliconflow:kolors"
+            AiImageService imageService = modelBeanManager.getImageServiceByModelKey(requestDTO.getModel());
+            
+            // 2. 转换为领域模型
             ImageGenerationRequest domainRequest = imageGenerationAssembler.toDomainModel(requestDTO);
             
-            // 调用领域服务生成图像
-            ImageGenerationResult result = imageGenerationRepository.generateImage(domainRequest);
+            // 3. 调用动态图像生成服务
+            ImageGenerationResult result = imageService.generateImage(domainRequest);
             
-            // 验证生成结果
+            // 4. 验证生成结果
             validateResult(result);
             
-            // 转换为响应DTO
+            // 5. 转换为响应DTO
             ImageGenerationResponseDTO responseDTO = imageGenerationAssembler.toResponseDTO(result, requestDTO);
             
             log.info("图像生成完成，生成数量: {}, 耗时: {}ms, 第一张图像URL: {}", 
@@ -104,7 +110,9 @@ public class ImageGenerationService {
      */
     public boolean checkServiceHealth() {
         try {
-            boolean available = imageGenerationRepository.isServiceAvailable();
+            // 检查是否有可用的图像生成模型
+            List<com.nexusvoice.domain.ai.model.AiModel> imageModels = modelBeanManager.getAvailableImageModels();
+            boolean available = !imageModels.isEmpty();
             log.debug("图像生成服务健康检查结果: {}", available ? "可用" : "不可用");
             return available;
         } catch (Exception e) {
@@ -116,11 +124,13 @@ public class ImageGenerationService {
     /**
      * 获取支持的模型列表
      * 
-     * @return 支持的模型名称列表
+     * @return 支持的模型键列表 (格式: provider:model)
      */
     public List<String> getSupportedModels() {
         try {
-            List<String> models = imageGenerationRepository.getSupportedModels();
+            List<String> models = modelBeanManager.getAvailableImageModels().stream()
+                    .map(model -> model.getModelKey())
+                    .collect(Collectors.toList());
             log.debug("获取支持的图像生成模型: {}", models);
             return models;
         } catch (Exception e) {
@@ -130,20 +140,16 @@ public class ImageGenerationService {
     }
 
     /**
-     * 验证API密钥
+     * 验证API密钥（此方法已废弃，现在API密钥通过ai_api_keys表管理）
      * 
      * @param apiKey API密钥
      * @return 是否有效
+     * @deprecated 使用数据库管理API密钥，此方法仅用于向后兼容
      */
+    @Deprecated
     public boolean validateApiKey(String apiKey) {
-        try {
-            boolean valid = imageGenerationRepository.validateApiKey(apiKey);
-            log.debug("API密钥验证结果: {}", valid ? "有效" : "无效");
-            return valid;
-        } catch (Exception e) {
-            log.error("API密钥验证失败", e);
-            return false;
-        }
+        log.warn("validateApiKey方法已废弃，API密钥现在通过数据库管理");
+        return apiKey != null && apiKey.startsWith("sk-");
     }
 
     /**

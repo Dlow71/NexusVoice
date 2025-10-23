@@ -194,6 +194,14 @@ public class AiModel extends BaseDomainEntity {
     }
     
     /**
+     * 是否为图像生成模型
+     */
+    public boolean isImageModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isImage();
+    }
+    
+    /**
      * 获取配置Map
      */
     @SuppressWarnings("unchecked")

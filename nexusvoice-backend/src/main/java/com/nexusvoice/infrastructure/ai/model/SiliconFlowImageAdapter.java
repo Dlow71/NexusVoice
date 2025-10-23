@@ -1,93 +1,88 @@
-package com.nexusvoice.infrastructure.repository;
+package com.nexusvoice.infrastructure.ai.model;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusvoice.application.file.service.FileUploadService;
+import com.nexusvoice.domain.ai.model.AiApiKey;
+import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.image.model.ImageGenerationRequest;
 import com.nexusvoice.domain.image.model.ImageGenerationResult;
-import com.nexusvoice.domain.image.repository.ImageGenerationRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.enums.FileTypeEnum;
 import com.nexusvoice.exception.BizException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Repository;
+import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.annotation.Resource;
 import java.io.ByteArrayInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.*;
 
 /**
- * 硅基流动图像生成仓储实现
+ * 硅基流动图像生成适配器
  * 
- * @deprecated 已被DynamicAiModelBeanManager + SiliconFlowImageAdapter替代
  * @author NexusVoice Team
- * @since 2025-09-28
+ * @since 2025-01-24
  */
-@Deprecated
 @Slf4j
-@Repository
-public class SiliconFlowImageGenerationRepositoryImpl implements ImageGenerationRepository {
+@Component
+public class SiliconFlowImageAdapter {
     
-    @Resource
-    @Qualifier("searchRestTemplate")
-    private RestTemplate restTemplate;
-    
-    @Resource
-    private ObjectMapper objectMapper;
-    
-    @Resource 
-    private FileUploadService fileUploadService;
-    
-    @Value("${nexusvoice.image.siliconflow.base-url:https://api.siliconflow.cn/v1}")
-    private String baseUrl;
-    
-    @Value("${nexusvoice.image.siliconflow.api-key}")
-    private String apiKey;
-    
-    @Value("${nexusvoice.image.enabled:true}")
-    private Boolean imageServiceEnabled;
+    private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final FileUploadService fileUploadService;
     
     private static final String IMAGES_GENERATIONS_ENDPOINT = "/images/generations";
     
-    @Override
-    public ImageGenerationResult generateImage(ImageGenerationRequest request) {
-        if (!imageServiceEnabled) {
-            throw BizException.of(ErrorCodeEnum.IMAGE_SERVICE_ERROR, "图像生成服务未启用");
-        }
-        
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            throw BizException.of(ErrorCodeEnum.IMAGE_API_KEY_INVALID, "硅基流动API密钥未配置");
-        }
-        
+    public SiliconFlowImageAdapter(
+            @Qualifier("searchRestTemplate") RestTemplate restTemplate,
+            ObjectMapper objectMapper,
+            FileUploadService fileUploadService) {
+        this.restTemplate = restTemplate;
+        this.objectMapper = objectMapper;
+        this.fileUploadService = fileUploadService;
+    }
+    
+    /**
+     * 生成图像
+     * 
+     * @param request 图像生成请求
+     * @param model AI模型配置
+     * @param apiKey API密钥
+     * @return 图像生成结果
+     */
+    public ImageGenerationResult generateImage(ImageGenerationRequest request, AiModel model, AiApiKey apiKey) {
         log.info("开始调用硅基流动API生成图像，模型: {}, 提示词: {}", 
-                request.getModelKey(), request.getPrompt());
+                model.getModelName(), request.getPrompt());
         
         long startTime = System.currentTimeMillis();
         
         try {
-            // 构建请求体
-            Map<String, Object> requestBody = buildRequestBody(request);
+            // 1. 构建请求体
+            Map<String, Object> requestBody = buildRequestBody(request, model);
             
-            // 设置请求头
+            // 2. 设置请求头
             HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + apiKey);
+            headers.set("Authorization", "Bearer " + apiKey.getApiKey());
             headers.set("Content-Type", "application/json");
             
             HttpEntity<Map<String, Object>> httpEntity = new HttpEntity<>(requestBody, headers);
             
-            // 调用API
+            // 3. 调用API
+            String baseUrl = apiKey.getBaseUrl() != null && !apiKey.getBaseUrl().isEmpty() 
+                    ? apiKey.getBaseUrl() 
+                    : model.getDefaultBaseUrl();
             String url = baseUrl + IMAGES_GENERATIONS_ENDPOINT;
-            log.debug("调用硅基流动API: {} 请求体: {}", url, requestBody);
+            
+            log.debug("调用硅基流动API: {}", url);
             
             ResponseEntity<String> response = restTemplate.exchange(
                 url, HttpMethod.POST, httpEntity, String.class);
@@ -101,10 +96,10 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
                                      "图像生成失败，状态码: " + response.getStatusCode());
             }
             
-            // 解析响应
-            ImageGenerationResult result = parseResponse(response.getBody(), request, generationTime);
+            // 4. 解析响应
+            ImageGenerationResult result = parseResponse(response.getBody(), request, generationTime, model);
             
-            // 下载图像并上传到七牛云
+            // 5. 下载图像并上传到七牛云CDN
             List<String> cdnUrls = uploadImagesToCdn(result.getImageUrls());
             result.setImageUrls(cdnUrls);
             
@@ -122,82 +117,14 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
         }
     }
     
-    @Override
-    public boolean isServiceAvailable() {
-        if (!imageServiceEnabled || apiKey == null || apiKey.trim().isEmpty()) {
-            return false;
-        }
-        
-        try {
-            // 使用简单的验证请求检查服务可用性
-            return validateApiKey(apiKey);
-        } catch (Exception e) {
-            log.warn("检查图像生成服务可用性失败", e);
-            return false;
-        }
-    }
-    
-    @Override
-    public List<String> getSupportedModels() {
-        return Arrays.asList(
-            "Qwen/Qwen-Image-Edit-2509",
-            "Qwen/Qwen-Image-Edit", 
-            "Qwen/Qwen-Image",
-            "Kwai-Kolors/Kolors"
-        );
-    }
-    
-    @Override
-    public boolean validateApiKey(String apiKey) {
-        // 这里可以实现一个轻量级的API密钥验证
-        // 目前简单检查密钥格式
-        return apiKey != null && !apiKey.trim().isEmpty() && apiKey.startsWith("sk-");
-    }
-    
-    /**
-     * 从modelKey提取实际的API模型名称
-     * siliconflow:kolors -> Kwai-Kolors/Kolors
-     */
-    private String extractActualModelName(String modelKey) {
-        if (modelKey == null) {
-            return "Kwai-Kolors/Kolors"; // 默认
-        }
-        
-        // 如果已经是实际模型名称格式（包含/），直接返回
-        if (modelKey.contains("/")) {
-            return modelKey;
-        }
-        
-        // 从provider:model格式提取
-        String[] parts = modelKey.split(":");
-        String model = parts.length > 1 ? parts[1] : modelKey;
-        
-        // 映射到实际的API模型名称
-        switch (model.toLowerCase()) {
-            case "kolors":
-                return "Kwai-Kolors/Kolors";
-            case "qwen-image":
-                return "Qwen/Qwen-Image";
-            case "qwen-image-edit":
-                return "Qwen/Qwen-Image-Edit";
-            case "qwen-image-edit-2509":
-                return "Qwen/Qwen-Image-Edit-2509";
-            default:
-                return model;
-        }
-    }
-    
     /**
      * 构建请求体
      */
-    private Map<String, Object> buildRequestBody(ImageGenerationRequest request) {
+    private Map<String, Object> buildRequestBody(ImageGenerationRequest request, AiModel model) {
         Map<String, Object> body = new HashMap<>();
         
-        // 从modelKey提取实际模型名称（siliconflow:kolors -> Kwai-Kolors/Kolors）
-        String actualModelName = extractActualModelName(request.getModelKey());
-        
-        // 必需参数
-        body.put("model", actualModelName);
+        // 必需参数：使用实际的模型名称（如 Kwai-Kolors/Kolors）
+        body.put("model", model.getModelName());
         body.put("prompt", request.getPrompt());
         
         // 可选参数
@@ -209,7 +136,7 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
             body.put("image_size", request.getImageSize().getSize());
         }
         
-        // Kolors模型支持批量生成
+        // 批量生成（Kolors模型支持，根据modelKey判断）
         if (request.getBatchSize() != null && request.getModelKey().contains("kolors")) {
             body.put("batch_size", request.getBatchSize());
         }
@@ -232,32 +159,20 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
             body.put("cfg", request.getCfg());
         }
         
-        // 输入图像（用于图像编辑）
-        if (request.getInputImage() != null) {
-            body.put("image", request.getInputImage());
-        }
-        
-        if (request.getInputImage2() != null) {
-            body.put("image2", request.getInputImage2());
-        }
-        
-        if (request.getInputImage3() != null) {
-            body.put("image3", request.getInputImage3());
-        }
-        
         return body;
     }
     
     /**
      * 解析API响应
      */
-    private ImageGenerationResult parseResponse(String responseBody, ImageGenerationRequest request, long generationTime) {
+    private ImageGenerationResult parseResponse(String responseBody, ImageGenerationRequest request, 
+                                                long generationTime, AiModel model) {
         try {
             JsonNode responseJson = objectMapper.readTree(responseBody);
             
             ImageGenerationResult result = new ImageGenerationResult();
             result.setGenerationTime(generationTime);
-            result.setModelName(request.getModelKey());
+            result.setModelName(model.getModelName());
             result.setImageSize(request.getImageSize().getSize());
             result.setRawResponse(responseBody);
             
@@ -340,16 +255,21 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
                 fileName = String.format("generated_image_%d_%d.jpg", 
                                         System.currentTimeMillis(), index);
                 contentType = "image/jpeg";
-            } else {
+            } else if (imageUrl.toLowerCase().contains(".png")) {
                 fileName = String.format("generated_image_%d_%d.png", 
                                         System.currentTimeMillis(), index);
                 contentType = "image/png";
+            } else {
+                fileName = String.format("generated_image_%d_%d.jpg", 
+                                        System.currentTimeMillis(), index);
+                contentType = "image/jpeg";
             }
             
+            // 创建自定义的MultipartFile实现
             return new MultipartFile() {
                 @Override
                 public String getName() {
-                    return "image";
+                    return fileName;
                 }
                 
                 @Override
@@ -364,7 +284,7 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
                 
                 @Override
                 public boolean isEmpty() {
-                    return imageData.length == 0;
+                    return imageData == null || imageData.length == 0;
                 }
                 
                 @Override
@@ -383,8 +303,8 @@ public class SiliconFlowImageGenerationRepositoryImpl implements ImageGeneration
                 }
                 
                 @Override
-                public void transferTo(java.io.File dest) throws IOException {
-                    throw new UnsupportedOperationException("不支持transferTo操作");
+                public void transferTo(File dest) throws IOException {
+                    java.nio.file.Files.write(dest.toPath(), imageData);
                 }
             };
         }

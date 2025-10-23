@@ -36,7 +36,7 @@ public class ImageGenerationController {
     @Resource
     private ImageGenerationService imageGenerationService;
 
-    @Operation(summary = "生成图像", description = "根据提示词使用AI模型生成图像")
+    @Operation(summary = "生成图像", description = "根据提示词使用AI模型生成图像。模型参数格式：siliconflow:kolors")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "图像生成成功"),
         @ApiResponse(responseCode = "400", description = "请求参数错误"),
@@ -44,7 +44,7 @@ public class ImageGenerationController {
     })
     @PostMapping(value = "/generate", produces = MediaType.APPLICATION_JSON_VALUE)
     public Result<ImageGenerationResponseDTO> generateImage(
-            @Parameter(description = "图像生成请求", required = true)
+            @Parameter(description = "图像生成请求。model格式为 provider:model，如 siliconflow:kolors", required = true)
             @Valid @RequestBody ImageGenerationRequestDTO requestDTO) {
         
         log.info("收到图像生成请求，模型: {}, 提示词: {}, 尺寸: {}", 
@@ -56,6 +56,13 @@ public class ImageGenerationController {
         long startTime = System.currentTimeMillis();
         
         try {
+            // 兼容旧格式：将 "Kwai-Kolors/Kolors" 转换为 "siliconflow:kolors"
+            if (requestDTO.getModel() != null && !requestDTO.getModel().contains(":")) {
+                String normalizedModel = normalizeModelName(requestDTO.getModel());
+                log.debug("模型名称格式转换: {} -> {}", requestDTO.getModel(), normalizedModel);
+                requestDTO.setModel(normalizedModel);
+            }
+            
             ImageGenerationResponseDTO responseDTO = imageGenerationService.generateImage(requestDTO);
             
             long processingTime = System.currentTimeMillis() - startTime;
@@ -68,6 +75,28 @@ public class ImageGenerationController {
             long processingTime = System.currentTimeMillis() - startTime;
             log.error("图像生成请求处理失败，耗时: {}ms", processingTime, e);
             throw e;
+        }
+    }
+    
+    /**
+     * 标准化模型名称
+     * 将旧格式的模型名称转换为新格式 (provider:model)
+     */
+    private String normalizeModelName(String modelName) {
+        // 兼容旧格式映射
+        switch (modelName.toLowerCase()) {
+            case "kwai-kolors/kolors":
+            case "kolors":
+                return "siliconflow:kolors";
+            case "qwen/qwen-image":
+                return "siliconflow:qwen-image";
+            case "qwen/qwen-image-edit":
+                return "siliconflow:qwen-image-edit";
+            case "qwen/qwen-image-edit-2509":
+                return "siliconflow:qwen-image-edit-2509";
+            default:
+                // 如果已经是正确格式或无法识别，返回原值
+                return modelName.contains(":") ? modelName : "siliconflow:" + modelName;
         }
     }
 
@@ -106,7 +135,7 @@ public class ImageGenerationController {
         }
     }
 
-    @Operation(summary = "获取支持的模型", description = "获取图像生成服务支持的所有模型列表")
+    @Operation(summary = "获取支持的模型", description = "获取图像生成服务支持的所有模型列表。返回格式为 provider:model")
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "获取模型列表成功"),
         @ApiResponse(responseCode = "500", description = "获取模型列表失败")
@@ -117,7 +146,7 @@ public class ImageGenerationController {
         
         try {
             List<String> models = imageGenerationService.getSupportedModels();
-            log.info("获取支持的模型列表成功，模型数量: {}", models.size());
+            log.info("获取支持的模型列表成功，模型数量: {}，模型列表: {}", models.size(), models);
             return Result.success(models);
             
         } catch (Exception e) {

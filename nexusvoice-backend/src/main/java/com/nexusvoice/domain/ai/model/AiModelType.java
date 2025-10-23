@@ -24,7 +24,12 @@ public enum AiModelType {
     /**
      * 重排序模型：用于搜索结果重排序、相关性排序
      */
-    RERANK("rerank", "重排序模型");
+    RERANK("rerank", "重排序模型"),
+    
+    /**
+     * 图像生成模型：用于AI图像生成、图像编辑
+     */
+    IMAGE("image", "图像生成模型");
     
     /**
      * 类型代码
@@ -77,5 +82,12 @@ public enum AiModelType {
      */
     public boolean isRerank() {
         return this == RERANK;
+    }
+    
+    /**
+     * 是否为图像生成模型
+     */
+    public boolean isImage() {
+        return this == IMAGE;
     }
 }

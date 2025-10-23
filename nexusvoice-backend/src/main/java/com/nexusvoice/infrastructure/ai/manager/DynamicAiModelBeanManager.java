@@ -62,11 +62,20 @@ public class DynamicAiModelBeanManager {
     @Autowired(required = false)
     private ChatEnhancementChain enhancementChain;
     
+    @Autowired(required = false)
+    private com.nexusvoice.infrastructure.ai.model.SiliconFlowImageAdapter siliconFlowImageAdapter;
+    
     /**
      * 模型服务映射表
      * key: provider:model, value: 该模型的服务实例
      */
     private final Map<String, DynamicAiChatService> modelServiceMap = new ConcurrentHashMap<>();
+    
+    /**
+     * 图像生成服务映射表
+     * key: provider:model, value: 该模型的图像生成服务实例
+     */
+    private final Map<String, DynamicAiImageService> imageServiceMap = new ConcurrentHashMap<>();
     
     /**
      * 初始化所有模型服务
@@ -86,12 +95,24 @@ public class DynamicAiModelBeanManager {
             
             for (AiModel model : enabledModels) {
                 String modelKey = model.getModelKey();
-                DynamicAiChatService service = new DynamicAiChatService(model);
-                modelServiceMap.put(modelKey, service);
-                log.info("加载模型服务：{}，名称：{}", modelKey, model.getModelName());
+                
+                // 根据模型类型加载不同的服务
+                if (model.isImageModel()) {
+                    // 图像生成模型
+                    DynamicAiImageService imageService = new DynamicAiImageService(model);
+                    imageServiceMap.put(modelKey, imageService);
+                    log.info("加载图像生成服务：{}，名称：{}", modelKey, model.getModelName());
+                } else if (model.isChatModel()) {
+                    // 对话模型
+                    DynamicAiChatService service = new DynamicAiChatService(model);
+                    modelServiceMap.put(modelKey, service);
+                    log.info("加载对话模型服务：{}，名称：{}", modelKey, model.getModelName());
+                }
+                // embedding和rerank模型由其他Manager管理
             }
             
-            log.info("成功加载{}个模型服务", modelServiceMap.size());
+            log.info("成功加载{}个对话模型服务，{}个图像生成服务", 
+                    modelServiceMap.size(), imageServiceMap.size());
             
         } catch (Exception e) {
             log.error("加载模型服务失败", e);
@@ -497,5 +518,152 @@ public class DynamicAiModelBeanManager {
             
             return messages;
         }
+    }
+    
+    /**
+     * 动态AI图像生成服务内部类
+     * 每个图像生成模型对应一个服务实例
+     */
+    private class DynamicAiImageService implements com.nexusvoice.infrastructure.ai.service.AiImageService {
+        private final AiModel model;
+        
+        public DynamicAiImageService(AiModel model) {
+            this.model = model;
+        }
+        
+        @Override
+        public com.nexusvoice.domain.image.model.ImageGenerationResult generateImage(
+                com.nexusvoice.domain.image.model.ImageGenerationRequest request) {
+            
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            String requestId = UUID.randomUUID().toString();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 获取API密钥
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 2. 调用图像生成适配器
+                com.nexusvoice.domain.image.model.ImageGenerationResult result = 
+                        siliconFlowImageAdapter.generateImage(request, model, apiKey);
+                
+                // 3. 计算费用（按图片数量计费）
+                int imageCount = result.getImageCount();
+                BigDecimal costPerImage = model.getInputTokenPrice(); // 复用input_token_price字段存储每张图片成本
+                BigDecimal cost = costPerImage.multiply(BigDecimal.valueOf(imageCount));
+                
+                // 4. 更新密钥使用统计（token数量用图片数量代替）
+                apiKeyPoolManager.markSuccess(apiKey.getId(), imageCount, cost);
+                
+                // 5. 记录调用日志
+                callLog = AiApiCallLog.success(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        request.getUserId(), null, // 图像生成通常不在对话上下文中
+                        requestId, requestTime,
+                        (int)(System.currentTimeMillis() - startTime),
+                        0, imageCount, // promptTokens=0, completionTokens=imageCount
+                        cost
+                );
+                callLogRepository.save(callLog);
+                
+                log.info("图像生成成功，模型：{}，图片数量：{}，费用：{}元", 
+                        model.getModelKey(), imageCount, cost);
+                
+                return result;
+                
+            } catch (Exception e) {
+                log.error("图像生成失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
+                
+                // 标记密钥失败
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            request.getUserId(), null,
+                            requestId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                throw e;
+            }
+        }
+        
+        @Override
+        public boolean isModelAvailable() {
+            return model.isEnabled() && 
+                   apiKeyPoolManager.getAvailableKeyCount(model.getProviderCode(), model.getModelCode()) > 0;
+        }
+        
+        @Override
+        public String getModelName() {
+            return model.getModelName();
+        }
+    }
+    
+    /**
+     * 获取图像生成服务
+     * 
+     * @param providerCode 厂商代码
+     * @param modelCode 模型代码
+     * @return AI图像生成服务
+     */
+    public com.nexusvoice.infrastructure.ai.service.AiImageService getImageService(String providerCode, String modelCode) {
+        String modelKey = providerCode + ":" + modelCode;
+        DynamicAiImageService service = imageServiceMap.get(modelKey);
+        
+        if (service == null) {
+            // 尝试动态加载
+            Optional<AiModel> modelOpt = modelRepository.findByProviderAndModel(providerCode, modelCode);
+            if (modelOpt.isEmpty()) {
+                throw new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    String.format("图像模型%s不存在", modelKey));
+            }
+            
+            AiModel model = modelOpt.get();
+            if (!model.isEnabled()) {
+                throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                    String.format("图像模型%s已禁用", modelKey));
+            }
+            
+            if (!model.isImageModel()) {
+                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
+                    String.format("模型%s不是图像生成模型", modelKey));
+            }
+            
+            service = new DynamicAiImageService(model);
+            imageServiceMap.put(modelKey, service);
+            log.info("动态加载图像生成服务：{}", modelKey);
+        }
+        
+        return service;
+    }
+    
+    /**
+     * 根据模型键获取图像生成服务
+     */
+    public com.nexusvoice.infrastructure.ai.service.AiImageService getImageServiceByModelKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw new BizException(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        
+        String[] parts = modelKey.split(":", 2);
+        return getImageService(parts[0], parts[1]);
+    }
+    
+    /**
+     * 获取所有可用的图像生成模型信息
+     */
+    public List<AiModel> getAvailableImageModels() {
+        return imageServiceMap.values().stream()
+                .map(service -> service.model)
+                .collect(Collectors.toList());
     }
 }

@@ -1,6 +1,5 @@
 package com.nexusvoice.domain.image.model;
 
-import com.nexusvoice.domain.image.constant.ImageModelEnum;
 import com.nexusvoice.domain.image.constant.ImageSizeEnum;
 
 /**
@@ -12,9 +11,9 @@ import com.nexusvoice.domain.image.constant.ImageSizeEnum;
 public class ImageGenerationRequest {
     
     /**
-     * 模型名称
+     * 模型键（格式：provider:model，如 siliconflow:kolors）
      */
-    private ImageModelEnum model;
+    private String modelKey;
     
     /**
      * 正向提示词
@@ -71,26 +70,31 @@ public class ImageGenerationRequest {
      */
     private String inputImage3;
     
+    /**
+     * 用户ID（用于费用统计和调用日志）
+     */
+    private Long userId;
+    
     public ImageGenerationRequest() {
     }
     
-    public ImageGenerationRequest(ImageModelEnum model, String prompt) {
-        this.model = model;
+    public ImageGenerationRequest(String modelKey, String prompt) {
+        this.modelKey = modelKey;
         this.prompt = prompt;
         // 设置默认值
-        this.imageSize = ImageSizeEnum.getDefaultSizeForModel(model);
+        this.imageSize = ImageSizeEnum.KOLORS_1024x1024; // 默认尺寸
         this.batchSize = 1;
         this.numInferenceSteps = 20;
         this.guidanceScale = 7.5;
         this.cfg = 4.0;
     }
     
-    public ImageModelEnum getModel() {
-        return model;
+    public String getModelKey() {
+        return modelKey;
     }
     
-    public void setModel(ImageModelEnum model) {
-        this.model = model;
+    public void setModelKey(String modelKey) {
+        this.modelKey = modelKey;
     }
     
     public String getPrompt() {
@@ -181,13 +185,21 @@ public class ImageGenerationRequest {
         this.inputImage3 = inputImage3;
     }
     
+    public Long getUserId() {
+        return userId;
+    }
+    
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+    
     /**
      * 验证请求参数的有效性
      * 
      * @return 验证结果消息，null表示验证通过
      */
     public String validate() {
-        if (model == null) {
+        if (modelKey == null || modelKey.trim().isEmpty()) {
             return "图像生成模型不能为空";
         }
         
@@ -199,16 +211,8 @@ public class ImageGenerationRequest {
             return "图像尺寸不能为空";
         }
         
-        // 检查尺寸是否适用于选定的模型
-        if (!imageSize.isSupportedByModel(model)) {
-            return "选定的图像尺寸不适用于当前模型";
-        }
-        
-        // 批量大小验证
+        // 批量大小验证（简化验证，不再依赖枚举）
         if (batchSize != null) {
-            if (!model.supportsBatchGeneration()) {
-                return "当前模型不支持批量生成";
-            }
             if (batchSize < 1 || batchSize > 4) {
                 return "批量大小必须在1-4之间";
             }
@@ -224,21 +228,15 @@ public class ImageGenerationRequest {
             return "推理步数必须在1-100之间";
         }
         
-        // 引导比例验证
+        // 引导比例验证（简化，不再检查模型是否支持）
         if (guidanceScale != null) {
-            if (!model.supportsGuidanceScale()) {
-                return "当前模型不支持引导比例参数";
-            }
             if (guidanceScale < 0 || guidanceScale > 20) {
                 return "引导比例必须在0-20之间";
             }
         }
         
-        // CFG参数验证
+        // CFG参数验证（简化，不再检查模型是否支持）
         if (cfg != null) {
-            if (!model.supportsCFG()) {
-                return "当前模型不支持CFG参数";
-            }
             if (cfg < 0.1 || cfg > 20) {
                 return "CFG参数必须在0.1-20之间";
             }
