@@ -188,6 +188,73 @@ public enum ErrorCodeEnum {
     MQ_CONSUMER_NOT_FOUND(2307, "消费者不存在"),
     MQ_TRANSACTION_ERROR(2308, "事务消息处理失败"),
     
+    // RAG文档处理相关 41xx
+    RAG_KNOWLEDGE_BASE_NOT_FOUND(4101, "知识库不存在"),
+    RAG_KNOWLEDGE_BASE_ALREADY_EXISTS(4102, "知识库已存在"),
+    RAG_KNOWLEDGE_BASE_NAME_DUPLICATE(4103, "知识库名称重复"),
+    RAG_KNOWLEDGE_BASE_NOT_EMPTY(4104, "知识库不为空，无法删除"),
+    RAG_KNOWLEDGE_BASE_STATUS_INVALID(4105, "知识库状态无效"),
+    
+    // RAG文件处理相关 42xx
+    RAG_FILE_NOT_FOUND(4201, "文档文件不存在"),
+    RAG_FILE_UPLOAD_FAILED(4202, "文档上传失败"),
+    RAG_FILE_TYPE_NOT_SUPPORTED(4203, "不支持的文档类型"),
+    RAG_FILE_SIZE_EXCEEDED(4204, "文档大小超出限制"),
+    RAG_FILE_HASH_DUPLICATE(4205, "文档已存在（重复文件）"),
+    RAG_FILE_PARSE_FAILED(4206, "文档解析失败"),
+    RAG_FILE_ACCESS_DENIED(4207, "无权访问此文档"),
+    RAG_FILE_PROCESSING(4208, "文档正在处理中"),
+    RAG_FILE_PROCESS_FAILED(4209, "文档处理失败"),
+    
+    // RAG文档单元相关 43xx
+    RAG_DOCUMENT_UNIT_NOT_FOUND(4301, "文档单元不存在"),
+    RAG_DOCUMENT_SPLIT_FAILED(4302, "文档分割失败"),
+    RAG_DOCUMENT_UNIT_TOO_LARGE(4303, "文档单元过大"),
+    RAG_DOCUMENT_UNIT_EMPTY(4304, "文档单元内容为空"),
+    
+    // RAG向量化相关 44xx
+    RAG_VECTORIZE_FAILED(4401, "向量化失败"),
+    RAG_VECTORIZE_MODEL_ERROR(4402, "向量化模型错误"),
+    RAG_VECTOR_DIMENSION_MISMATCH(4403, "向量维度不匹配"),
+    RAG_EMBEDDING_NOT_FOUND(4404, "向量不存在"),
+    RAG_EMBEDDING_MODEL_NOT_AVAILABLE(4405, "向量化模型不可用"),
+    
+    // RAG OCR相关 45xx
+    RAG_OCR_FAILED(4501, "OCR识别失败"),
+    RAG_OCR_MODEL_ERROR(4502, "OCR模型错误"),
+    RAG_OCR_CONFIDENCE_LOW(4503, "OCR识别置信度过低"),
+    RAG_OCR_LANGUAGE_NOT_SUPPORTED(4504, "OCR不支持该语言"),
+    RAG_OCR_IMAGE_INVALID(4505, "OCR图像无效"),
+    
+    // RAG搜索相关 46xx
+    RAG_SEARCH_FAILED(4601, "文档搜索失败"),
+    RAG_SEARCH_NO_RESULTS(4602, "没有找到相关文档"),
+    RAG_SEARCH_QUERY_INVALID(4603, "搜索查询无效"),
+    RAG_SEARCH_INDEX_ERROR(4604, "搜索索引错误"),
+    
+    // RAG任务相关 47xx
+    RAG_TASK_NOT_FOUND(4701, "处理任务不存在"),
+    RAG_TASK_ALREADY_RUNNING(4702, "任务已在执行中"),
+    RAG_TASK_CANCELLED(4703, "任务已取消"),
+    RAG_TASK_TIMEOUT(4704, "任务处理超时"),
+    RAG_TASK_RETRY_EXCEEDED(4705, "任务重试次数超限"),
+    
+    // RAG版本相关 48xx
+    RAG_VERSION_NOT_FOUND(4801, "版本不存在"),
+    RAG_VERSION_CREATE_FAILED(4802, "版本创建失败"),
+    RAG_VERSION_DUPLICATE(4803, "版本号重复"),
+    RAG_VERSION_INVALID(4804, "版本号格式无效"),
+    RAG_VERSION_PUBLISH_FAILED(4805, "版本发布失败"),
+    RAG_VERSION_NOT_PUBLISHED(4806, "版本未发布"),
+    
+    // RAG用户安装相关 49xx
+    RAG_USER_RAG_NOT_FOUND(4901, "用户RAG不存在"),
+    RAG_USER_INSTALL_FAILED(4902, "安装失败"),
+    RAG_USER_ALREADY_INSTALLED(4903, "已经安装过该版本"),
+    RAG_USER_UNINSTALL_FAILED(4904, "卸载失败"),
+    RAG_USER_QUOTA_EXCEEDED(4905, "用户安装数量超限"),
+    RAG_USER_ACCESS_DENIED(4906, "无权访问此RAG"),
+    
     // 通用业务错误
     BUSINESS_ERROR(9999, "业务处理失败");
     
