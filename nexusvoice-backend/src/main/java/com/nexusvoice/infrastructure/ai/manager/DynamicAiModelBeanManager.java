@@ -23,10 +23,7 @@ import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.output.Response;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -78,44 +75,42 @@ public class DynamicAiModelBeanManager {
     private final Map<String, DynamicAiImageService> imageServiceMap = new ConcurrentHashMap<>();
     
     /**
-     * 初始化所有模型服务
+     * 加载对话和图像模型服务
+     * 由AiModelInitializer统一调度，避免重复查询数据库
+     * 
+     * @param chatModels 对话模型列表
+     * @param imageModels 图像模型列表
      */
-    @PostConstruct
-    public void init() {
-        log.info("初始化动态AI模型Bean管理器...");
-        loadAllModelServices();
-    }
-    
-    /**
-     * 加载所有模型服务
-     */
-    public void loadAllModelServices() {
+    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels) {
         try {
-            List<AiModel> enabledModels = modelRepository.findAllEnabled();
+            log.info("开始加载对话和图像模型服务...");
             
-            for (AiModel model : enabledModels) {
+            // 清空现有服务（用于刷新场景）
+            modelServiceMap.clear();
+            imageServiceMap.clear();
+            
+            // 加载对话模型
+            for (AiModel model : chatModels) {
                 String modelKey = model.getModelKey();
-                
-                // 根据模型类型加载不同的服务
-                if (model.isImageModel()) {
-                    // 图像生成模型
-                    DynamicAiImageService imageService = new DynamicAiImageService(model);
-                    imageServiceMap.put(modelKey, imageService);
-                    log.info("加载图像生成服务：{}，名称：{}", modelKey, model.getModelName());
-                } else if (model.isChatModel()) {
-                    // 对话模型
-                    DynamicAiChatService service = new DynamicAiChatService(model);
-                    modelServiceMap.put(modelKey, service);
-                    log.info("加载对话模型服务：{}，名称：{}", modelKey, model.getModelName());
-                }
-                // embedding和rerank模型由其他Manager管理
+                DynamicAiChatService service = new DynamicAiChatService(model);
+                modelServiceMap.put(modelKey, service);
+                log.debug("加载对话模型：{}，名称：{}", modelKey, model.getModelName());
             }
             
-            log.info("成功加载{}个对话模型服务，{}个图像生成服务", 
+            // 加载图像模型
+            for (AiModel model : imageModels) {
+                String modelKey = model.getModelKey();
+                DynamicAiImageService imageService = new DynamicAiImageService(model);
+                imageServiceMap.put(modelKey, imageService);
+                log.debug("加载图像模型：{}，名称：{}", modelKey, model.getModelName());
+            }
+            
+            log.info("成功加载{}个对话模型，{}个图像模型", 
                     modelServiceMap.size(), imageServiceMap.size());
             
         } catch (Exception e) {
-            log.error("加载模型服务失败", e);
+            log.error("加载对话和图像模型服务失败", e);
+            throw new RuntimeException("加载对话和图像模型服务失败", e);
         }
     }
     
@@ -164,8 +159,10 @@ public class DynamicAiModelBeanManager {
         return getService(parts[0], parts[1]);
     }
     
+    
     /**
-     * 刷新模型服务（热更新）
+     * 刷新单个模型服务（热更新）
+     * 用于单个模型配置变更时的即时刷新
      */
     public void refreshModelService(String providerCode, String modelCode) {
         String modelKey = providerCode + ":" + modelCode;
@@ -174,6 +171,7 @@ public class DynamicAiModelBeanManager {
         if (modelOpt.isEmpty()) {
             // 模型被删除，移除服务
             modelServiceMap.remove(modelKey);
+            imageServiceMap.remove(modelKey);
             modelFactory.clearModelCache(modelKey);
             log.info("移除模型服务：{}", modelKey);
             return;
@@ -183,27 +181,25 @@ public class DynamicAiModelBeanManager {
         if (!model.isEnabled()) {
             // 模型被禁用，移除服务
             modelServiceMap.remove(modelKey);
+            imageServiceMap.remove(modelKey);
             modelFactory.clearModelCache(modelKey);
             log.info("禁用模型服务：{}", modelKey);
             return;
         }
         
-        // 创建新的服务实例替换旧的
-        DynamicAiChatService newService = new DynamicAiChatService(model);
-        modelServiceMap.put(modelKey, newService);
+        // 根据类型创建新服务
+        if (model.isChatModel()) {
+            DynamicAiChatService newService = new DynamicAiChatService(model);
+            modelServiceMap.put(modelKey, newService);
+            log.info("刷新对话模型服务：{}，名称：{}", modelKey, model.getModelName());
+        } else if (model.isImageModel()) {
+            DynamicAiImageService newService = new DynamicAiImageService(model);
+            imageServiceMap.put(modelKey, newService);
+            log.info("刷新图像模型服务：{}，名称：{}", modelKey, model.getModelName());
+        }
+        
         modelFactory.clearModelCache(modelKey);
         apiKeyPoolManager.refreshModelPool(providerCode, modelCode);
-        
-        log.info("刷新模型服务：{}，名称：{}", modelKey, model.getModelName());
-    }
-    
-    /**
-     * 定时刷新任务（每30分钟执行）
-     */
-    @Scheduled(fixedDelay = 1800000)
-    public void scheduledRefresh() {
-        log.info("执行定时模型服务刷新任务");
-        loadAllModelServices();
     }
     
     /**

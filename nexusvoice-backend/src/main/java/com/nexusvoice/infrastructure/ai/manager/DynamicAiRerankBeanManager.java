@@ -3,7 +3,6 @@ package com.nexusvoice.infrastructure.ai.manager;
 import com.nexusvoice.domain.ai.model.AiApiCallLog;
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
-import com.nexusvoice.domain.ai.model.AiModelType;
 import com.nexusvoice.domain.ai.repository.AiApiCallLogRepository;
 import com.nexusvoice.domain.ai.repository.AiModelRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
@@ -14,10 +13,7 @@ import com.nexusvoice.infrastructure.ai.model.SiliconFlowRerankAdapter;
 import com.nexusvoice.infrastructure.ai.pool.ApiKeyPoolManager;
 import com.nexusvoice.infrastructure.ai.service.AiRerankService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import jakarta.annotation.PostConstruct;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -56,32 +52,31 @@ public class DynamicAiRerankBeanManager {
     }
     
     /**
-     * 初始化所有重排序模型服务
+     * 加载重排序模型服务
+     * 由AiModelInitializer统一调度，避免重复查询数据库
+     * 
+     * @param rerankModels 重排序模型列表
      */
-    @PostConstruct
-    public void init() {
-        log.info("初始化动态AI重排序模型Bean管理器...");
-        loadAllRerankServices();
-    }
-    
-    /**
-     * 加载所有重排序模型服务
-     */
-    public void loadAllRerankServices() {
+    public void loadModels(List<AiModel> rerankModels) {
         try {
-            List<AiModel> rerankModels = modelRepository.findByTypeEnabled(AiModelType.RERANK.getCode());
+            log.info("开始加载重排序模型服务...");
             
+            // 清空现有服务（用于刷新场景）
+            rerankServiceMap.clear();
+            
+            // 加载重排序模型
             for (AiModel model : rerankModels) {
                 String modelKey = model.getModelKey();
                 DynamicAiRerankService service = new DynamicAiRerankService(model);
                 rerankServiceMap.put(modelKey, service);
-                log.info("加载重排序模型服务：{}，名称：{}", modelKey, model.getModelName());
+                log.debug("加载重排序模型：{}，名称：{}", modelKey, model.getModelName());
             }
             
-            log.info("成功加载{}个重排序模型服务", rerankServiceMap.size());
+            log.info("成功加载{}个重排序模型", rerankServiceMap.size());
             
         } catch (Exception e) {
             log.error("加载重排序模型服务失败", e);
+            throw new RuntimeException("加载重排序模型服务失败", e);
         }
     }
     
@@ -131,7 +126,8 @@ public class DynamicAiRerankBeanManager {
     }
     
     /**
-     * 刷新模型服务（热更新）
+     * 刷新单个重排序模型服务（热更新）
+     * 用于单个模型配置变更时的即时刷新
      */
     public void refreshRerankService(String providerCode, String modelCode) {
         String modelKey = providerCode + ":" + modelCode;
@@ -155,15 +151,6 @@ public class DynamicAiRerankBeanManager {
         apiKeyPoolManager.refreshModelPool(providerCode, modelCode);
         
         log.info("刷新重排序模型服务：{}，名称：{}", modelKey, model.getModelName());
-    }
-    
-    /**
-     * 定时刷新任务（每30分钟执行）
-     */
-    @Scheduled(fixedDelay = 1800000)
-    public void scheduledRefresh() {
-        log.info("执行定时重排序模型服务刷新任务");
-        loadAllRerankServices();
     }
     
     /**
