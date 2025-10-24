@@ -29,6 +29,12 @@
     <langchain4j.version>0.35.0</langchain4j.version>
     <redisson.version>3.35.0</redisson.version>
     <rocketmq.version>2.3.0</rocketmq.version>
+    <!-- RAG文档处理相关版本 -->
+    <poi.version>5.4.0</poi.version>
+    <pdfbox.version>3.0.2</pdfbox.version>
+    <tika.version>2.6.0</tika.version>
+    <commons-io.version>2.16.1</commons-io.version>
+    <pgvector.version>0.1.6</pgvector.version>
   </properties>
 
   <dependencies>
@@ -150,19 +156,7 @@
       <scope>runtime</scope>
     </dependency>
     
-    <!-- PGVector扩展（用于向量存储，可选） -->
-    <!--
-    <dependency>
-      <groupId>com.pgvector</groupId>
-      <artifactId>pgvector</artifactId>
-      <version>0.1.6</version>
-    </dependency>
-    <dependency>
-      <groupId>dev.langchain4j</groupId>
-      <artifactId>langchain4j-pgvector</artifactId>
-      <version>${langchain4j.version}</version>
-    </dependency>
-    -->
+    <!-- PGVector扩展已移至上方RAG文档处理依赖区域 -->
 
     <!-- LangChain4j（与MySQL并存，不依赖PG） -->
     <dependency>
@@ -181,6 +175,57 @@
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-spring-boot-starter</artifactId>
       <version>${langchain4j.version}</version>
+    </dependency>
+
+    <!-- ==================== RAG文档处理相关依赖 ==================== -->
+    
+    <!-- Apache POI - Office文档解析 (Word/Excel/PPT) -->
+    <dependency>
+      <groupId>org.apache.poi</groupId>
+      <artifactId>poi-ooxml</artifactId>
+      <version>${poi.version}</version>
+    </dependency>
+
+    <!-- PDFBox - PDF文档处理 -->
+    <dependency>
+      <groupId>org.apache.pdfbox</groupId>
+      <artifactId>pdfbox</artifactId>
+      <version>${pdfbox.version}</version>
+    </dependency>
+
+    <!-- Apache Tika - 文件类型自动检测 -->
+    <dependency>
+      <groupId>org.apache.tika</groupId>
+      <artifactId>tika-core</artifactId>
+      <version>${tika.version}</version>
+    </dependency>
+
+    <!-- Commons IO - IO工具库 -->
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>${commons-io.version}</version>
+    </dependency>
+
+    <!-- LangChain4j POI文档解析器集成 -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-document-parser-apache-poi</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+
+    <!-- LangChain4j PGVector向量存储集成 -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-pgvector</artifactId>
+      <version>${langchain4j.version}</version>
+    </dependency>
+
+    <!-- PGVector Java驱动 -->
+    <dependency>
+      <groupId>com.pgvector</groupId>
+      <artifactId>pgvector</artifactId>
+      <version>${pgvector.version}</version>
     </dependency>
 
     <!-- Connection Pool - Druid -->
