@@ -68,16 +68,22 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // 禁用CSRF（使用JWT时不需要）
+            // 禁用CSRF（前后端分离，使用JWT）
             .csrf(AbstractHttpConfigurer::disable)
+            
+            // 配置会话策略：无状态（JWT）
+            .sessionManagement(session -> 
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            )
+            
+            // 配置异步请求支持（SSE需要）
+            .securityContext(context -> 
+                context.requireExplicitSave(false) // 允许异步请求共享SecurityContext
+            )
             
             // 启用CORS配置
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             
-            // 设置会话管理为无状态
-            .sessionManagement(session -> 
-                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                
             // 配置请求授权
             .authorizeHttpRequests(auth -> auth
                 // 公开访问的端点

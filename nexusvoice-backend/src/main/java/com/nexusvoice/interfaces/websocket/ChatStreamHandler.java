@@ -22,6 +22,8 @@ import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.domain.config.service.SystemConfigService;
 import com.nexusvoice.utils.MarkdownTextUtils;
+import com.nexusvoice.infrastructure.streaming.StreamChannel;
+import com.nexusvoice.infrastructure.streaming.impl.WebSocketChannel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
@@ -37,8 +39,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import org.springframework.beans.factory.annotation.Qualifier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -69,10 +71,9 @@ public class ChatStreamHandler implements WebSocketHandler {
     // 正在处理的TTS任务计数器，用于优雅关闭
     private final ConcurrentMap<String, AtomicInteger> sessionTaskCounts = new ConcurrentHashMap<>();
     
-    // JDK 21虚拟线程执行器 - 用于I/O密集型任务（如TTS调用）
-    private final ExecutorService virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
-    // 专用的心跳任务执行器（使用单个虚拟线程）
-    private final ExecutorService heartbeatExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    // 统一线程池管理（注入，不再自己创建）
+    private final ExecutorService ttsVirtualThreadExecutor;      // TTS专用虚拟线程池
+    private final ExecutorService heartbeatVirtualThreadExecutor; // 心跳专用虚拟线程池
     
     public ChatStreamHandler(ConversationApplicationService conversationApplicationService,
                            ConversationRepository conversationRepository,
@@ -82,7 +83,9 @@ public class ChatStreamHandler implements WebSocketHandler {
                            TTSService ttsService,
                            SystemConfigService systemConfigService,
                            DynamicAiModelBeanManager modelBeanManager,
-                           ObjectMapper objectMapper) {
+                           ObjectMapper objectMapper,
+                           @Qualifier("ttsVirtualThreadExecutor") ExecutorService ttsVirtualThreadExecutor,
+                           @Qualifier("heartbeatVirtualThreadExecutor") ExecutorService heartbeatVirtualThreadExecutor) {
         this.conversationApplicationService = conversationApplicationService;
         this.conversationRepository = conversationRepository;
         this.conversationDomainService = conversationDomainService;
@@ -92,6 +95,8 @@ public class ChatStreamHandler implements WebSocketHandler {
         this.systemConfigService = systemConfigService;
         this.modelBeanManager = modelBeanManager;
         this.objectMapper = objectMapper;
+        this.ttsVirtualThreadExecutor = ttsVirtualThreadExecutor;
+        this.heartbeatVirtualThreadExecutor = heartbeatVirtualThreadExecutor;
     }
 
     @Override
@@ -135,18 +140,11 @@ public class ChatStreamHandler implements WebSocketHandler {
                 return;
             }
 
-            // 单flight保护（由system_config控制开关）
-            boolean singleFlightEnabled = getBooleanConfig("websocket.single_flight.enabled", true);
-            if (singleFlightEnabled) {
-                Boolean prev = streamingSessions.putIfAbsent(sessionId, Boolean.TRUE);
-                if (prev != null) {
-                    sendErrorMessage(session, "上一个请求仍在处理中，请稍后再试");
-                    return;
-                }
-            }
+            // 创建WebSocket通道抽象
+            StreamChannel channel = new WebSocketChannel(session, objectMapper, userId);
             
-            // 处理流式聊天
-            handleStreamChat(session, requestDto, userId, singleFlightEnabled);
+            // 处理流式聊天（通过通道抽象）
+            handleStreamChatInternal(channel, requestDto, userId);
             
         } catch (Exception e) {
             log.error("处理WebSocket消息失败，会话ID：{}", sessionId, e);
@@ -234,20 +232,45 @@ public class ChatStreamHandler implements WebSocketHandler {
             }
         }
         
-        // 3. 关闭线程池
-        virtualThreadExecutor.shutdown();
-        heartbeatExecutor.shutdown();
+        // 3. 关闭线程池（线程池由Spring容器管理，这里不需要手动关闭）
+        // ttsVirtualThreadExecutor和heartbeatVirtualThreadExecutor由VirtualThreadPoolConfig统一管理
+        // Spring会在应用关闭时自动调用@PreDestroy方法关闭所有线程池
         
         log.info("WebSocket处理器资源清理完成");
     }
 
     /**
-     * 处理流式聊天
+     * 处理流式聊天（协议无关的核心逻辑）
+     * 
+     * 此方法被WebSocket和SSE共同调用，实现流式聊天的核心业务逻辑
+     * 包含：权限验证、对话创建、AI调用、TTS分段、增强链等完整流程
+     * 
+     * @param channel 流式输出通道（WebSocket或SSE）
+     * @param requestDto 聊天请求
+     * @param userId 用户ID
      */
-    private void handleStreamChat(WebSocketSession session, ChatRequestDto requestDto, Long userId, boolean singleFlightEnabled) {
+    public void handleStreamChatInternal(StreamChannel channel, ChatRequestDto requestDto, Long userId) {
+        String sessionId = channel.getSessionId();
+        boolean singleFlightEnabled = getBooleanConfig("websocket.single_flight.enabled", true);
+        
+        // 单flight保护（由system_config控制开关）
+        if (singleFlightEnabled) {
+            Boolean prev = streamingSessions.putIfAbsent(sessionId, Boolean.TRUE);
+            if (prev != null) {
+                // 发送错误消息和END信号
+                channel.sendMessage(StreamChatResponse.error("上一个请求仍在处理中，请稍后再试"));
+                channel.sendMessage(StreamChatResponse.end("error"));
+                
+                // SSE需要显式关闭连接
+                if (channel.getChannelType() == StreamChannel.ChannelType.SSE) {
+                    channel.close();
+                    log.debug("SSE流（重复请求）已关闭，sessionId={}", sessionId);
+                }
+                return;
+            }
+        }
         try {
             long startTime = System.currentTimeMillis();
-            String sessionId = session.getId();
             // 1. 获取或创建对话
             Conversation conversation = getOrCreateConversation(requestDto, userId);
             
@@ -318,7 +341,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             final SegmentAggregator aggregator = segmentedTtsEnabled
                     ? new SegmentAggregator(sessionId, ttsGroupId, selectedVoiceType, modelName, firstMinChars, minChars, maxChars, firstGateMs, ttsMaxConcurrency, heartbeatMs, lateUpdateEnabled,
                     (segText) -> responseContent.append(segText),
-                    (resp) -> sendMessage(session, resp))
+                    (resp) -> channel.sendMessage(resp))
                     : null;
 
             // 7. 动态获取AI服务（与HTTP完全一致）
@@ -335,32 +358,42 @@ public class ChatStreamHandler implements WebSocketHandler {
                             }
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.START) {
                                 // 模型开始事件直接转发
-                                sendMessage(session, streamResponse);
+                                channel.sendMessage(streamResponse);
                                 return;
                             }
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.CONTENT && streamResponse.getDelta() != null) {
                                 String delta = streamResponse.getDelta();
                                 responseContent.append(delta);
                                 // 始终发送CONTENT消息，让前端显示流式文字
-                                sendMessage(session, streamResponse);
+                                channel.sendMessage(streamResponse);
                                 // 如果启用了分段TTS，也传递给aggregator处理
                                 if (segmentedTtsEnabled && aggregator != null) {
                                     aggregator.onDelta(delta);
                                 }
                             }
                         } catch (Exception e) {
-                            log.error("发送流式响应失败", e);
+                            log.error("发送流式响应失败，通道类型：{}", channel.getChannelType(), e);
                         }
                     },
                     // onError - 处理错误
                     (error) -> {
-                        log.error("流式聊天出错，对话ID：{}", conversation.getId(), error);
-                        sendErrorMessage(session, "AI响应出错：" + error.getMessage());
-                        // 发送END信号给客户端，避免客户端一直等待
+                        log.error("流式聊天出错，对话ID：{}，通道类型：{}", conversation.getId(), channel.getChannelType(), error);
+                        
+                        // 先发送错误消息和END信号
+                        StreamChatResponse errorResp = StreamChatResponse.error("AI响应出错：" + error.getMessage());
+                        channel.sendMessage(errorResp);
+                        
                         StreamChatResponse errorEndResp = StreamChatResponse.end("error");
                         errorEndResp.setConversationId(conversation.getId());
                         errorEndResp.setResponseTimeMs(System.currentTimeMillis() - startTime);
-                        sendMessage(session, errorEndResp);
+                        channel.sendMessage(errorEndResp);
+                        
+                        // SSE需要显式关闭连接
+                        if (channel.getChannelType() == StreamChannel.ChannelType.SSE) {
+                            channel.close();
+                            log.debug("SSE流错误后已关闭，sessionId={}", sessionId);
+                        }
+                        
                         // 清理会话状态（包括任务计数器）
                         cleanupSession(sessionId, singleFlightEnabled);
                     },
@@ -418,7 +451,13 @@ public class ChatStreamHandler implements WebSocketHandler {
                                             endResp.setTtsGroupId(ttsGroupId);
                                             endResp.setTtsChunked(true);
                                         }
-                                        sendMessage(session, endResp);
+                                        channel.sendMessage(endResp);
+                                        
+                                        // SSE需要显式关闭连接，WebSocket保持长连接
+                                        if (channel.getChannelType() == StreamChannel.ChannelType.SSE) {
+                                            channel.close();
+                                            log.debug("SSE流已完成并关闭，sessionId={}", sessionId);
+                                        }
                                     }
                                 } catch (Exception ee) {
                                     log.error("保存AI回复消息失败", ee);
@@ -436,19 +475,35 @@ public class ChatStreamHandler implements WebSocketHandler {
             );
             
         } catch (BizException e) {
-            log.error("流式聊天业务异常，用户ID：{}", userId, e);
-            sendErrorMessage(session, e.getMessage());
-            // 发送END信号给客户端
-            sendMessage(session, StreamChatResponse.end("error"));
+            log.error("流式聊天业务异常，用户ID：{}，通道类型：{}", userId, channel.getChannelType(), e);
+            
+            // 先发送错误消息和END信号
+            channel.sendMessage(StreamChatResponse.error(e.getMessage()));
+            channel.sendMessage(StreamChatResponse.end("error"));
+            
+            // SSE需要显式关闭连接
+            if (channel.getChannelType() == StreamChannel.ChannelType.SSE) {
+                channel.close();
+                log.debug("SSE流异常后已关闭，sessionId={}", sessionId);
+            }
+            
             // 清理会话状态（包括任务计数器）
-            cleanupSession(session.getId(), singleFlightEnabled);
+            cleanupSession(sessionId, singleFlightEnabled);
         } catch (Exception e) {
-            log.error("流式聊天系统异常，用户ID：{}", userId, e);
-            sendErrorMessage(session, "系统繁忙，请稍后重试");
-            // 发送END信号给客户端
-            sendMessage(session, StreamChatResponse.end("error"));
+            log.error("流式聊天系统异常，用户ID：{}，通道类型：{}", userId, channel.getChannelType(), e);
+            
+            // 先发送错误消息和END信号
+            channel.sendMessage(StreamChatResponse.error("系统繁忙，请稍后重试"));
+            channel.sendMessage(StreamChatResponse.end("error"));
+            
+            // SSE需要显式关闭连接
+            if (channel.getChannelType() == StreamChannel.ChannelType.SSE) {
+                channel.close();
+                log.debug("SSE流异常后已关闭，sessionId={}", sessionId);
+            }
+            
             // 清理会话状态（包括任务计数器）
-            cleanupSession(session.getId(), singleFlightEnabled);
+            cleanupSession(sessionId, singleFlightEnabled);
         }
     }
 
@@ -581,7 +636,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-            }, virtualThreadExecutor);
+            }, ttsVirtualThreadExecutor);  // 使用TTS专用虚拟线程池
             
             return done;
         }
@@ -619,7 +674,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                         Thread.currentThread().interrupt();
                         log.debug("首段fallback任务被中断");
                     }
-                }, virtualThreadExecutor);
+                }, ttsVirtualThreadExecutor);  // 使用TTS专用虚拟线程池
             }
 
             // 使用虚拟线程执行器代替默认线程池
@@ -667,7 +722,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                         log.debug("TTS任务完成：index={}，剩余任务数：{}，sessionId={}", index, remaining, sessionId);
                     }
                 }
-            }, virtualThreadExecutor); // 使用虚拟线程执行器
+            }, ttsVirtualThreadExecutor);  // 使用TTS专用虚拟线程池
         }
 
         private synchronized void flush() {
@@ -741,7 +796,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                         break;
                     }
                 }
-            }, heartbeatExecutor); // 使用专用的心跳执行器
+            }, heartbeatVirtualThreadExecutor);  // 使用心跳专用虚拟线程池
         }
 
         private void stopHeartbeat() {

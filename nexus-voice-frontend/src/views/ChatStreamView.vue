@@ -31,6 +31,30 @@
             <span class="assistant-icon">✨</span>
             <span class="assistant-text">角色生成</span>
           </button>
+          <!-- 协议选择器 -->
+          <div class="protocol-selector">
+            <label class="protocol-label">
+              <span class="protocol-icon">🔄</span>
+            </label>
+            <el-select 
+              v-model="streamProtocol" 
+              placeholder="选择协议"
+              :disabled="isSending"
+              class="protocol-select"
+              size="small"
+              @change="handleProtocolChange"
+            >
+              <el-option label="WebSocket" value="websocket">
+                <span>WebSocket</span>
+                <span style="color: #9ca3af; font-size: 12px; margin-left: 8px;">(双向)</span>
+              </el-option>
+              <el-option label="SSE" value="sse">
+                <span>SSE</span>
+                <span style="color: #9ca3af; font-size: 12px; margin-left: 8px;">(轻量)</span>
+              </el-option>
+            </el-select>
+          </div>
+          
           <!-- WebSocket状态指示器 -->
           <div class="ws-status" :class="wsStatusClass">
             <span class="status-dot"></span>
@@ -401,19 +425,24 @@ import ConversationSidebar from '../components/ConversationSidebar.vue';
 import characterApi from '../services/character';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
+import { createTransport } from '../services/streamTransport';
 
 // 路由和认证
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
-// WebSocket相关
-const ws = ref(null);
+// 流式传输相关（支持WebSocket和SSE）
+const streamProtocol = ref('websocket'); // 'websocket' | 'sse'
+const transport = ref(null); // StreamTransport实例
 const wsStatus = ref('disconnected'); // disconnected, connecting, connected
 const connectionError = ref('');
-const reconnectAttempts = ref(0);
-const maxReconnectAttempts = 3;
-const reconnectTimeouts = [1000, 2000, 4000]; // 指数退避
+
+// 协议统计（用于监控和调试）
+const protocolStats = ref({
+  websocket: { attempts: 0, success: 0, failures: 0, lastUsed: null },
+  sse: { attempts: 0, success: 0, failures: 0, lastUsed: null }
+});
 
 // 对话相关
 const messages = ref([]);
@@ -562,14 +591,9 @@ const wsStatusText = computed(() => {
   }
 });
 
-// 初始化WebSocket连接
-const initWebSocket = () => {
-  if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-    return;
-  }
-  
-  wsStatus.value = 'connecting';
-  connectionError.value = '';
+// 初始化传输层（支持WebSocket和SSE）
+const initTransport = () => {
+  console.log(`[传输层] 🚀 初始化 ${streamProtocol.value.toUpperCase()} 传输`);
   
   const token = authStore.token;
   if (!token) {
@@ -578,71 +602,70 @@ const initWebSocket = () => {
     return;
   }
   
-  // 使用子协议（Sec-WebSocket-Protocol）传递token，更安全
-  // 格式：Bearer.{token}，后端会从子协议中提取
-  const wsUrl = `ws://localhost:8081/ws/chat/stream`;
-  const protocol = `Bearer.${token}`;
+  // 关闭旧连接
+  if (transport.value) {
+    console.log(`[传输层] 🔌 关闭旧连接`);
+    transport.value.close();
+    transport.value = null;
+  }
   
   try {
-    ws.value = new WebSocket(wsUrl, protocol);
+    // 创建新的传输实例
+    transport.value = createTransport(streamProtocol.value);
     
-    ws.value.onopen = () => {
-      console.log('WebSocket连接已建立');
-      wsStatus.value = 'connected';
-      connectionError.value = '';
-      reconnectAttempts.value = 0;
-      systemMessage.value = '连接成功，可以开始对话了';
+    // 统计尝试次数
+    protocolStats.value[streamProtocol.value].attempts++;
+    
+    // 绑定状态变更事件
+    transport.value.onStatusChange = (status) => {
+      console.log(`[${streamProtocol.value.toUpperCase()}] 📡 状态变更: ${status}`);
+      wsStatus.value = status;
       
-      // 从sessionStorage恢复conversationId（保持字符串类型）
-      const savedConversationId = sessionStorage.getItem(`stream-conversation-${roleId.value}`);
-      if (savedConversationId) {
-        conversationId.value = savedConversationId;
+      if (status === 'connected') {
+        connectionError.value = '';
+        systemMessage.value = '连接成功，可以开始对话了';
+        protocolStats.value[streamProtocol.value].success++;
+        protocolStats.value[streamProtocol.value].lastUsed = new Date();
+        
+        // 从sessionStorage恢复conversationId
+        const savedConversationId = sessionStorage.getItem(`stream-conversation-${roleId.value}`);
+        if (savedConversationId) {
+          conversationId.value = savedConversationId;
+        }
+      } else if (status === 'disconnected') {
+        if (!connectionError.value) {
+          connectionError.value = '连接已断开';
+        }
       }
     };
     
-    ws.value.onmessage = (event) => {
-      try {
-        console.log('[WebSocket原始消息]', event.data.substring(0, 200) + (event.data.length > 200 ? '...' : ''));
-        const data = JSON.parse(event.data);
-        handleWebSocketMessage(data);
-      } catch (error) {
-        console.error('解析WebSocket消息失败:', error, event.data);
-      }
+    // 绑定消息事件
+    transport.value.onMessage = (data) => {
+      console.log(`[${streamProtocol.value.toUpperCase()}] 📨 收到消息: ${data.type}`);
+      handleWebSocketMessage(data); // 复用现有消息处理逻辑
     };
     
-    ws.value.onerror = (error) => {
-      console.error('WebSocket错误:', error);
-      connectionError.value = '连接出现错误';
-    };
-    
-    ws.value.onclose = (event) => {
-      console.log('WebSocket连接已关闭', event);
-      wsStatus.value = 'disconnected';
+    // 绑定错误事件
+    transport.value.onError = (error) => {
+      console.error(`[${streamProtocol.value.toUpperCase()}] ❌ 错误:`, error);
+      connectionError.value = error.message || '连接出现错误';
+      protocolStats.value[streamProtocol.value].failures++;
       
-      if (event.code === 1008 || event.code === 1003) {
-        connectionError.value = 'Token认证失败，请重新登录';
+      // Token认证失败
+      if (error.message && error.message.includes('Token认证失败')) {
         setTimeout(() => {
           authStore.logout();
         }, 2000);
-        return;
-      }
-      
-      // 自动重连
-      if (reconnectAttempts.value < maxReconnectAttempts) {
-        const timeout = reconnectTimeouts[reconnectAttempts.value] || 5000;
-        connectionError.value = `连接断开，${timeout/1000}秒后重试...`;
-        setTimeout(() => {
-          reconnectAttempts.value++;
-          initWebSocket();
-        }, timeout);
-      } else {
-        connectionError.value = '连接失败，请检查网络';
       }
     };
+    
+    // 开始连接
+    transport.value.connect(token);
   } catch (error) {
-    console.error('创建WebSocket失败:', error);
+    console.error(`[传输层] ❌ 创建传输实例失败:`, error);
     connectionError.value = '创建连接失败';
     wsStatus.value = 'disconnected';
+    protocolStats.value[streamProtocol.value].failures++;
   }
 };
 
@@ -994,18 +1017,26 @@ const sendMessage = async () => {
   }
   console.log('[发送WebSocket消息]', { ...requestData, imageUrls: requestData.imageUrls ? `${requestData.imageUrls.length}张图片` : undefined });
   
-  // 发送到WebSocket
-  if (ws.value && ws.value.readyState === WebSocket.OPEN) {
-    ws.value.send(JSON.stringify(requestData));
-    isSending.value = true;
-    
-    // 记录发送时间，用于调试
-    console.log(`[发送成功] 时间: ${new Date().toLocaleTimeString()}`);
+  // 使用传输层发送消息
+  if (transport.value && transport.value.isConnected()) {
+    try {
+      console.log(`[${streamProtocol.value.toUpperCase()}] 📤 准备发送消息`);
+      transport.value.send(requestData);
+      isSending.value = true;
+      
+      // 记录发送时间
+      console.log(`[发送成功] 时间: ${new Date().toLocaleTimeString()}, 协议: ${streamProtocol.value}`);
+    } catch (error) {
+      console.error(`[${streamProtocol.value.toUpperCase()}] ❌ 发送失败:`, error);
+      ElMessage.error('发送消息失败：' + error.message);
+      isAIThinking.value = false;
+      isSending.value = false;
+    }
   } else {
-    ElMessage.error('WebSocket未连接');
+    ElMessage.error(`${streamProtocol.value.toUpperCase()}未连接`);
     isAIThinking.value = false;
     isSending.value = false;
-    console.log('[状态重置] WebSocket未连接，isSending=false');
+    console.log('[状态重置] 未连接，isSending=false');
   }
   
   scrollToBottom();
@@ -1081,155 +1112,6 @@ const stopAudioPlayback = () => {
   isPlaying.value = false;
 };
 
-// 启动消息超时定时器
-const startMessageTimeout = () => {
-  clearMessageTimeout();
-  messageTimeoutTimer = setTimeout(() => {
-    // 超时处理：强制结束当前流式消息
-    const lastMessage = messages.value[messages.value.length - 1];
-    if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
-      console.warn('消息接收超时，强制结束流式输出');
-      lastMessage.isStreaming = false;
-      
-      // 渲染Markdown
-      if (lastMessage.content) {
-        lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-      }
-      
-      // 添加系统提示消息
-      messages.value.push({
-        id: `msg-${Date.now()}`,
-        type: 'system',
-        content: '消息接收超时，可能网络不稳定或服务器繁忙',
-        timestamp: new Date()
-      });
-    }
-    
-    // 重置状态
-    isSending.value = false;
-    isAIThinking.value = false;
-    systemMessage.value = '准备就绪';
-    
-    ElMessage.warning('消息接收超时，请重试');
-  }, MESSAGE_TIMEOUT);
-};
-
-// 清除消息超时定时器
-const clearMessageTimeout = () => {
-  if (messageTimeoutTimer) {
-    clearTimeout(messageTimeoutTimer);
-    messageTimeoutTimer = null;
-  }
-};
-
-// 启动流状态检测
-const startStreamCheck = () => {
-  clearStreamCheck();
-  hasCompleteSentence = false;
-  
-  let checkCount = 0; // 添加检查计数器
-  const MAX_CHECKS = 60; // 最多检查60次（30秒）
-  
-  streamCheckTimer = setInterval(() => {
-    checkCount++;
-    
-    // 超过最大检查次数，强制结束
-    if (checkCount >= MAX_CHECKS) {
-      console.error('[流超时] 已检查30秒，强制结束');
-      const lastMessage = messages.value[messages.value.length - 1];
-      if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
-        lastMessage.isStreaming = false;
-        if (lastMessage.content) {
-          lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-        }
-      }
-      isSending.value = false;
-      isAIThinking.value = false;
-      systemMessage.value = '准备就绪';
-      clearMessageTimeout();
-      clearStreamCheck();
-      ElMessage.error('消息接收超时，请刷新页面');
-      return;
-    }
-    
-    // 检查是否有正在流式输出的消息
-    const lastMessage = messages.value[messages.value.length - 1];
-    if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
-      const now = Date.now();
-      const timeSinceLastContent = now - lastContentTime;
-      
-      // 决定超时时间：如果有完整句子，使用较短的超时
-      const timeout = hasCompleteSentence ? QUICK_END_TIMEOUT : STREAM_IDLE_TIMEOUT;
-      
-      // 如果超过超时时间没有新内容，认为流已经结束
-      if (timeSinceLastContent > timeout) {
-        const reason = hasCompleteSentence ? '检测到完整句子' : '长时间无新内容';
-        console.warn(`[流结束检测] ${reason}，${timeout}ms没有新内容，强制结束流`);
-        
-        // 强制结束流式输出
-        lastMessage.isStreaming = false;
-        
-        // 渲染Markdown
-        if (lastMessage.content) {
-          lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-        }
-        
-        // 重置状态
-        isSending.value = false;
-        isAIThinking.value = false;
-        systemMessage.value = '准备就绪';
-        
-        console.log('[状态重置] 流结束检测触发，isSending=false');
-        
-        // 清除定时器
-        clearMessageTimeout();
-        clearStreamCheck();
-      }
-    } else {
-      // 如果没有流式消息了，停止检查
-      clearStreamCheck();
-    }
-  }, 500); // 每0.5秒检查一次，更快响应
-};
-
-// 清除流状态检测定时器
-const clearStreamCheck = () => {
-  if (streamCheckTimer) {
-    clearInterval(streamCheckTimer);
-    streamCheckTimer = null;
-  }
-  hasCompleteSentence = false;
-};
-
-// 强制结束流
-const forceEndStream = () => {
-  console.log('[强制结束] 用户手动停止流式输出');
-  
-  const lastMessage = messages.value[messages.value.length - 1];
-  if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
-    // 强制结束流式输出
-    lastMessage.isStreaming = false;
-    
-    // 渲染Markdown
-    if (lastMessage.content) {
-      lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-    }
-  }
-  
-  // 重置所有状态
-  isSending.value = false;
-  isAIThinking.value = false;
-  systemMessage.value = '准备就绪';
-  
-  console.log('[状态重置] 强制结束，isSending=false');
-  
-  // 清除所有定时器
-  clearMessageTimeout();
-  clearStreamCheck();
-  
-  ElMessage.warning('已强制停止AI回复');
-};
-
 // 加载角色信息
 const loadCharacterInfo = async () => {
   if (!roleId.value) return;
@@ -1239,12 +1121,6 @@ const loadCharacterInfo = async () => {
     if (response.data.success) {
       currentCharacter.value = response.data.data;
       console.log('加载的角色信息:', currentCharacter.value);
-      
-      // 打印开场白信息用于调试
-      const greeting = currentCharacter.value.greetingMessage || currentCharacter.value.greeting_message;
-      const greetingAudioUrl = currentCharacter.value.greetingAudioUrl || currentCharacter.value.greeting_audio_url;
-      console.log('开场白文本:', greeting);
-      console.log('开场白音频:', greetingAudioUrl);
     }
   } catch (error) {
     console.error('加载角色信息失败:', error);
@@ -1279,13 +1155,11 @@ const showCharacterGreeting = () => {
         groupId: 'greeting'
       }];
       
-      // 自动播放开场白音频（开场白音频是预先生成的，始终播放）
+      // 自动播放开场白音频
       console.log('[开场白] 检测到音频URL，准备播放:', greetingAudioUrl);
       setTimeout(() => {
         startAudioPlayback(greetingMessage);
       }, 500);
-    } else {
-      console.log('[开场白] 没有音频URL');
     }
     
     messages.value.push(greetingMessage);
@@ -1315,37 +1189,23 @@ const handleSwitchConversation = async (convId) => {
   // 清空当前消息
   messages.value = [];
   
-  // 更新conversationId（保持字符串类型）
+  // 更新conversationId
   conversationId.value = convId;
   
   // 从会话列表中获取该会话的角色信息
   const targetConversation = conversationHistory.value.find(c => c.id === convId);
   if (targetConversation) {
-    // 更新选中的模型（如果会话中有模型信息）
+    // 更新选中的模型
     if (targetConversation.modelName) {
       selectedModel.value = targetConversation.modelName;
     }
     // 更新当前角色信息
     if (targetConversation.conversationRole) {
       currentCharacter.value = targetConversation.conversationRole;
-      console.log('切换会话，更新角色信息:', currentCharacter.value);
-    } else if (targetConversation.roleId) {
-      // 如果只有roleId，则加载角色详情
-      try {
-        const response = await characterApi.getCharacterDetail(targetConversation.roleId);
-        if (response.data.success) {
-          currentCharacter.value = response.data.data;
-          console.log('切换会话，加载角色详情:', currentCharacter.value);
-        }
-      } catch (error) {
-        console.error('加载角色详情失败:', error);
-      }
     }
   }
   
   sessionStorage.setItem(`stream-conversation-${roleId.value}`, convId);
-  
-  // 更新系统消息
   systemMessage.value = '正在加载历史消息...';
   
   // 加载历史消息
@@ -1354,31 +1214,9 @@ const handleSwitchConversation = async (convId) => {
     if (response.data.success) {
       const data = response.data.data;
       
-      // 如果没有历史消息，显示开场白
       if (!data || data.length === 0) {
-        // 显示角色的开场白
-        if (currentCharacter.value) {
-          const greeting = currentCharacter.value.greetingMessage || currentCharacter.value.greeting_message;
-          const greetingAudioUrl = currentCharacter.value.greetingAudioUrl || currentCharacter.value.greeting_audio_url;
-          
-          if (greeting) {
-            const greetingMessage = {
-              id: `msg-greeting-${Date.now()}`,
-              type: 'assistant',
-              content: greeting,
-              isStreaming: false,
-              renderedContent: renderMarkdown(greeting),
-              audioSegments: greetingAudioUrl ? [{
-                index: 0,
-                text: greeting,
-                audioUrl: greetingAudioUrl,
-                groupId: 'greeting'
-              }] : [],
-              timestamp: new Date()
-            };
-            messages.value.push(greetingMessage);
-          }
-        }
+        // 显示开场白
+        showCharacterGreeting();
       } else {
         // 转换历史消息格式
         messages.value = data.map((msg) => ({
@@ -1401,6 +1239,115 @@ const handleSwitchConversation = async (convId) => {
   }
 };
 
+// 重新连接
+const reconnect = () => {
+  console.log(`[传输层] 🔄 手动重连 ${streamProtocol.value.toUpperCase()}`);
+  initTransport();
+};
+
+// 协议切换处理
+const handleProtocolChange = () => {
+  if (isSending.value) {
+    ElMessage.warning('请等待当前消息完成后再切换协议');
+    // 回退选择
+    nextTick(() => {
+      streamProtocol.value = streamProtocol.value === 'websocket' ? 'sse' : 'websocket';
+    });
+    return;
+  }
+  
+  console.log(`[协议切换] 🔄 切换到 ${streamProtocol.value.toUpperCase()}`);
+  ElMessage.info(`已切换到 ${streamProtocol.value.toUpperCase()} 协议`);
+  
+  // 重新初始化传输层
+  initTransport();
+  
+  // 保存到localStorage
+  localStorage.setItem('preferred_protocol', streamProtocol.value);
+};
+
+// 渲染Markdown
+const renderMarkdown = (content) => {
+  if (!content) return '';
+  try {
+    const html = marked(content);
+    return DOMPurify.sanitize(html);
+  } catch (error) {
+    console.error('Markdown渲染失败:', error);
+    return content;
+  }
+};
+
+// 滚动到底部
+const scrollToBottom = () => {
+  nextTick(() => {
+    if (messageListEl.value) {
+      messageListEl.value.scrollTop = messageListEl.value.scrollHeight;
+    }
+  });
+};
+
+// 加载TTS声音列表
+const loadVoiceList = async () => {
+  try {
+    const response = await characterApi.getVoiceList();
+    if (response.data.success) {
+      voiceList.value = response.data.data || [];
+    }
+  } catch (error) {
+    console.error('加载声音列表失败:', error);
+  }
+};
+
+// 获取头像URL
+const getAvatarUrl = (url) => {
+  if (!url) return '/default-avatar.png';
+  if (url.startsWith('http')) return url;
+  return url;
+};
+
+// 获取用户头像
+const getUserAvatar = () => {
+  const user = authStore.user;
+  if (user && user.avatarUrl) {
+    return user.avatarUrl;
+  }
+  return '/default-user-avatar.png';
+};
+
+// 返回角色列表
+const goBack = () => {
+  router.push('/characters');
+};
+
+// 格式化时间
+const formatTime = (timestamp) => {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now - date;
+  
+  // 小于1分钟
+  if (diff < 60000) {
+    return '刚刚';
+  }
+  // 小于1小时
+  if (diff < 3600000) {
+    return `${Math.floor(diff / 60000)}分钟前`;
+  }
+  // 小于1天
+  if (diff < 86400000) {
+    return `${Math.floor(diff / 3600000)}小时前`;
+  }
+  // 显示日期时间
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
 // 删除对话
 const handleDeleteConversation = async (convId) => {
   stopAudioPlayback();
@@ -1412,283 +1359,161 @@ const handleDeleteConversation = async (convId) => {
       {
         confirmButtonText: '确认删除',
         cancelButtonText: '取消',
-        type: 'warning',
+        type: 'warning'
       }
     );
     
-    await characterApi.deleteConversation(convId);
-    ElMessage.success('对话删除成功！');
-    
-    const index = conversationHistory.value.findIndex(c => c.id === convId);
-    if (index !== -1) {
-      conversationHistory.value.splice(index, 1);
-    }
-    
-    if (conversationId.value === convId) {
-      conversationId.value = null;
-      messages.value = [];
-      sessionStorage.removeItem(`stream-conversation-${roleId.value}`);
+    // 执行删除
+    const response = await characterApi.deleteConversation(convId);
+    if (response.data.success) {
+      ElMessage.success('删除成功');
+      
+      // 如果删除的是当前对话，清空消息列表
+      if (conversationId.value === convId) {
+        conversationId.value = null;
+        messages.value = [];
+        sessionStorage.removeItem(`stream-conversation-${roleId.value}`);
+        showCharacterGreeting();
+      }
+      
+      // 刷新对话列表
+      await fetchConversationHistory();
     }
   } catch (error) {
     if (error !== 'cancel') {
       console.error('删除对话失败:', error);
-      ElMessage.error('删除对话失败');
+      ElMessage.error('删除失败');
     }
   }
 };
 
-// 渲染Markdown
-const renderMarkdown = (content) => {
-  if (!content) return '';
-  try {
-    const rawHtml = marked.parse(content);
-    return DOMPurify.sanitize(rawHtml);
-  } catch (error) {
-    console.error('Markdown渲染失败:', error);
-    return content;
-  }
-};
-
-// 格式化时间
-const formatTime = (timestamp) => {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString('zh-CN', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    second: '2-digit' 
-  });
-};
-
-// 滚动控制
-const handleScroll = () => {
-  if (!messageListEl.value) return;
-  
-  clearTimeout(scrollCheckTimer);
-  scrollCheckTimer = setTimeout(() => {
-    const { scrollTop, scrollHeight, clientHeight } = messageListEl.value;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-    userScrolled.value = !isAtBottom;
-  }, 100);
-};
-
-const scrollToBottom = async () => {
-  if (userScrolled.value) return;
-  
-  await nextTick();
-  if (messageListEl.value) {
-    messageListEl.value.scrollTop = messageListEl.value.scrollHeight;
-  }
-};
-
-// 重新连接
-const reconnect = () => {
-  reconnectAttempts.value = 0;
-  initWebSocket();
-};
-
-// 返回首页
-const goBack = () => {
-  router.push('/');
-};
-
-// 获取头像URL
-const getAvatarUrl = (url) => {
-  return url || new URL('../assets/placeholder.svg', import.meta.url).href;
-};
-
-// 获取用户头像
-const getUserAvatar = () => {
-  // 优先使用用户设置的头像，否则使用默认占位图
-  return authStore.user?.avatar || new URL('../assets/placeholder.svg', import.meta.url).href;
-};
-
-// 监听路由变化
-watch(() => route.params.roleId, async (newRoleId, oldRoleId) => {
-  if (newRoleId && newRoleId !== oldRoleId) {
-    stopAudioPlayback();
-    messages.value = [];
-    conversationId.value = null;
-    sessionStorage.removeItem(`stream-conversation-${oldRoleId}`);
-    
-    // 重新加载角色信息
-    await loadCharacterInfo();
-    
-    // 仅显示开场白（不创建对话）
-    showCharacterGreeting();
-    
-    // 重新建立WebSocket连接
-    if (ws.value) {
-      ws.value.close();
-    }
-    initWebSocket();
-  }
-});
-
-// 角色助手相关方法
-const openAssistantPanel = () => {
-  assistantStep.value = "initial";
-  roleBrief.value = null;
-  researchTasks.value = [];
-  isAssistantPanelVisible.value = true;
-};
-
-const handleGenerateBrief = async () => {
-  if (!conversationId.value) {
-    ElMessage.warning('请先进行对话后再生成角色草稿');
-    return;
-  }
-  
-  isAssistantLoading.value = true;
-  try {
-    const response = await characterApi.generateRoleBrief(conversationId.value, enableWebSearch.value);
-    if (response.data && response.data.success) {
-      roleBrief.value = response.data.data;
-      assistantStep.value = "brief_generated";
-      ElMessage.success("角色草稿已生成！");
-    } else {
-      throw new Error(response.data.message || "生成草稿失败");
-    }
-  } catch (error) {
-    ElMessage.error(
-        error.response?.data?.message || "生成草稿失败，请稍后再试。"
-    );
-  } finally {
-    isAssistantLoading.value = false;
-  }
-};
-
-const handlePreviewTasks = async () => {
-  if (!conversationId.value) {
-    ElMessage.warning('无法获取对话ID');
-    return;
-  }
-  
-  isAssistantLoading.value = true;
-  try {
-    const response = await characterApi.getResearchTasks(conversationId.value);
-    researchTasks.value = response.data.data.tasks;
-    assistantStep.value = "tasks_previewed";
-  } catch (error) {
-    ElMessage.error(
-        error.response?.data?.message || "预览任务失败，请稍后再试。"
-    );
-  } finally {
-    isAssistantLoading.value = false;
-  }
-};
-
-const handleConfirmCreation = async (isDeep) => {
-  if (!conversationId.value) {
-    ElMessage.warning('无法获取对话ID');
-    return;
-  }
-  
-  isAssistantLoading.value = true;
-  const payload = {
-    conversationId: conversationId.value,
-    deepResearch: isDeep,
-    overrideName: roleBrief.value.name,
-    description: roleBrief.value.description,
-    personaPrompt: roleBrief.value.personaPrompt,
-    greetingMessage: roleBrief.value.greetingMessage,
-    avatarUrl: roleBrief.value.avatarUrl,
-    voiceType: roleBrief.value.voiceType,
-  };
-  if (isDeep) {
-    payload.researchQueries = researchTasks.value
-        .filter((t) => t.enabled)
-        .map((t) => t.query);
-  }
-  try {
-    const response = await characterApi.confirmRoleCreation(payload);
-    ElMessage.success(`角色 "${response.data.data.name}" 创建成功！`);
-    isAssistantPanelVisible.value = false;
-  } catch (error) {
-    ElMessage.error(
-        error.response?.data?.message || "创建角色失败，请稍后再试。"
-    );
-  } finally {
-    isAssistantLoading.value = false;
-  }
-};
-
-const triggerFileInput = () => {
-  fileInput.value.click();
-};
-
-const handleImageUpload = async (event) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  isUploading.value = true;
-  try {
-    const response = await characterApi.uploadImage(file);
-    if (response.data && response.data.success) {
-      const imageUrl = response.data.message;
-      if (roleBrief.value) {
-        roleBrief.value.avatarUrl = imageUrl;
+// 启动消息超时定时器
+const startMessageTimeout = () => {
+  clearMessageTimeout();
+  messageTimeoutTimer = setTimeout(() => {
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
+      console.warn('消息接收超时，强制结束流式输出');
+      lastMessage.isStreaming = false;
+      
+      if (lastMessage.content) {
+        lastMessage.renderedContent = renderMarkdown(lastMessage.content);
       }
-      ElMessage.success("图片上传成功！");
-    } else {
-      throw new Error(response.data.message || "上传失败");
+      
+      messages.value.push({
+        id: `msg-${Date.now()}`,
+        type: 'system',
+        content: '消息接收超时，可能网络不稳定或服务器繁忙',
+        timestamp: new Date()
+      });
     }
-  } catch (error) {
-    ElMessage.error(error.message || "图片上传失败");
-  } finally {
-    isUploading.value = false;
-    event.target.value = "";
-  }
-};
-
-const handleImageGeneration = async () => {
-  if (!roleBrief.value || !roleBrief.value.description) {
-    ElMessage.warning("请先填写角色描述，AI需要根据描述来生成头像");
-    return;
-  }
-  isGeneratingImage.value = true;
-  try {
-    const prompt = `为一位名叫"${roleBrief.value.name}"的角色生成一张头像。角色特征：${roleBrief.value.description}`;
-    const response = await characterApi.generateImage(prompt);
     
-    if (response.data && response.data.success && response.data.data.imageUrls.length > 0) {
-      const imageUrl = response.data.data.imageUrls[0];
-      roleBrief.value.avatarUrl = imageUrl;
-      ElMessage.success("头像生成成功！");
-    } else {
-      throw new Error(response.data.message || "未能获取到生成的图片URL");
+    isSending.value = false;
+    isAIThinking.value = false;
+    systemMessage.value = '准备就绪';
+    
+    ElMessage.warning('消息接收超时，请重试');
+  }, MESSAGE_TIMEOUT);
+};
+
+// 清除消息超时定时器
+const clearMessageTimeout = () => {
+  if (messageTimeoutTimer) {
+    clearTimeout(messageTimeoutTimer);
+    messageTimeoutTimer = null;
+  }
+};
+
+// 清除流状态检测定时器
+const clearStreamCheck = () => {
+  if (streamCheckTimer) {
+    clearInterval(streamCheckTimer);
+    streamCheckTimer = null;
+  }
+  hasCompleteSentence = false;
+};
+
+// 启动流状态检测
+const startStreamCheck = () => {
+  clearStreamCheck();
+  hasCompleteSentence = false;
+  
+  let checkCount = 0;
+  const MAX_CHECKS = 60;
+  
+  streamCheckTimer = setInterval(() => {
+    checkCount++;
+    
+    if (checkCount >= MAX_CHECKS) {
+      console.error('[流超时] 已检查30秒，强制结束');
+      const lastMessage = messages.value[messages.value.length - 1];
+      if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
+        lastMessage.isStreaming = false;
+        if (lastMessage.content) {
+          lastMessage.renderedContent = renderMarkdown(lastMessage.content);
+        }
+      }
+      isSending.value = false;
+      isAIThinking.value = false;
+      systemMessage.value = '准备就绪';
+      clearMessageTimeout();
+      clearStreamCheck();
+      ElMessage.error('消息接收超时，请刷新页面');
+      return;
     }
-  } catch (error) {
-    console.error("生成头像失败:", error);
-    ElMessage.error(error.response?.data?.message || "生成头像失败，请稍后再试。");
-  } finally {
-    isGeneratingImage.value = false;
-  }
+    
+    const lastMessage = messages.value[messages.value.length - 1];
+    if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
+      const now = Date.now();
+      const timeSinceLastContent = now - lastContentTime;
+      
+      const timeout = hasCompleteSentence ? QUICK_END_TIMEOUT : STREAM_IDLE_TIMEOUT;
+      
+      if (timeSinceLastContent > timeout) {
+        const reason = hasCompleteSentence ? '检测到完整句子' : '长时间无新内容';
+        console.warn(`[流结束检测] ${reason}，${timeout}ms没有新内容，强制结束流`);
+        
+        lastMessage.isStreaming = false;
+        
+        if (lastMessage.content) {
+          lastMessage.renderedContent = renderMarkdown(lastMessage.content);
+        }
+        
+        isSending.value = false;
+        isAIThinking.value = false;
+        systemMessage.value = '准备就绪';
+        
+        clearMessageTimeout();
+        clearStreamCheck();
+      }
+    } else {
+      clearStreamCheck();
+    }
+  }, 500);
 };
 
-const fetchVoiceList = async () => {
-  try {
-    const response = await characterApi.getVoiceList();
-    voiceList.value = response.data;
-  } catch (error) {
-    console.error("获取声音列表失败:", error);
-    ElMessage.error("无法加载声音列表");
+// 强制结束流
+const forceEndStream = () => {
+  console.log('[强制结束] 用户手动停止流式输出');
+  
+  const lastMessage = messages.value[messages.value.length - 1];
+  if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
+    lastMessage.isStreaming = false;
+    
+    if (lastMessage.content) {
+      lastMessage.renderedContent = renderMarkdown(lastMessage.content);
+    }
   }
+  
+  isSending.value = false;
+  isAIThinking.value = false;
+  systemMessage.value = '准备就绪';
+  
+  clearMessageTimeout();
+  clearStreamCheck();
+  
+  ElMessage.warning('已强制停止AI回复');
 };
-
-const previewVoice = () => {
-  if (currentPreviewAudio) {
-    currentPreviewAudio.pause();
-  }
-  if (!roleBrief.value || !roleBrief.value.voiceType) return;
-  const selectedVoice = voiceList.value.find(
-      (voice) => voice.voice_type === roleBrief.value.voiceType
-  );
-  if (selectedVoice && selectedVoice.url) {
-    currentPreviewAudio = new Audio(selectedVoice.url);
-    currentPreviewAudio.play();
-  }
-};
-
 
 // 生命周期
 onMounted(async () => {
@@ -1714,8 +1539,18 @@ onMounted(async () => {
       showCharacterGreeting();
     }
     
-    // 5. 初始化WebSocket连接
-    initWebSocket();
+    // 5. 从localStorage恢复用户上次选择的协议
+    const savedProtocol = localStorage.getItem('preferred_protocol');
+    if (savedProtocol === 'websocket' || savedProtocol === 'sse') {
+      streamProtocol.value = savedProtocol;
+      console.log(`[传输层] 📥 恢复用户首选协议: ${savedProtocol.toUpperCase()}`);
+    }
+    
+    // 6. 初始化传输层（支持WebSocket和SSE）
+    initTransport();
+    
+    // 7. 加载TTS声音列表
+    loadVoiceList();
     
     hasError.value = false;
     systemMessage.value = '准备就绪';
@@ -1729,14 +1564,29 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  stopAudioPlayback();
+  console.log('[传输层] 🗑️ 组件销毁，清理资源');
+  
+  // 清理传输层
+  if (transport.value) {
+    transport.value.close();
+    transport.value = null;
+  }
+  
+  // 清理定时器
   clearMessageTimeout();
   clearStreamCheck();
-  if (ws.value) {
-    ws.value.close();
-    ws.value = null;
+  if (scrollCheckTimer) {
+    clearTimeout(scrollCheckTimer);
   }
-  clearTimeout(scrollCheckTimer);
+  
+  // 停止音频播放
+  stopAudioPlayback();
+  
+  // 清理试听音频
+  if (currentPreviewAudio) {
+    currentPreviewAudio.pause();
+    currentPreviewAudio = null;
+  }
 });
 </script>
 
@@ -1797,6 +1647,55 @@ onUnmounted(() => {
   margin: 0;
   color: #e5e7eb;
   font-size: 1.25rem;
+}
+
+/* 协议选择器 */
+.protocol-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+}
+
+.protocol-label {
+  display: flex;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.protocol-icon {
+  font-size: 16px;
+}
+
+.protocol-select {
+  width: 140px;
+}
+
+/* 协议选择器下拉框深色主题适配 */
+.protocol-select :deep(.el-input__wrapper) {
+  background-color: #1e293b;
+  border-color: #334155;
+  box-shadow: none;
+}
+
+.protocol-select :deep(.el-input__inner) {
+  color: #e2e8f0;
+}
+
+.protocol-select :deep(.el-select__caret) {
+  color: #94a3b8;
+}
+
+.protocol-select :deep(.el-input__wrapper:hover) {
+  border-color: #475569;
+}
+
+.protocol-select :deep(.el-input__wrapper.is-focus) {
+  border-color: #3b82f6;
 }
 
 /* WebSocket状态指示器 */
