@@ -91,21 +91,43 @@
             <div class="message-bubble">
               <!-- 用户消息 -->
               <div v-if="message.type === 'user'" class="message-content">
-                <!-- 图片预览 -->
-                <div v-if="message.images && message.images.length > 0" class="message-images">
-                  <img 
-                    v-for="(imgSrc, idx) in message.images" 
-                    :key="idx" 
-                    :src="imgSrc" 
-                    alt="用户上传的图片" 
-                    class="message-image"
-                    @click="openImagePreview(imgSrc)"
-                    title="点击查看大图"
-                  />
-                </div>
                 <!-- 文本内容 -->
                 <div v-if="message.content" class="message-text">
                   {{ message.content }}
+                </div>
+                
+                <!-- 附件显示（图片/文档等） -->
+                <div v-if="message.attachments && message.attachments.length > 0" 
+                     class="message-attachments">
+                  <div v-for="(attachment, idx) in message.attachments" 
+                       :key="idx" 
+                       class="attachment-item">
+                    <!-- 图片附件 -->
+                    <img v-if="attachment.type === 'image'" 
+                         :src="attachment.url" 
+                         :alt="attachment.name || '图片'"
+                         class="attachment-image"
+                         @click="openImagePreview(attachment.url)"
+                         :title="`${attachment.name} (${formatFileSize(attachment.size)})`" />
+                    
+                    <!-- 文档附件 -->
+                    <a v-else-if="attachment.type === 'document'" 
+                       :href="attachment.url"
+                       target="_blank"
+                       class="attachment-document"
+                       :title="`下载 ${attachment.name}`">
+                      📄 {{ attachment.name }} ({{ formatFileSize(attachment.size) }})
+                    </a>
+                    
+                    <!-- 其他类型附件 -->
+                    <a v-else
+                       :href="attachment.url"
+                       target="_blank"
+                       class="attachment-other"
+                       :title="`下载 ${attachment.name}`">
+                      📎 {{ attachment.name }} ({{ formatFileSize(attachment.size) }})
+                    </a>
+                  </div>
                 </div>
               </div>
               
@@ -214,7 +236,11 @@
         <div v-if="selectedImages.length > 0" class="image-preview-container">
           <div v-for="(img, index) in selectedImages" :key="index" class="image-preview-item">
             <img :src="img.preview" alt="预览图" class="preview-image" />
-            <button @click="removeImage(index)" class="remove-image-btn">×</button>
+            <!-- 上传中状态遮罩 -->
+            <div v-if="img.uploading" class="uploading-overlay">
+              <span class="uploading-text">上传中...</span>
+            </div>
+            <button v-else @click="removeImage(index)" class="remove-image-btn">×</button>
           </div>
         </div>
         
@@ -482,7 +508,7 @@ const selectedModel = ref('deepseek:deepseek-v3.1'); // 默认选中DeepSeek V3.
 const isModelLocked = computed(() => !!conversationId.value); // 有对话后锁定模型
 
 // 图片上传相关
-const selectedImages = ref([]); // 已选择的图片列表 [{file: File, preview: string}]
+const selectedImages = ref([]); // 已选择的图片列表 [{file, url, name, size, mimeType, preview, uploading}]
 const imageInput = ref(null); // 图片input引用
 const maxImages = 5; // 最大图片数量
 
@@ -519,6 +545,44 @@ const triggerImageSelect = () => {
   imageInput.value?.click();
 };
 
+/**
+ * 上传单张图片到CDN
+ * @param {File} file - 图片文件
+ * @returns {Promise<Object>} 上传结果 {url, name, size, mimeType}
+ */
+const uploadImageToCDN = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  
+  // 从authStore获取token
+  const token = authStore.token;
+  if (!token) {
+    throw new Error('请先登录');
+  }
+  
+  const response = await fetch('http://localhost:8081/api/file/message/upload-image', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    },
+    body: formData
+  });
+  
+  if (!response.ok) {
+    throw new Error(`上传失败: ${response.statusText}`);
+  }
+  
+  const result = await response.json();
+  if (!result.success) {
+    throw new Error(result.message || '上传失败');
+  }
+  
+  return result.data;
+};
+
+/**
+ * 处理图片选择：验证并立即上传到CDN
+ */
 const handleImageSelect = async (event) => {
   const files = Array.from(event.target.files || []);
   
@@ -526,6 +590,7 @@ const handleImageSelect = async (event) => {
   const remainingSlots = maxImages - selectedImages.value.length;
   if (remainingSlots <= 0) {
     ElMessage.warning(`最多只能上传${maxImages}张图片`);
+    event.target.value = '';
     return;
   }
   
@@ -544,15 +609,48 @@ const handleImageSelect = async (event) => {
       continue;
     }
     
-    // 创建预览
+    // 创建本地预览
     const reader = new FileReader();
-    reader.onload = (e) => {
-      selectedImages.value.push({
-        file: file,
-        preview: e.target.result
-      });
-    };
-    reader.readAsDataURL(file);
+    const localPreview = await new Promise((resolve) => {
+      reader.onload = (e) => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+    
+    // 添加到列表（标记为上传中）
+    const imageIndex = selectedImages.value.length;
+    selectedImages.value.push({
+      file,
+      preview: localPreview,
+      uploading: true,
+      url: null,
+      name: file.name,
+      size: file.size,
+      mimeType: file.type
+    });
+    
+    // 异步上传到CDN
+    try {
+      ElMessage.info(`正在上传 ${file.name}...`);
+      const uploadResult = await uploadImageToCDN(file);
+      
+      // 更新为CDN URL
+      selectedImages.value[imageIndex] = {
+        ...selectedImages.value[imageIndex],
+        uploading: false,
+        url: uploadResult.url,
+        preview: uploadResult.url, // 使用CDN URL作为预览
+        name: uploadResult.name || file.name,
+        size: Number(uploadResult.size) || file.size, // 确保size是数字类型
+        mimeType: uploadResult.mimeType || file.type
+      };
+      
+      ElMessage.success(`${file.name} 上传成功`);
+    } catch (error) {
+      console.error('上传图片失败:', error);
+      ElMessage.error(`${file.name} 上传失败：${error.message}`);
+      // 移除上传失败的图片
+      selectedImages.value.splice(imageIndex, 1);
+    }
   }
   
   // 清空input，允许重复选择同一文件
@@ -1006,17 +1104,35 @@ const sendMessage = async () => {
   
   const messageText = inputMessage.value.trim();
   const imagesToSend = [...selectedImages.value]; // 保存当前选中的图片
+  
+  // 检查是否有图片还在上传中
+  const hasUploadingImages = imagesToSend.some(img => img.uploading);
+  if (hasUploadingImages) {
+    ElMessage.warning('请等待图片上传完成');
+    return;
+  }
+  
   inputMessage.value = '';
   selectedImages.value = []; // 清空图片列表
   
   stopAudioPlayback();
   
-  // 添加用户消息到列表（包含图片）
+  // 构建附件列表（用于显示）
+  const attachments = imagesToSend.map(img => ({
+    type: 'image',
+    url: img.url,
+    name: img.name,
+    size: img.size,
+    mimeType: img.mimeType
+  }));
+  
+  // 添加用户消息到列表（包含附件）
   messages.value.push({
     id: `msg-${Date.now()}`,
     type: 'user',
     content: messageText,
-    images: imagesToSend.map(img => img.preview), // 保存图片预览用于显示
+    attachments: attachments, // 使用附件对象列表
+    attachmentCount: attachments.length,
     timestamp: new Date()
   });
   
@@ -1025,26 +1141,30 @@ const sendMessage = async () => {
   
   console.log('[发送消息] 设置isSending=true');
   
-  // 构建请求消息（注意：WebSocket使用conversationId而不是roleId）
+  // 构建请求消息（使用attachmentUrls而非imageUrls）
   const requestData = {
-    conversationId: conversationId.value,  // 使用已创建的对话ID
+    conversationId: conversationId.value,
     message: messageText || '请看图片', // 如果没有文本，提供默认文本
     enableWebSearch: enableWebSearch.value,
-    enableAudio: enableAudio.value,  // 建议：如果后端TTS有问题，可以先设为false
-    // 添加图片数据（如果有）
-    imageUrls: imagesToSend.length > 0 ? imagesToSend.map(img => img.preview) : undefined
-    // 不需要roleId，因为对话已经关联了角色
+    enableAudio: enableAudio.value
   };
   
-  // 日志输出（不显示完整Base64以避免控制台卡顿）
-  if (imagesToSend.length > 0) {
-    console.log('[发送WebSocket消息] 包含', imagesToSend.length, '张图片');
-    imagesToSend.forEach((img, idx) => {
-      const preview = img.preview.substring(0, 50) + '...';
-      console.log(`  图片${idx + 1}:`, preview);
+  // 添加附件URL（JSON字符串数组格式）
+  if (attachments.length > 0) {
+    requestData.attachmentUrls = attachments.map(att => JSON.stringify(att));
+  }
+  
+  // 日志输出
+  if (attachments.length > 0) {
+    console.log('[发送WebSocket消息] 包含', attachments.length, '个附件');
+    attachments.forEach((att, idx) => {
+      console.log(`  附件${idx + 1}:`, att.name, `(${formatFileSize(att.size)})`);
     });
   }
-  console.log('[发送WebSocket消息]', { ...requestData, imageUrls: requestData.imageUrls ? `${requestData.imageUrls.length}张图片` : undefined });
+  console.log('[发送WebSocket消息]', { 
+    ...requestData, 
+    attachmentUrls: requestData.attachmentUrls ? `${requestData.attachmentUrls.length}个附件` : undefined 
+  });
   
   // 使用传输层发送消息
   if (transport.value && transport.value.isConnected()) {
@@ -1240,22 +1360,39 @@ const handleSwitchConversation = async (convId) => {
   // 加载历史消息
   try {
     const response = await characterApi.getMessagesByConversationId(convId);
+    console.log('=== API返回的原始数据:', response.data);
     if (response.data.success) {
       const data = response.data.data;
+      console.log('=== 历史消息数据:', data);
       
       if (!data || data.length === 0) {
         // 显示开场白
         showCharacterGreeting();
       } else {
-        // 转换历史消息格式
-        messages.value = data.map((msg) => ({
-          id: msg.id || `msg-${Date.now()}-${Math.random()}`,
-          content: msg.content,
-          type: msg.role === 'USER' ? 'user' : 'assistant',
-          timestamp: new Date(msg.createdAt || msg.created_at || Date.now()),
-          audioSegments: msg.audioSegments || [],
-          renderedContent: msg.role === 'ASSISTANT' ? renderMarkdown(msg.content) : null
-        }));
+        // 转换历史消息格式（包含附件）
+        messages.value = data.map((msg) => {
+          console.log('=== 处理消息:', {
+            id: msg.id,
+            role: msg.role,
+            hasAttachments: !!msg.attachments,
+            attachments: msg.attachments,
+            attachmentCount: msg.attachmentCount
+          });
+          
+          return {
+            id: msg.id || `msg-${Date.now()}-${Math.random()}`,
+            content: msg.content,
+            type: msg.role === 'USER' ? 'user' : 'assistant',
+            timestamp: new Date(msg.createdAt || msg.created_at || Date.now()),
+            audioSegments: msg.audioSegments || [],
+            renderedContent: msg.role === 'ASSISTANT' ? renderMarkdown(msg.content) : null,
+            // 添加附件字段支持
+            attachments: msg.attachments || [],
+            attachmentCount: msg.attachmentCount || 0
+          };
+        });
+        
+        console.log('=== 转换后的messages:', messages.value);
       }
       
       scrollToBottom();
@@ -1293,6 +1430,19 @@ const handleProtocolChange = () => {
   
   // 保存到localStorage
   localStorage.setItem('preferred_protocol', streamProtocol.value);
+};
+
+/**
+ * 格式化文件大小
+ * @param {number} bytes - 字节数
+ * @returns {string} 格式化后的大小
+ */
+const formatFileSize = (bytes) => {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 };
 
 // 渲染Markdown
@@ -2764,28 +2914,83 @@ input:checked + .slider:before {
   transform: scale(1.1);
 }
 
-/* 消息中的图片显示 */
-.message-images {
+.uploading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
   display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  margin-bottom: 0.5rem;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
 }
 
-.message-image {
+.uploading-text {
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 消息中的附件显示 */
+.message-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.attachment-item {
+  position: relative;
+}
+
+.attachment-image {
   max-width: 200px;
   max-height: 200px;
   border-radius: 8px;
+  object-fit: cover;
   cursor: pointer;
-  transition: transform 0.2s;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.message-image:hover {
+.attachment-image:hover {
   transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.attachment-document,
+.attachment-other {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 0.75rem;
+  background: #374151;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #10b981;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  border: 1px solid #4b5563;
+}
+
+.attachment-document:hover,
+.attachment-other:hover {
+  background: #4b5563;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
 
 .message-text {
   word-wrap: break-word;
+  line-height: 1.6;
 }
 
 /* 图片预览弹窗 */

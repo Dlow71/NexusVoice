@@ -6,11 +6,13 @@ import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
+import com.nexusvoice.domain.conversation.model.MessageAttachment;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.Builder;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 包含角色信息的对话消息DTO
@@ -77,4 +79,10 @@ public class ConversationMessageWithRoleDto {
 
     @Schema(description = "对话绑定的角色信息")
     private RoleInfoDto conversationRole;
+
+    @Schema(description = "附件列表（图片、文档等）")
+    private List<MessageAttachment> attachments;
+
+    @Schema(description = "附件数量")
+    private Integer attachmentCount;
 }

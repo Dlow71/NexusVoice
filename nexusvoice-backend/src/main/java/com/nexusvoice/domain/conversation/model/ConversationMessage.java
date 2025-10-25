@@ -4,6 +4,8 @@ import com.nexusvoice.domain.common.BaseDomainEntity;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.ArrayList;
 
 /**
  * 对话消息实体
@@ -62,6 +64,16 @@ public class ConversationMessage extends BaseDomainEntity {
      * 消息发送时间
      */
     private LocalDateTime sentAt;
+
+    /**
+     * 附件列表（图片、文档、音频、视频等）
+     */
+    private List<MessageAttachment> attachments;
+
+    /**
+     * 附件数量（用于快速查询）
+     */
+    private Integer attachmentCount;
 
     /**
      * 创建用户消息
@@ -167,6 +179,50 @@ public class ConversationMessage extends BaseDomainEntity {
     public boolean isFromAssistant() {
         return MessageRole.ASSISTANT.equals(this.role);
     }
+
+    /**
+     * 添加附件
+     */
+    public void addAttachment(MessageAttachment attachment) {
+        if (this.attachments == null) {
+            this.attachments = new ArrayList<>();
+        }
+        this.attachments.add(attachment);
+        this.attachmentCount = this.attachments.size();
+    }
+
+    /**
+     * 批量添加附件
+     */
+    public void addAttachments(List<MessageAttachment> attachments) {
+        if (attachments == null || attachments.isEmpty()) {
+            return;
+        }
+        if (this.attachments == null) {
+            this.attachments = new ArrayList<>();
+        }
+        this.attachments.addAll(attachments);
+        this.attachmentCount = this.attachments.size();
+    }
+
+    /**
+     * 检查是否有附件
+     */
+    public boolean hasAttachments() {
+        return attachments != null && !attachments.isEmpty();
+    }
+
+    /**
+     * 获取图片附件列表
+     */
+    public List<MessageAttachment> getImageAttachments() {
+        if (!hasAttachments()) {
+            return new ArrayList<>();
+        }
+        return attachments.stream()
+                .filter(MessageAttachment::isImage)
+                .toList();
+    }
     
     // Getter and Setter methods
     public Long getConversationId() {
@@ -247,5 +303,22 @@ public class ConversationMessage extends BaseDomainEntity {
     
     public void setSentAt(LocalDateTime sentAt) {
         this.sentAt = sentAt;
+    }
+
+    public List<MessageAttachment> getAttachments() {
+        return attachments;
+    }
+
+    public void setAttachments(List<MessageAttachment> attachments) {
+        this.attachments = attachments;
+        this.attachmentCount = attachments != null ? attachments.size() : 0;
+    }
+
+    public Integer getAttachmentCount() {
+        return attachmentCount;
+    }
+
+    public void setAttachmentCount(Integer attachmentCount) {
+        this.attachmentCount = attachmentCount;
     }
 }

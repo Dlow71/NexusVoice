@@ -78,4 +78,16 @@ public class ConversationMessagePO extends BasePO {
      */
     @TableField("sent_at")
     private LocalDateTime sentAt;
+
+    /**
+     * 附件URL列表（JSON格式）
+     */
+    @TableField("attachment_urls")
+    private String attachmentUrls;
+
+    /**
+     * 附件数量
+     */
+    @TableField("attachment_count")
+    private Integer attachmentCount;
 }

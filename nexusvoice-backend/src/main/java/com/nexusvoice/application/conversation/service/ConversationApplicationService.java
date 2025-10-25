@@ -582,4 +582,28 @@ public class ConversationApplicationService {
             }
         }
     }
+
+    /**
+     * 从消息附件中提取图片URL列表
+     * 符合DDD架构：应用层编排业务逻辑，不在接口层处理
+     * 
+     * @param message 消息对象
+     * @return 图片URL列表，如果没有图片返回空列表
+     */
+    public List<String> extractImageUrlsFromMessage(ConversationMessage message) {
+        List<String> imageUrls = new ArrayList<>();
+        
+        if (message == null || !message.hasAttachments()) {
+            return imageUrls;
+        }
+        
+        for (com.nexusvoice.domain.conversation.model.MessageAttachment attachment : message.getAttachments()) {
+            if (attachment.isImage()) {
+                imageUrls.add(attachment.getUrl());
+            }
+        }
+        
+        log.debug("从消息中提取了{}张图片用于多模态识别", imageUrls.size());
+        return imageUrls;
+    }
 }

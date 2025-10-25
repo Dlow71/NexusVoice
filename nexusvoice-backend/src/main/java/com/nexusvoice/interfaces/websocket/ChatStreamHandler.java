@@ -9,6 +9,7 @@ import com.nexusvoice.application.tts.service.TTSService;
 import com.nexusvoice.application.role.service.RoleApplicationService;
 import com.nexusvoice.domain.conversation.model.Conversation;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
+import com.nexusvoice.domain.conversation.model.MessageAttachment;
 import com.nexusvoice.domain.conversation.repository.ConversationRepository;
 import com.nexusvoice.domain.conversation.repository.ConversationMessageRepository;
 import com.nexusvoice.domain.conversation.service.ConversationDomainService;
@@ -309,7 +310,45 @@ public class ChatStreamHandler implements WebSocketHandler {
                     requestDto.getMessage(),
                     null
             );
+            
+            // 4.1 处理附件（如果有）
+            log.info("=== 开始处理附件，attachmentUrls: {}", requestDto.getAttachmentUrls());
+            if (requestDto.getAttachmentUrls() != null && !requestDto.getAttachmentUrls().isEmpty()) {
+                List<MessageAttachment> attachments = new ArrayList<>();
+                for (String attachmentJson : requestDto.getAttachmentUrls()) {
+                    try {
+                        log.info("解析附件JSON: {}", attachmentJson);
+                        // 解析每个附件JSON字符串为MessageAttachment对象
+                        MessageAttachment attachment = objectMapper.readValue(
+                            attachmentJson, 
+                            MessageAttachment.class
+                        );
+                        attachments.add(attachment);
+                        log.info("附件解析成功: type={}, url={}, name={}", 
+                                attachment.getType(), attachment.getUrl(), attachment.getName());
+                    } catch (Exception e) {
+                        log.error("解析附件JSON失败，JSON: {}", attachmentJson, e);
+                        // 继续处理其他附件
+                    }
+                }
+                
+                if (!attachments.isEmpty()) {
+                    userMessage.addAttachments(attachments);
+                    log.info("用户消息添加了 {} 个附件，消息ID: {}", attachments.size(), userMessage.getId());
+                    log.info("附件列表: {}", attachments);
+                }
+            } else {
+                log.info("=== 没有附件需要处理");
+            }
+            
             conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
+            
+            // 4.2 提取图片URL用于多模态识别（符合DDD：调用应用服务）
+            List<String> imageUrls = conversationApplicationService.extractImageUrlsFromMessage(userMessage);
+            if (!imageUrls.isEmpty()) {
+                requestDto.setImageUrls(imageUrls);
+                log.info("从附件中提取了 {} 张图片用于多模态识别", imageUrls.size());
+            }
             
             // 5. 构建AI请求
             ChatRequest aiRequest = buildStreamAiRequest(conversation, requestDto, role);

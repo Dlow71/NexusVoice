@@ -1,9 +1,17 @@
 package com.nexusvoice.infrastructure.persistence.converter;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
+import com.nexusvoice.domain.conversation.model.MessageAttachment;
 import com.nexusvoice.infrastructure.persistence.po.ConversationMessagePO;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * ConversationMessage领域对象与PO转换器
@@ -11,8 +19,15 @@ import org.springframework.stereotype.Component;
  * @author NexusVoice
  * @since 2025-01-21
  */
+@Slf4j
 @Component
 public class ConversationMessagePOConverter {
+
+    private final ObjectMapper objectMapper;
+
+    public ConversationMessagePOConverter(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+    }
 
     /**
      * Domain转PO
@@ -37,6 +52,27 @@ public class ConversationMessagePOConverter {
         po.setCreatedAt(domain.getCreatedAt());
         po.setUpdatedAt(domain.getUpdatedAt());
         po.setDeleted(domain.getDeleted());
+        
+        // 序列化附件列表为JSON
+        if (domain.hasAttachments()) {
+            try {
+                String attachmentsJson = objectMapper.writeValueAsString(domain.getAttachments());
+                po.setAttachmentUrls(attachmentsJson);
+                po.setAttachmentCount(domain.getAttachmentCount());
+                log.info("=== 序列化附件成功，attachmentCount={}, JSON长度={}", 
+                        domain.getAttachmentCount(), attachmentsJson.length());
+                log.info("附件JSON: {}", attachmentsJson);
+            } catch (JsonProcessingException e) {
+                log.error("序列化附件列表失败", e);
+                po.setAttachmentUrls(null);
+                po.setAttachmentCount(0);
+            }
+        } else {
+            po.setAttachmentUrls(null);
+            po.setAttachmentCount(0);
+            log.info("=== 消息没有附件");
+        }
+        
         return po;
     }
 
@@ -63,6 +99,27 @@ public class ConversationMessagePOConverter {
         domain.setCreatedAt(po.getCreatedAt());
         domain.setUpdatedAt(po.getUpdatedAt());
         domain.setDeleted(po.getDeleted());
+        
+        // 反序列化附件列表
+        if (po.getAttachmentUrls() != null && !po.getAttachmentUrls().trim().isEmpty()) {
+            try {
+                log.info("=== 开始反序列化附件，JSON长度={}", po.getAttachmentUrls().length());
+                log.info("附件JSON: {}", po.getAttachmentUrls());
+                List<MessageAttachment> attachments = objectMapper.readValue(
+                    po.getAttachmentUrls(),
+                    new TypeReference<List<MessageAttachment>>() {}
+                );
+                domain.setAttachments(attachments);
+                log.info("=== 反序列化附件成功，数量={}", attachments.size());
+            } catch (JsonProcessingException e) {
+                log.error("反序列化附件列表失败，附件JSON: {}", po.getAttachmentUrls(), e);
+                domain.setAttachments(new ArrayList<>());
+            }
+        } else {
+            domain.setAttachments(new ArrayList<>());
+            log.info("=== 消息没有附件数据");
+        }
+        
         return domain;
     }
 

@@ -469,14 +469,24 @@ public class DynamicAiModelBeanManager {
         private List<ChatMessage> convertMessages(ChatRequest request) {
             List<ChatMessage> messages = new ArrayList<>();
             
-            for (com.nexusvoice.infrastructure.ai.model.ChatMessage msg : request.getMessages()) {
+            // 查找最后一条USER消息的索引
+            int lastUserMessageIndex = -1;
+            for (int idx = request.getMessages().size() - 1; idx >= 0; idx--) {
+                if (request.getMessages().get(idx).getRole() == com.nexusvoice.domain.conversation.constant.MessageRole.USER) {
+                    lastUserMessageIndex = idx;
+                    break;
+                }
+            }
+            
+            for (int i = 0; i < request.getMessages().size(); i++) {
+                com.nexusvoice.infrastructure.ai.model.ChatMessage msg = request.getMessages().get(i);
                 switch (msg.getRole()) {
                     case SYSTEM:
                         messages.add(SystemMessage.from(msg.getContent()));
                         break;
                     case USER:
-                        // 检查是否需要添加图像（仅对最后一条用户消息添加图像）
-                        boolean isLastUserMessage = request.getMessages().indexOf(msg) == request.getMessages().size() - 1;
+                        // 检查是否是最后一条USER消息且有图像URL
+                        boolean isLastUserMessage = i == lastUserMessageIndex;
                         if (isLastUserMessage && request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
                             // 创建多模态消息（文本+图像）
                             List<Content> contents = new ArrayList<>();
@@ -486,12 +496,12 @@ public class DynamicAiModelBeanManager {
                                 contents.add(TextContent.from(msg.getContent()));
                             }
                             
-                            // 添加图像内容（Base64格式）
-                            for (int i = 0; i < request.getImageUrls().size(); i++) {
-                                String imageUrl = request.getImageUrls().get(i);
+                            // 添加图像内容（Base64格式或URL）
+                            for (int imgIdx = 0; imgIdx < request.getImageUrls().size(); imgIdx++) {
+                                String imageUrl = request.getImageUrls().get(imgIdx);
                                 // 记录图片URL的前缀信息（不记录完整Base64以避免日志过大）
                                 String prefix = imageUrl.length() > 50 ? imageUrl.substring(0, 50) + "..." : imageUrl;
-                                log.debug("添加图像{}，格式：{}", i + 1, prefix);
+                                log.debug("添加图像{}，格式：{}", imgIdx + 1, prefix);
                                 contents.add(ImageContent.from(imageUrl));
                             }
                             

@@ -98,6 +98,8 @@ public class ConversationAssembler {
                 .updatedAt(message.getUpdatedAt())
                 .conversationRoleId(conversationRole != null ? conversationRole.getId() : null)
                 .conversationRole(toRoleInfoDto(conversationRole))
+                .attachments(message.getAttachments())
+                .attachmentCount(message.getAttachmentCount())
                 .build();
     }
 
