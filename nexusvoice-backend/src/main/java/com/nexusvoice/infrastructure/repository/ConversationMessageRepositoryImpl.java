@@ -197,6 +197,17 @@ public class ConversationMessageRepositoryImpl implements ConversationMessageRep
         
         mapper.delete(queryWrapper);
     }
+    
+    @Override
+    public void logicalDeleteByConversationId(Long conversationId) {
+        // 使用LambdaUpdateWrapper设置deleted字段，触发软删除
+        LambdaUpdateWrapper<ConversationMessagePO> updateWrapper = new LambdaUpdateWrapper<>();
+        updateWrapper.eq(ConversationMessagePO::getConversationId, conversationId)
+                     .set(ConversationMessagePO::getDeleted, 1)  // MyBatis-Plus软删除标识
+                     .set(ConversationMessagePO::getUpdatedAt, LocalDateTime.now());
+        
+        mapper.update(null, updateWrapper);
+    }
 
     @Override
     public void deleteByIds(List<Long> messageIds) {

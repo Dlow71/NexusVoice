@@ -52,6 +52,7 @@ public class ConversationApplicationService {
     private final TTSService ttsService;
     private final RoleApplicationService roleApplicationService;
     private final SystemConfigService systemConfigService;
+    private final ConversationResourceCleanupService resourceCleanupService;
 
     public ConversationApplicationService(ConversationRepository conversationRepository,
                                         ConversationMessageRepository messageRepository,
@@ -59,7 +60,8 @@ public class ConversationApplicationService {
                                         DynamicAiModelBeanManager modelBeanManager,
                                         TTSService ttsService,
                                         RoleApplicationService roleApplicationService,
-                                        SystemConfigService systemConfigService) {
+                                        SystemConfigService systemConfigService,
+                                        ConversationResourceCleanupService resourceCleanupService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
@@ -67,6 +69,7 @@ public class ConversationApplicationService {
         this.ttsService = ttsService;
         this.roleApplicationService = roleApplicationService;
         this.systemConfigService = systemConfigService;
+        this.resourceCleanupService = resourceCleanupService;
     }
 
     /**
@@ -320,16 +323,35 @@ public class ConversationApplicationService {
 
     /**
      * 删除对话
+     * 完整流程（注意顺序，避免竞态条件）：
+     * 1. 验证权限
+     * 2. 查询该对话的所有消息（在删除前先查询，避免丢失资源URL）
+     * 3. 逻辑删除对话记录（conversations表）
+     * 4. 物理删除该对话的所有消息（conversation_messages表）
+     * 5. 异步清理CDN/MinIO上的资源文件（使用步骤2查询到的消息列表）
      */
     @Transactional
     public void deleteConversation(Long conversationId, Long userId) {
-        // 验证权限
+        // 1. 验证权限
         conversationDomainService.validateConversationAccess(conversationId, userId);
         
-        // 逻辑删除对话
+        // 2. 查询该对话的所有消息（必须在删除之前查询，否则异步清理时找不到数据）
+        List<ConversationMessage> messages = messageRepository.findByConversationId(conversationId);
+        Long messageCount = (long) messages.size();
+        
+        // 3. 逻辑删除对话记录（conversations表）
         conversationRepository.logicalDeleteById(conversationId);
         
-        log.info("用户删除对话成功，用户ID：{}，对话ID：{}", userId, conversationId);
+        // 4. 逻辑删除该对话的所有消息（conversation_messages表，软删除）
+        // 使用软删除保留数据，方便审计和数据恢复
+        messageRepository.logicalDeleteByConversationId(conversationId);
+        
+        log.info("用户删除对话成功，用户ID：{}，对话ID：{}，消息数量：{}，开始异步清理资源文件", 
+                userId, conversationId, messageCount);
+        
+        // 5. 异步清理资源文件（传入已查询的消息列表，避免异步线程查询时数据已被删除）
+        // 使用虚拟线程执行，不阻塞主线程，避免影响删除操作的响应速度
+        resourceCleanupService.cleanupConversationResourcesAsync(conversationId, messages);
     }
 
     /**

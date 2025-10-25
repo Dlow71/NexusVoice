@@ -87,9 +87,16 @@ public interface ConversationMessageRepository {
     void deleteById(Long messageId);
 
     /**
-     * 删除对话的所有消息
+     * 删除对话的所有消息（物理删除）
+     * @deprecated 建议使用logicalDeleteByConversationId进行软删除
      */
+    @Deprecated
     void deleteByConversationId(Long conversationId);
+    
+    /**
+     * 逻辑删除对话的所有消息（软删除，推荐使用）
+     */
+    void logicalDeleteByConversationId(Long conversationId);
 
     /**
      * 批量删除消息

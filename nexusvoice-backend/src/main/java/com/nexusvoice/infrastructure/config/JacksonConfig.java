@@ -1,6 +1,7 @@
 package com.nexusvoice.infrastructure.config;
 
 import com.fasterxml.jackson.core.JsonGenerator;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
@@ -82,6 +83,9 @@ public class JacksonConfig {
         
         // 配置时间序列化
         configureTimeModule(objectMapper);
+        
+        // 配置反序列化：忽略未知字段（容错处理）
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         
         return objectMapper;
     }

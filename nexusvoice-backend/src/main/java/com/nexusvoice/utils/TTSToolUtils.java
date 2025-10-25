@@ -1,9 +1,6 @@
 package com.nexusvoice.utils;
 
-import cn.hutool.core.io.IoUtil;
-import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusvoice.exception.TTSException;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
@@ -208,7 +205,6 @@ public class TTSToolUtils {
      * 内部 WebSocket 客户端：收集服务端分片音频并合并为字节数组
      */
     static class CollectingWebSocketClient extends WebSocketClient {
-        private final ObjectMapper mapper = new ObjectMapper();
         private final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         private final CountDownLatch done = new CountDownLatch(1);
         private volatile boolean completed = false;
@@ -225,7 +221,7 @@ public class TTSToolUtils {
         @Override
         public void onMessage(String message) {
             try {
-                TTSResponseModel resp = mapper.readValue(message, TTSResponseModel.class);
+                TTSResponseModel resp = JsonUtils.getInstance().readValue(message, TTSResponseModel.class);
                 if (resp.getData() != null && !resp.getData().isEmpty()) {
                     byte[] chunk = Base64.getDecoder().decode(resp.getData());
                     buffer.write(chunk);
@@ -262,7 +258,7 @@ public class TTSToolUtils {
         }
 
         void sendTTSRequest(TTSRequestModel req) throws Exception {
-            String json = mapper.writeValueAsString(req);
+            String json = JsonUtils.toJson(req);
             send(json.getBytes()); // 以二进制帧发送，与现有TTSService保持一致
         }
 

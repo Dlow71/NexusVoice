@@ -1,7 +1,7 @@
 package com.nexusvoice.domain.ai.model;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nexusvoice.domain.common.BaseDomainEntity;
+import com.nexusvoice.utils.JsonUtils;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.extern.slf4j.Slf4j;
@@ -9,7 +9,6 @@ import lombok.extern.slf4j.Slf4j;
 import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -23,8 +22,6 @@ import java.util.Map;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class AiModel extends BaseDomainEntity {
-    
-    private static final ObjectMapper objectMapper = new ObjectMapper();
     
     /**
      * 厂商代码：openai/claude/qwen等
@@ -204,18 +201,8 @@ public class AiModel extends BaseDomainEntity {
     /**
      * 获取配置Map
      */
-    @SuppressWarnings("unchecked")
     public Map<String, Object> getConfigMap() {
-        if (configJson == null || configJson.isEmpty()) {
-            return new HashMap<>();
-        }
-        
-        try {
-            return objectMapper.readValue(configJson, Map.class);
-        } catch (Exception e) {
-            log.error("解析配置JSON失败，模型：{}，配置：{}", getModelKey(), configJson, e);
-            return new HashMap<>();
-        }
+        return JsonUtils.toMap(configJson);
     }
     
     /**
