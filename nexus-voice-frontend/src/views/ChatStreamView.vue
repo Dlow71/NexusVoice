@@ -99,6 +99,8 @@
                     :src="imgSrc" 
                     alt="用户上传的图片" 
                     class="message-image"
+                    @click="openImagePreview(imgSrc)"
+                    title="点击查看大图"
                   />
                 </div>
                 <!-- 文本内容 -->
@@ -413,6 +415,29 @@
         </main>
       </div>
     </div>
+
+    <!-- 图片预览弹窗 -->
+    <div 
+      v-if="imagePreviewVisible" 
+      class="image-preview-overlay"
+      @click="closeImagePreview"
+    >
+      <div class="image-preview-wrapper">
+        <img 
+          :src="previewImageUrl" 
+          alt="图片预览" 
+          class="preview-full-image"
+          @click.stop
+        />
+        <button 
+          class="preview-close-btn"
+          @click="closeImagePreview"
+          title="关闭预览"
+        >
+          ×
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -574,6 +599,10 @@ const isUploading = ref(false);
 const isGeneratingImage = ref(false);
 const voiceList = ref([]);
 let currentPreviewAudio = null;
+
+// 图片预览弹窗
+const imagePreviewVisible = ref(false);
+const previewImageUrl = ref('');
 
 // WebSocket状态计算属性
 const isConnected = computed(() => wsStatus.value === 'connected');
@@ -1270,6 +1299,15 @@ const handleProtocolChange = () => {
 const renderMarkdown = (content) => {
   if (!content) return '';
   try {
+    // 配置marked选项，禁用部分GFM语法
+    marked.setOptions({
+      breaks: true,           // 将换行符转换为<br>
+      gfm: false,             // 禁用GFM语法（包括删除线）
+      headerIds: false,       // 禁用标题ID
+      mangle: false,          // 禁用邮箱混淆
+      sanitize: false         // 不使用内置sanitizer（我们用DOMPurify）
+    });
+    
     const html = marked(content);
     return DOMPurify.sanitize(html);
   } catch (error) {
@@ -1313,6 +1351,18 @@ const getUserAvatar = () => {
     return user.avatarUrl;
   }
   return '/default-user-avatar.png';
+};
+
+// 打开图片预览
+const openImagePreview = (imageUrl) => {
+  previewImageUrl.value = imageUrl;
+  imagePreviewVisible.value = true;
+};
+
+// 关闭图片预览
+const closeImagePreview = () => {
+  imagePreviewVisible.value = false;
+  previewImageUrl.value = '';
 };
 
 // 返回角色列表
@@ -2736,6 +2786,76 @@ input:checked + .slider:before {
 
 .message-text {
   word-wrap: break-word;
+}
+
+/* 图片预览弹窗 */
+.image-preview-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.image-preview-wrapper {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.preview-full-image {
+  max-width: 100%;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  animation: zoomIn 0.3s ease-out;
+}
+
+@keyframes zoomIn {
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.preview-close-btn {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  font-size: 32px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  z-index: 2001;
+}
+
+.preview-close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-color: white;
+  transform: scale(1.1);
 }
 </style>
 
