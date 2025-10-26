@@ -199,6 +199,14 @@ public class AiModel extends BaseDomainEntity {
     }
     
     /**
+     * 是否为语音识别模型
+     */
+    public boolean isAsrModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isAsr();
+    }
+    
+    /**
      * 获取配置Map
      */
     public Map<String, Object> getConfigMap() {

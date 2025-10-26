@@ -62,6 +62,9 @@ public class DynamicAiModelBeanManager {
     @Autowired(required = false)
     private com.nexusvoice.infrastructure.ai.model.SiliconFlowImageAdapter siliconFlowImageAdapter;
     
+    @Autowired(required = false)
+    private com.nexusvoice.infrastructure.ai.model.SiliconFlowAsrAdapter siliconFlowAsrAdapter;
+    
     /**
      * 模型服务映射表
      * key: provider:model, value: 该模型的服务实例
@@ -75,19 +78,27 @@ public class DynamicAiModelBeanManager {
     private final Map<String, DynamicAiImageService> imageServiceMap = new ConcurrentHashMap<>();
     
     /**
-     * 加载对话和图像模型服务
+     * ASR语音识别服务映射表
+     * key: provider:model, value: 该模型的ASR服务实例
+     */
+    private final Map<String, DynamicAiAsrService> asrServiceMap = new ConcurrentHashMap<>();
+    
+    /**
+     * 加载对话、图像和ASR模型服务
      * 由AiModelInitializer统一调度，避免重复查询数据库
      * 
      * @param chatModels 对话模型列表
      * @param imageModels 图像模型列表
+     * @param asrModels ASR模型列表
      */
-    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels) {
+    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels, List<AiModel> asrModels) {
         try {
-            log.info("开始加载对话和图像模型服务...");
+            log.info("开始加载对话、图像和ASR模型服务...");
             
             // 清空现有服务（用于刷新场景）
             modelServiceMap.clear();
             imageServiceMap.clear();
+            asrServiceMap.clear();
             
             // 加载对话模型
             for (AiModel model : chatModels) {
@@ -105,12 +116,20 @@ public class DynamicAiModelBeanManager {
                 log.debug("加载图像模型：{}，名称：{}", modelKey, model.getModelName());
             }
             
-            log.info("成功加载{}个对话模型，{}个图像模型", 
-                    modelServiceMap.size(), imageServiceMap.size());
+            // 加载ASR模型
+            for (AiModel model : asrModels) {
+                String modelKey = model.getModelKey();
+                DynamicAiAsrService asrService = new DynamicAiAsrService(model);
+                asrServiceMap.put(modelKey, asrService);
+                log.debug("加载ASR模型：{}，名称：{}", modelKey, model.getModelName());
+            }
+            
+            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型", 
+                    modelServiceMap.size(), imageServiceMap.size(), asrServiceMap.size());
             
         } catch (Exception e) {
-            log.error("加载对话和图像模型服务失败", e);
-            throw new RuntimeException("加载对话和图像模型服务失败", e);
+            log.error("加载对话、图像和ASR模型服务失败", e);
+            throw new RuntimeException("加载对话、图像和ASR模型服务失败", e);
         }
     }
     
@@ -172,6 +191,7 @@ public class DynamicAiModelBeanManager {
             // 模型被删除，移除服务
             modelServiceMap.remove(modelKey);
             imageServiceMap.remove(modelKey);
+            asrServiceMap.remove(modelKey);
             modelFactory.clearModelCache(modelKey);
             log.info("移除模型服务：{}", modelKey);
             return;
@@ -182,6 +202,7 @@ public class DynamicAiModelBeanManager {
             // 模型被禁用，移除服务
             modelServiceMap.remove(modelKey);
             imageServiceMap.remove(modelKey);
+            asrServiceMap.remove(modelKey);
             modelFactory.clearModelCache(modelKey);
             log.info("禁用模型服务：{}", modelKey);
             return;
@@ -196,6 +217,10 @@ public class DynamicAiModelBeanManager {
             DynamicAiImageService newService = new DynamicAiImageService(model);
             imageServiceMap.put(modelKey, newService);
             log.info("刷新图像模型服务：{}，名称：{}", modelKey, model.getModelName());
+        } else if (model.isAsrModel()) {
+            DynamicAiAsrService newService = new DynamicAiAsrService(model);
+            asrServiceMap.put(modelKey, newService);
+            log.info("刷新ASR模型服务：{}，名称：{}", modelKey, model.getModelName());
         }
         
         modelFactory.clearModelCache(modelKey);
@@ -671,5 +696,151 @@ public class DynamicAiModelBeanManager {
         return imageServiceMap.values().stream()
                 .map(service -> service.model)
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * 获取ASR服务
+     * 
+     * @param providerCode 厂商代码
+     * @param modelCode 模型代码
+     * @return AI ASR服务
+     */
+    public com.nexusvoice.infrastructure.ai.service.AiAsrService getAsrService(String providerCode, String modelCode) {
+        String modelKey = providerCode + ":" + modelCode;
+        DynamicAiAsrService service = asrServiceMap.get(modelKey);
+        
+        if (service == null) {
+            // 尝试动态加载
+            Optional<AiModel> modelOpt = modelRepository.findByProviderAndModel(providerCode, modelCode);
+            if (modelOpt.isEmpty()) {
+                throw new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    String.format("ASR模型%s不存在", modelKey));
+            }
+            
+            AiModel model = modelOpt.get();
+            if (!model.isEnabled()) {
+                throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                    String.format("ASR模型%s已禁用", modelKey));
+            }
+            
+            if (!model.isAsrModel()) {
+                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
+                    String.format("模型%s不是ASR模型", modelKey));
+            }
+            
+            service = new DynamicAiAsrService(model);
+            asrServiceMap.put(modelKey, service);
+            log.info("动态加载ASR服务：{}", modelKey);
+        }
+        
+        return service;
+    }
+    
+    /**
+     * 根据模型键获取ASR服务
+     */
+    public com.nexusvoice.infrastructure.ai.service.AiAsrService getAsrServiceByModelKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw new BizException(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        
+        String[] parts = modelKey.split(":", 2);
+        return getAsrService(parts[0], parts[1]);
+    }
+    
+    /**
+     * 获取所有可用的ASR模型信息
+     */
+    public List<AiModel> getAvailableAsrModels() {
+        return asrServiceMap.values().stream()
+                .map(service -> service.model)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 动态AI ASR服务内部类
+     * 完全复用密钥池、费用统计、调用日志等基础设施
+     */
+    private class DynamicAiAsrService implements com.nexusvoice.infrastructure.ai.service.AiAsrService {
+        private final AiModel model;
+        
+        public DynamicAiAsrService(AiModel model) {
+            this.model = model;
+        }
+        
+        @Override
+        public com.nexusvoice.domain.audio.model.AudioTranscriptionResult transcribe(
+                com.nexusvoice.domain.audio.model.AudioTranscriptionRequest request) {
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            String requestId = UUID.randomUUID().toString();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 获取API密钥
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 2. 调用ASR适配器
+                com.nexusvoice.domain.audio.model.AudioTranscriptionResult result = 
+                        siliconFlowAsrAdapter.transcribe(request, model, apiKey);
+                
+                // 3. 计算费用（按音频时长计费）
+                double audioDuration = result.getAudioDuration() != null ? result.getAudioDuration() : 0.0;
+                int estimatedTokens = siliconFlowAsrAdapter.estimateTokenCount(audioDuration);
+                BigDecimal cost = model.calculateCost(estimatedTokens, 0);
+                
+                // 4. 更新密钥使用统计
+                apiKeyPoolManager.markSuccess(apiKey.getId(), estimatedTokens, cost);
+                
+                // 5. 记录调用日志
+                callLog = AiApiCallLog.success(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        request.getUserId(), null, // ASR通常不在对话上下文中
+                        requestId, requestTime,
+                        (int)(System.currentTimeMillis() - startTime),
+                        estimatedTokens, 0, // promptTokens=estimatedTokens, completionTokens=0
+                        cost
+                );
+                callLogRepository.save(callLog);
+                
+                log.info("ASR识别成功，模型：{}，音频时长：{}s，费用：{}元", 
+                        model.getModelKey(), audioDuration, cost);
+                
+                return result;
+                
+            } catch (Exception e) {
+                log.error("ASR识别失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
+                
+                // 标记密钥失败
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            request.getUserId(), null,
+                            requestId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                throw e;
+            }
+        }
+        
+        @Override
+        public boolean isModelAvailable() {
+            return model.isEnabled() && 
+                   apiKeyPoolManager.getAvailableKeyCount(model.getProviderCode(), model.getModelCode()) > 0;
+        }
+        
+        @Override
+        public String getModelName() {
+            return model.getModelName();
+        }
     }
 }

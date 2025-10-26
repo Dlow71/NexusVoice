@@ -264,11 +264,44 @@
           >
             📷
           </button>
+          
+          <!-- ASR语音录音按钮 -->
+          <!-- 空闲状态：显示麦克风按钮 -->
+          <button 
+            v-if="recordingState === RecordingState.IDLE"
+            @click="startRecording"
+            :disabled="!isConnected || isSending"
+            class="voice-record-btn"
+            title="点击开始录音"
+          >
+            🎤
+          </button>
+          
+          <!-- 录音中：显示停止和取消按钮 -->
+          <div v-else-if="recordingState === RecordingState.RECORDING" class="recording-controls">
+            <button @click="stopRecording" class="stop-recording-btn" title="停止录音">
+              ⏹️ {{ formatDuration(recordingDuration) }}
+            </button>
+            <button @click="cancelRecording" class="cancel-recording-btn" title="取消录音">
+              ❌
+            </button>
+            <div class="recording-indicator">
+              <span class="recording-dot"></span>
+              <span>录音中...</span>
+            </div>
+          </div>
+          
+          <!-- 识别中：显示处理状态 -->
+          <div v-else-if="recordingState === RecordingState.PROCESSING" class="processing-indicator">
+            <span class="processing-spinner">⏳</span>
+            <span>识别中...</span>
+          </div>
+          
           <input 
             v-model="inputMessage" 
             @keypress.enter="sendMessage"
-            :disabled="!isConnected || isSending"
-            placeholder="输入消息，按Enter发送..."
+            :disabled="!isConnected || isSending || recordingState !== RecordingState.IDLE"
+            :placeholder="recordingState === RecordingState.IDLE ? '输入消息，按Enter发送...' : '等待语音识别...'"
             class="message-input"
           />
           <button 
@@ -477,6 +510,8 @@ import characterApi from '../services/character';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { createTransport } from '../services/streamTransport';
+import asrService from '../services/asr';
+import { useAudioRecorder, RecordingState } from '../composables/useAudioRecorder';
 
 // 路由和认证
 const route = useRoute();
@@ -701,6 +736,76 @@ let currentPreviewAudio = null;
 // 图片预览弹窗
 const imagePreviewVisible = ref(false);
 const previewImageUrl = ref('');
+
+// ==================== ASR语音识别相关 ====================
+
+/**
+ * 初始化录音功能
+ * 传入录音完成和错误处理回调
+ */
+const {
+  recordingState,
+  recordingDuration,
+  startRecording,
+  stopRecording,
+  cancelRecording,
+  isRecordingSupported,
+  formatDuration
+} = useAudioRecorder({
+  maxDuration: 60, // 最大60秒
+  onRecordComplete: handleAudioRecorded,
+  onError: handleRecordingError
+});
+
+/**
+ * 处理录音完成后的音频识别
+ * @param {Blob} audioBlob - 录制的音频数据
+ */
+async function handleAudioRecorded(audioBlob) {
+  console.log('[ASR] 开始识别音频，大小:', (audioBlob.size / 1024).toFixed(2), 'KB');
+  
+  try {
+    // 调用ASR服务识别语音
+    const result = await asrService.transcribe(audioBlob, {
+      modelKey: 'siliconflow:telespeech-asr', // 使用默认ASR模型
+      enablePunctuation: true,
+      enableItn: true
+    });
+    
+    // 识别成功，填充到输入框
+    if (result && result.text) {
+      const recognizedText = result.text.trim();
+      inputMessage.value = recognizedText;
+      
+      console.log('[ASR] 识别成功:', recognizedText);
+      console.log('[ASR] 耗时:', result.transcriptionTimeMs, 'ms');
+      console.log('[ASR] 音频时长:', result.audioDurationMs, 'ms');
+      
+      ElMessage.success({
+        message: `识别成功：${recognizedText.substring(0, 30)}${recognizedText.length > 30 ? '...' : ''}`,
+        duration: 3000
+      });
+      
+      // 可选：自动发送消息
+      // await nextTick();
+      // await sendMessage();
+    } else {
+      throw new Error('识别结果为空');
+    }
+  } catch (error) {
+    console.error('[ASR] 识别失败:', error);
+    ElMessage.error(`语音识别失败: ${error.message}`);
+  }
+}
+
+/**
+ * 处理录音错误
+ * @param {Error} error - 错误对象
+ */
+function handleRecordingError(error) {
+  console.error('[录音] 发生错误:', error);
+  ElMessage.error(error.message);
+}
 
 // WebSocket状态计算属性
 const isConnected = computed(() => wsStatus.value === 'connected');
@@ -2327,6 +2432,174 @@ input:checked + .slider:before {
 .input-area {
   display: flex;
   gap: 1rem;
+  align-items: center;
+}
+
+/* ASR语音录音按钮 */
+.voice-record-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  border: none;
+  font-size: 1.3rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+  flex-shrink: 0;
+}
+
+.voice-record-btn:hover:not(:disabled) {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.5);
+}
+
+.voice-record-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.voice-record-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: linear-gradient(135deg, #6b7280 0%, #9ca3af 100%);
+}
+
+/* 录音控制区域 */
+.recording-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(239, 68, 68, 0.15);
+  border-radius: 24px;
+  border: 2px solid #ef4444;
+  animation: recording-border-pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes recording-border-pulse {
+  0%, 100% {
+    border-color: #ef4444;
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    border-color: #dc2626;
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+  }
+}
+
+.stop-recording-btn {
+  padding: 0.5rem 1rem;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.stop-recording-btn:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
+}
+
+.stop-recording-btn:active {
+  transform: scale(0.98);
+}
+
+.cancel-recording-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #6b7280;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.cancel-recording-btn:hover {
+  background: #4b5563;
+  transform: scale(1.1);
+}
+
+.cancel-recording-btn:active {
+  transform: scale(0.9);
+}
+
+/* 录音指示器 */
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #ef4444;
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.recording-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: recording-pulse 1.5s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes recording-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.3);
+  }
+}
+
+/* 识别中指示器 */
+.processing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(59, 130, 246, 0.15);
+  border-radius: 24px;
+  border: 2px solid #3b82f6;
+  color: #3b82f6;
+  font-weight: 600;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.processing-spinner {
+  font-size: 1.1rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .message-input {

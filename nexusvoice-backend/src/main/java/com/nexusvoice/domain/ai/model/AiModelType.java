@@ -29,7 +29,12 @@ public enum AiModelType {
     /**
      * 图像生成模型：用于AI图像生成、图像编辑
      */
-    IMAGE("image", "图像生成模型");
+    IMAGE("image", "图像生成模型"),
+    
+    /**
+     * 语音识别模型：用于语音转文本、ASR识别
+     */
+    ASR("asr", "语音识别模型");
     
     /**
      * 类型代码
@@ -89,5 +94,12 @@ public enum AiModelType {
      */
     public boolean isImage() {
         return this == IMAGE;
+    }
+    
+    /**
+     * 是否为语音识别模型
+     */
+    public boolean isAsr() {
+        return this == ASR;
     }
 }

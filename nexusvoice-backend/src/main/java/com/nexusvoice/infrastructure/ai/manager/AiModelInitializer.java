@@ -56,16 +56,18 @@ public class AiModelInitializer {
             // 3. 统计各类型模型数量
             int chatCount = modelsByType.getOrDefault("chat", List.of()).size();
             int imageCount = modelsByType.getOrDefault("image", List.of()).size();
+            int asrCount = modelsByType.getOrDefault("asr", List.of()).size();
             int embeddingCount = modelsByType.getOrDefault("embedding", List.of()).size();
             int rerankCount = modelsByType.getOrDefault("rerank", List.of()).size();
             
-            log.info("模型类型分布 - CHAT: {}, IMAGE: {}, EMBEDDING: {}, RERANK: {}", 
-                    chatCount, imageCount, embeddingCount, rerankCount);
+            log.info("模型类型分布 - CHAT: {}, IMAGE: {}, ASR: {}, EMBEDDING: {}, RERANK: {}", 
+                    chatCount, imageCount, asrCount, embeddingCount, rerankCount);
             
             // 4. 分发给各个Manager（无需再查询数据库）
             modelBeanManager.loadModels(
                     modelsByType.getOrDefault("chat", List.of()),
-                    modelsByType.getOrDefault("image", List.of())
+                    modelsByType.getOrDefault("image", List.of()),
+                    modelsByType.getOrDefault("asr", List.of())
             );
             
             embeddingBeanManager.loadModels(
@@ -106,7 +108,8 @@ public class AiModelInitializer {
             // 分发刷新
             modelBeanManager.loadModels(
                     modelsByType.getOrDefault("chat", List.of()),
-                    modelsByType.getOrDefault("image", List.of())
+                    modelsByType.getOrDefault("image", List.of()),
+                    modelsByType.getOrDefault("asr", List.of())
             );
             
             embeddingBeanManager.loadModels(
