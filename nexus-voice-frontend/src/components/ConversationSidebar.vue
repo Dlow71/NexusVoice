@@ -18,7 +18,7 @@
             class="avatar"
         />
         <div class="convo-info">
-          <span class="convo-content">{{ convo.lastMessage || convo.title || '新对话' }}</span>
+          <span class="convo-content">{{ convo.title || convo.lastMessage || '新对话' }}</span>
         </div>
         <button @click.stop="deleteConvo(convo.id)" class="delete-btn" title="删除对话">
           ×

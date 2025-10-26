@@ -805,13 +805,13 @@ public class DynamicAiModelBeanManager {
                 );
                 callLogRepository.save(callLog);
                 
-                log.info("ASR识别成功，模型：{}，音频时长：{}s，费用：{}元", 
+                DynamicAiModelBeanManager.log.info("ASR识别成功，模型：{}，音频时长：{}s，费用：{}元", 
                         model.getModelKey(), audioDuration, cost);
                 
                 return result;
                 
             } catch (Exception e) {
-                log.error("ASR识别失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
+                DynamicAiModelBeanManager.log.error("ASR识别失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
                 
                 // 标记密钥失败
                 if (apiKey != null) {

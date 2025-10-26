@@ -94,6 +94,8 @@ public enum ErrorCodeEnum {
     MESSAGE_NOT_FOUND(2006, "消息不存在"),
     MESSAGE_CONTENT_EMPTY(2007, "消息内容不能为空"),
     MESSAGE_CONTENT_TOO_LONG(2008, "消息内容过长"),
+    CONVERSATION_TITLE_GENERATION_FAILED(2009, "对话标题生成失败"),
+    CONVERSATION_TITLE_TOO_SHORT(2010, "对话内容不足，无法生成标题"),
     
     // WebSocket相关 16xx
     WEBSOCKET_CONNECTION_FAILED(1601, "WebSocket连接失败"),

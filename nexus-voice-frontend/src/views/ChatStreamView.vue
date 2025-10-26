@@ -1102,6 +1102,14 @@ const handleEndMessage = (data) => {
   
   console.log('[状态重置] isSending=false, isAIThinking=false');
   
+  // 如果是用户发送的第一条消息收到回复，生成标题
+  // 判断条件：有且仅有1条用户消息（过滤掉开场白）
+  const userMessageCount = messages.value.filter(m => m.type === 'user').length;
+  if (userMessageCount === 1 && conversationId.value) {
+    console.log('[检测到首次对话完成，准备生成标题] conversationId:', conversationId.value, 'userMessageCount:', userMessageCount);
+    generateConversationTitle();
+  }
+  
   // 清除所有定时器
   clearMessageTimeout();
   clearStreamCheck();
@@ -1430,6 +1438,50 @@ const fetchConversationHistory = async () => {
     }
   } catch (error) {
     console.error('加载对话历史失败:', error);
+  }
+};
+
+// 生成对话标题
+const generateConversationTitle = async () => {
+  if (!conversationId.value) {
+    console.warn('[标题生成跳过] 没有conversationId');
+    return;
+  }
+  
+  try {
+    console.log('[开始生成标题] conversationId:', conversationId.value);
+    
+    // 使用封装好的API
+    const response = await characterApi.generateConversationTitle(conversationId.value);
+    console.log('[标题生成响应]', response.data);
+    
+    // 后端Result类使用code判断成功，200表示成功
+    if (response.data.code === 200 && response.data.data) {
+      const newTitle = response.data.data;
+      console.log('[标题生成成功]', newTitle);
+      
+      // 更新左侧对话列表中的标题
+      const targetConversation = conversationHistory.value.find(
+        c => c.id === conversationId.value
+      );
+      
+      if (targetConversation) {
+        targetConversation.title = newTitle;
+        console.log('[对话列表标题已更新]', newTitle);
+      } else {
+        // 如果列表中没有这个对话，刷新整个列表
+        console.log('[对话不在列表中，刷新整个列表]');
+        await fetchConversationHistory();
+      }
+      
+      // 可选：显示成功提示
+      // ElMessage.success('标题生成成功');
+    } else {
+      console.warn('[标题生成失败]', response.data.message);
+    }
+  } catch (error) {
+    // 静默处理错误，不影响聊天功能
+    console.error('[标题生成异常]', error);
   }
 };
 

@@ -1,6 +1,5 @@
 package com.nexusvoice.interfaces.api.conversation;
 
-import cn.hutool.core.collection.CollectionUtil;
 import com.nexusvoice.annotation.RequireAuth;
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
@@ -10,6 +9,8 @@ import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
 import com.nexusvoice.common.Result;
+import com.nexusvoice.enums.ErrorCodeEnum;
+import com.nexusvoice.exception.BizException;
 import com.nexusvoice.utils.SecurityUtils;
 import com.nexusvoice.utils.JwtUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,8 +22,6 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
-import java.time.LocalDateTime;
-import java.util.Date;
 import java.util.List;
 
 /**
@@ -207,5 +206,32 @@ public class ConversationController {
         
         @io.swagger.v3.oas.annotations.media.Schema(description = "是否支持音频输入", example = "false")
         private Boolean supportsAudioInput;
+    }
+
+    @PostMapping("/{conversationId}/generate-title")
+    @RequireAuth
+    @Operation(summary = "生成对话标题", 
+               description = "使用AI分析对话内容并生成简洁的标题（5-15字）。" +
+                           "建议在用户发送第一条消息并收到AI回复后调用此接口。" +
+                           "生成的标题会自动保存到对话记录中。")
+    public Result<String> generateTitle(
+            @Parameter(description = "对话ID", required = true)
+            @PathVariable Long conversationId) {
+        
+        Long userId = SecurityUtils.getCurrentUserId().get();
+        log.info("生成对话标题请求，conversationId: {}, userId: {}", conversationId, userId);
+        
+        try {
+            String title = conversationApplicationService.generateConversationTitle(conversationId, userId);
+            log.info("对话标题生成成功，conversationId: {}, title: {}", conversationId, title);
+            return Result.success("标题生成成功", title);  // 明确指定message和data
+        } catch (BizException e) {
+            log.warn("对话标题生成失败，conversationId: {}, 错误: {}", conversationId, e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("对话标题生成异常，conversationId: " + conversationId, e);
+            throw new BizException(ErrorCodeEnum.CONVERSATION_TITLE_GENERATION_FAILED, 
+                "标题生成失败：" + e.getMessage());
+        }
     }
 }

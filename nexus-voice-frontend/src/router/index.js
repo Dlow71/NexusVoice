@@ -15,7 +15,11 @@ const routes = [
         component: LoginView,
     },
     {
-        path: '/', // 网站的根路径 (例如 http://localhost:5173/)
+        path: '/', // 网站的根路径，重定向到 /characters
+        redirect: '/characters',
+    },
+    {
+        path: '/characters', // 角色选择页面
         name: 'CharacterSelection',
         component: CharacterSelectionView,
         meta:{requiresAuth: true},

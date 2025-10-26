@@ -53,6 +53,7 @@ public class ConversationApplicationService {
     private final RoleApplicationService roleApplicationService;
     private final SystemConfigService systemConfigService;
     private final ConversationResourceCleanupService resourceCleanupService;
+    private final com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator;
 
     public ConversationApplicationService(ConversationRepository conversationRepository,
                                         ConversationMessageRepository messageRepository,
@@ -61,7 +62,8 @@ public class ConversationApplicationService {
                                         TTSService ttsService,
                                         RoleApplicationService roleApplicationService,
                                         SystemConfigService systemConfigService,
-                                        ConversationResourceCleanupService resourceCleanupService) {
+                                        ConversationResourceCleanupService resourceCleanupService,
+                                        com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
@@ -70,6 +72,7 @@ public class ConversationApplicationService {
         this.roleApplicationService = roleApplicationService;
         this.systemConfigService = systemConfigService;
         this.resourceCleanupService = resourceCleanupService;
+        this.titleGenerator = titleGenerator;
     }
 
     /**
@@ -627,5 +630,42 @@ public class ConversationApplicationService {
         
         log.debug("从消息中提取了{}张图片用于多模态识别", imageUrls.size());
         return imageUrls;
+    }
+
+    /**
+     * 生成对话标题
+     * 使用AI分析对话内容并生成简洁标题
+     *
+     * @param conversationId 对话ID
+     * @param userId 用户ID（用于权限验证）
+     * @return 生成的标题
+     */
+    @Transactional
+    public String generateConversationTitle(Long conversationId, Long userId) {
+        log.info("开始生成对话标题，conversationId: {}, userId: {}", conversationId, userId);
+        
+        // 1. 验证权限
+        conversationDomainService.validateConversationAccess(conversationId, userId);
+        
+        // 2. 获取对话
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.CONVERSATION_NOT_FOUND));
+        
+        // 3. 获取对话前几条消息（用于生成标题）
+        List<ConversationMessage> messages = messageRepository
+                .findByConversationIdOrderBySequence(conversationId)
+                .stream()
+                .limit(4)  // 只取前4条消息（2轮对话）
+                .collect(Collectors.toList());
+        
+        // 4. 使用AI生成标题
+        String generatedTitle = titleGenerator.generateTitle(messages);
+        
+        // 5. 更新对话标题
+        conversation.updateTitle(generatedTitle);
+        conversationRepository.save(conversation);
+        
+        log.info("对话标题生成成功，conversationId: {}, title: {}", conversationId, generatedTitle);
+        return generatedTitle;
     }
 }

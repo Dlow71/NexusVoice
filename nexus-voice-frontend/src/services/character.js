@@ -175,5 +175,12 @@ export default {
     getAvailableModels() {
         return apiClient.get('/v1/conversations/models');
     },
+    /**
+     * 生成对话标题
+     * @param {string} conversationId - 会话ID
+     */
+    generateConversationTitle(conversationId) {
+        return apiClient.post(`/v1/conversations/${conversationId}/generate-title`);
+    },
 };
 
