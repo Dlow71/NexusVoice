@@ -34,7 +34,12 @@ public enum AiModelType {
     /**
      * 语音识别模型：用于语音转文本、ASR识别
      */
-    ASR("asr", "语音识别模型");
+    ASR("asr", "语音识别模型"),
+    
+    /**
+     * 语音合成模型：用于文本转语音、TTS合成
+     */
+    TTS("tts", "语音合成模型");
     
     /**
      * 类型代码
@@ -101,5 +106,12 @@ public enum AiModelType {
      */
     public boolean isAsr() {
         return this == ASR;
+    }
+    
+    /**
+     * 是否为语音合成模型
+     */
+    public boolean isTts() {
+        return this == TTS;
     }
 }

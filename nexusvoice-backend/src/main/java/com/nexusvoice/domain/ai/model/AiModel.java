@@ -207,6 +207,14 @@ public class AiModel extends BaseDomainEntity {
     }
     
     /**
+     * 是否为语音合成模型
+     */
+    public boolean isTtsModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isTts();
+    }
+    
+    /**
      * 获取配置Map
      */
     public Map<String, Object> getConfigMap() {

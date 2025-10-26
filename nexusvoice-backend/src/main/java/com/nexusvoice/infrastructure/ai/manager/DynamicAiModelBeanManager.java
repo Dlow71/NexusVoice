@@ -65,6 +65,9 @@ public class DynamicAiModelBeanManager {
     @Autowired(required = false)
     private com.nexusvoice.infrastructure.ai.model.SiliconFlowAsrAdapter siliconFlowAsrAdapter;
     
+    @Autowired(required = false)
+    private com.nexusvoice.infrastructure.tts.adapter.QiniuTtsAdapter qiniuTtsAdapter;
+    
     /**
      * 模型服务映射表
      * key: provider:model, value: 该模型的服务实例
@@ -84,21 +87,29 @@ public class DynamicAiModelBeanManager {
     private final Map<String, DynamicAiAsrService> asrServiceMap = new ConcurrentHashMap<>();
     
     /**
-     * 加载对话、图像和ASR模型服务
+     * TTS语音合成服务映射表
+     * key: provider:model, value: 该模型的TTS服务实例
+     */
+    private final Map<String, DynamicAiTtsService> ttsServiceMap = new ConcurrentHashMap<>();
+    
+    /**
+     * 加载对话、图像、ASR和TTS模型服务
      * 由AiModelInitializer统一调度，避免重复查询数据库
      * 
      * @param chatModels 对话模型列表
      * @param imageModels 图像模型列表
      * @param asrModels ASR模型列表
+     * @param ttsModels TTS模型列表
      */
-    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels, List<AiModel> asrModels) {
+    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels, List<AiModel> asrModels, List<AiModel> ttsModels) {
         try {
-            log.info("开始加载对话、图像和ASR模型服务...");
+            log.info("开始加载对话、图像、ASR和TTS模型服务...");
             
             // 清空现有服务（用于刷新场景）
             modelServiceMap.clear();
             imageServiceMap.clear();
             asrServiceMap.clear();
+            ttsServiceMap.clear();
             
             // 加载对话模型
             for (AiModel model : chatModels) {
@@ -124,12 +135,20 @@ public class DynamicAiModelBeanManager {
                 log.debug("加载ASR模型：{}，名称：{}", modelKey, model.getModelName());
             }
             
-            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型", 
-                    modelServiceMap.size(), imageServiceMap.size(), asrServiceMap.size());
+            // 加载TTS模型
+            for (AiModel model : ttsModels) {
+                String modelKey = model.getModelKey();
+                DynamicAiTtsService ttsService = new DynamicAiTtsService(model);
+                ttsServiceMap.put(modelKey, ttsService);
+                log.debug("加载TTS模型：{}，名称：{}", modelKey, model.getModelName());
+            }
+            
+            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型，{}个TTS模型", 
+                    modelServiceMap.size(), imageServiceMap.size(), asrServiceMap.size(), ttsServiceMap.size());
             
         } catch (Exception e) {
-            log.error("加载对话、图像和ASR模型服务失败", e);
-            throw new RuntimeException("加载对话、图像和ASR模型服务失败", e);
+            log.error("加载对话、图像、ASR和TTS模型服务失败", e);
+            throw new RuntimeException("加载对话、图像、ASR和TTS模型服务失败", e);
         }
     }
     
@@ -823,6 +842,151 @@ public class DynamicAiModelBeanManager {
                     callLog = AiApiCallLog.failure(
                             apiKey.getId(), model.getProviderCode(), model.getModelCode(),
                             request.getUserId(), null,
+                            requestId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                throw e;
+            }
+        }
+        
+        @Override
+        public boolean isModelAvailable() {
+            return model.isEnabled() && 
+                   apiKeyPoolManager.getAvailableKeyCount(model.getProviderCode(), model.getModelCode()) > 0;
+        }
+        
+        @Override
+        public String getModelName() {
+            return model.getModelName();
+        }
+    }
+    
+    /**
+     * 获取TTS服务
+     * 
+     * @param providerCode 厂商代码
+     * @param modelCode 模型代码
+     * @return AI TTS服务
+     */
+    public com.nexusvoice.infrastructure.ai.service.AiTtsService getTtsService(String providerCode, String modelCode) {
+        String modelKey = providerCode + ":" + modelCode;
+        DynamicAiTtsService service = ttsServiceMap.get(modelKey);
+        
+        if (service == null) {
+            // 尝试动态加载
+            Optional<AiModel> modelOpt = modelRepository.findByProviderAndModel(providerCode, modelCode);
+            if (modelOpt.isEmpty()) {
+                throw new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    String.format("TTS模型%s不存在", modelKey));
+            }
+            
+            AiModel model = modelOpt.get();
+            if (!model.isEnabled()) {
+                throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                    String.format("TTS模型%s已禁用", modelKey));
+            }
+            
+            if (!model.isTtsModel()) {
+                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
+                    String.format("模型%s不是TTS模型", modelKey));
+            }
+            
+            service = new DynamicAiTtsService(model);
+            ttsServiceMap.put(modelKey, service);
+            log.info("动态加载TTS服务：{}", modelKey);
+        }
+        
+        return service;
+    }
+    
+    /**
+     * 根据模型键获取TTS服务
+     */
+    public com.nexusvoice.infrastructure.ai.service.AiTtsService getTtsServiceByModelKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw new BizException(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        
+        String[] parts = modelKey.split(":", 2);
+        return getTtsService(parts[0], parts[1]);
+    }
+    
+    /**
+     * 获取所有可用的TTS模型信息
+     */
+    public List<AiModel> getAvailableTtsModels() {
+        return ttsServiceMap.values().stream()
+                .map(service -> service.model)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 动态AI TTS服务内部类
+     * 完全复用密钥池、费用统计、调用日志等基础设施
+     */
+    private class DynamicAiTtsService implements com.nexusvoice.infrastructure.ai.service.AiTtsService {
+        private final AiModel model;
+        
+        public DynamicAiTtsService(AiModel model) {
+            this.model = model;
+        }
+        
+        @Override
+        public com.nexusvoice.domain.tts.model.TtsResult synthesize(
+                com.nexusvoice.domain.tts.model.TtsRequest request) {
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            String requestId = UUID.randomUUID().toString();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 获取API密钥（完全复用密钥池）
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 2. 调用TTS适配器
+                com.nexusvoice.domain.tts.model.TtsResult result = 
+                        qiniuTtsAdapter.synthesize(request, model, apiKey);
+                
+                // 3. 计算费用（按字符数计费）
+                int charCount = result.getCharCount() != null ? result.getCharCount() : 0;
+                BigDecimal cost = model.calculateCost(charCount, 0);
+                
+                // 4. 更新密钥使用统计
+                apiKeyPoolManager.markSuccess(apiKey.getId(), charCount, cost);
+                
+                // 5. 记录调用日志
+                callLog = AiApiCallLog.success(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        request.getUserId(), request.getConversationId(),
+                        requestId, requestTime,
+                        (int)(System.currentTimeMillis() - startTime),
+                        charCount, 0, // promptTokens=charCount, completionTokens=0
+                        cost
+                );
+                callLogRepository.save(callLog);
+                
+                DynamicAiModelBeanManager.log.info("TTS合成成功，模型：{}，字符数：{}，费用：{}元", 
+                        model.getModelKey(), charCount, cost);
+                
+                return result;
+                
+            } catch (Exception e) {
+                DynamicAiModelBeanManager.log.error("TTS合成失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
+                
+                // 标记密钥失败
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            request.getUserId(), request.getConversationId(),
                             requestId, requestTime, e.getMessage()
                     );
                     callLogRepository.save(callLog);
