@@ -1,22 +1,22 @@
 package com.nexusvoice.application.tts.service;
 
-import com.nexusvoice.application.file.service.FileUploadService;
+import com.nexusvoice.application.file.service.UnifiedFileUploadService;
+import com.nexusvoice.domain.storage.model.UploadResult;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
-import com.nexusvoice.domain.config.model.SystemConfig;
-import com.nexusvoice.domain.config.repository.SystemConfigRepository;
+import com.nexusvoice.domain.config.service.SystemConfigService;
 import com.nexusvoice.enums.FileTypeEnum;
 import com.nexusvoice.exception.TTSException;
 import com.nexusvoice.infrastructure.config.QiniuConfig;
 import com.nexusvoice.utils.TTSToolUtils;
 import com.nexusvoice.utils.TextChunker;
 import jakarta.annotation.Resource;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -41,13 +41,14 @@ public class TTSService {
     private String qiniuToken;
 
     @Resource
-    private FileUploadService fileUploadService;
+    private UnifiedFileUploadService unifiedFileUploadService;
 
     @Resource
     private QiniuConfig qiniuConfig;
 
     @Resource
-    private SystemConfigRepository systemConfigRepository;
+    private SystemConfigService systemConfigService;
+
 
     /**
      * 文本转语音
@@ -69,9 +70,9 @@ public class TTSService {
             Double speedRatio = requestDTO.getSpeedRatio() != null ? requestDTO.getSpeedRatio() : 1.0;
 
             // 读取系统配置（数据库）
-            boolean chunkEnabled = getBooleanConfig("tts.chunk.enabled", true);
-            int maxChunkChars = getIntConfig("tts.chunk.max_chars", 300, 50, 2000);
-            int maxConcurrency = getIntConfig("tts.chunk.max_concurrency", 4, 1, 16);
+            boolean chunkEnabled = systemConfigService.getBoolean("tts.chunk.enabled", true);
+            int maxChunkChars = Math.max(50, Math.min(2000, systemConfigService.getInt("tts.chunk.max_chars", 300)));
+            int maxConcurrency = Math.max(1, Math.min(16, systemConfigService.getInt("tts.chunk.max_concurrency", 4)));
 
             // 创建TTS工具实例
             TTSToolUtils ttsToolUtils = TTSToolUtils.createWithDefaults(
@@ -92,7 +93,10 @@ public class TTSService {
                 if (audioFile == null || audioFile.isEmpty()) {
                     throw new TTSException("音频生成失败，返回文件为空");
                 }
-                String audioUrl = fileUploadService.upload(audioFile, FileTypeEnum.AUDIO);
+                
+                // 上传文件并获取结果对象（持久文件，不注册为临时文件）
+                UploadResult uploadResult = unifiedFileUploadService.uploadWithResult(audioFile, FileTypeEnum.AUDIO);
+                String audioUrl = uploadResult.getFileUrl();
 
                 TTSResponseDTO responseDTO = new TTSResponseDTO();
                 responseDTO.setAudioData(audioUrl);
@@ -160,8 +164,12 @@ public class TTSService {
                         if (audio == null || audio.isEmpty()) {
                             throw new TTSException("分段音频生成失败");
                         }
-                        String url = fileUploadService.upload(audio, FileTypeEnum.AUDIO);
-                        return new SegmentResult(index, segText, url, (int) audio.getSize());
+                        
+                        // 上传文件并获取结果对象（持久文件，不注册为临时文件）
+                        UploadResult uploadResult = unifiedFileUploadService.uploadWithResult(audio, FileTypeEnum.AUDIO);
+                        String url = uploadResult.getFileUrl();
+                        
+                        return new SegmentResult(index, segText, url, (int) uploadResult.getFileSize().longValue());
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     } finally {
@@ -211,33 +219,6 @@ public class TTSService {
         return dto;
     }
 
-    private boolean getBooleanConfig(String key, boolean defaultVal) {
-        return systemConfigRepository.findByKey(key)
-                .filter(SystemConfig::isActive)
-                .map(SystemConfig::getConfigValue)
-                .map(v -> {
-                    String s = v.trim().toLowerCase();
-                    return s.equals("true") || s.equals("1") || s.equals("yes") || s.equals("on");
-                })
-                .orElse(defaultVal);
-    }
-
-    private int getIntConfig(String key, int defaultVal, int min, int max) {
-        return systemConfigRepository.findByKey(key)
-                .filter(SystemConfig::isActive)
-                .map(SystemConfig::getConfigValue)
-                .map(v -> {
-                    try {
-                        int n = Integer.parseInt(v.trim());
-                        if (n < min) return min;
-                        if (n > max) return max;
-                        return n;
-                    } catch (Exception e) {
-                        return defaultVal;
-                    }
-                })
-                .orElse(defaultVal);
-    }
 
     private static class SegmentResult {
         final int index;

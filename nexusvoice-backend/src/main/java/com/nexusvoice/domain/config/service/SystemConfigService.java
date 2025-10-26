@@ -253,4 +253,13 @@ public class SystemConfigService {
     public String getSearchProvider() {
         return getString(SystemConfigKey.SEARCH_PROVIDER, "duckduckgo");
     }
+    
+    /**
+     * 获取流式聊天语音回复过期时间（分钟）
+     * 仅用于ChatStreamHandler中的AI语音回复临时文件
+     * 默认1440分钟（24小时）
+     */
+    public Integer getTtsStreamResponseExpireMinutes() {
+        return getInt("tts.stream.response.expire.minutes", 1440);
+    }
 }

@@ -74,6 +74,18 @@ public class UploadResult {
     private String bucket;
     
     /**
+     * 访问域名
+     * 七牛云：CDN域名
+     * MinIO：公网访问域名
+     */
+    private String domain;
+    
+    /**
+     * 存储区域
+     */
+    private String region;
+    
+    /**
      * 上传时间
      */
     private LocalDateTime uploadTime;

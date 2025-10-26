@@ -96,6 +96,8 @@ public class QiniuStorageRepositoryImpl extends AbstractStorageRepository<QiniuS
             result.setEtag(putRet.hash);
             result.setFilePath(putRet.key);
             result.setBucket(config.getBucket());
+            result.setDomain(config.getDomain());
+            result.setRegion(config.getRegion());
             // 转换metadata类型
             Map<String, String> objectMetadata = new HashMap<>();
             if (metadata != null) {

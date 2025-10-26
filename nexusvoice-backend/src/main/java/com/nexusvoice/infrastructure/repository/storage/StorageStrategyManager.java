@@ -80,7 +80,7 @@ public class StorageStrategyManager {
             log.error("  1. 检查 storage.qiniu.enabled 或 storage.minio.enabled 是否为 true");
             log.error("  2. 检查存储配置是否完整（accessKey、secretKey、domain等）");
             log.error("  3. 七牛云必填项：access_key、secret_key、bucket、domain");
-            log.error("  4. MinIO必填项：endpoint、access_key、secret_key、bucket");
+            log.error("  4. MinIO必塯项：domain、access_key、secret_key、bucket");
             throw BizException.of(ErrorCodeEnum.SYSTEM_ERROR, 
                 "存储服务初始化失败：没有任何可用的存储服务，请检查数据库配置");
         }
@@ -299,7 +299,7 @@ public class StorageStrategyManager {
                 log.info("MinIO存储初始化成功");
             } else {
                 log.error("MinIO存储配置无效，跳过初始化！请检查数据库配置：");
-                log.error("  - storage.minio.endpoint: {}", minioConfig.getEndpoint());
+                log.error("  - storage.minio.domain: {}", minioConfig.getDomain());
                 log.error("  - storage.minio.access_key: {}", 
                     minioConfig.getAccessKey() == null || minioConfig.getAccessKey().isEmpty() ? "❌ 未配置" : "✓ 已配置");
                 log.error("  - storage.minio.secret_key: {}", 
@@ -339,19 +339,23 @@ public class StorageStrategyManager {
     private MinioStorageConfig loadMinioConfig() {
         MinioStorageConfig config = new MinioStorageConfig();
         config.setEnabled(systemConfigService.getBoolean("storage.minio.enabled", false));
-        config.setEndpoint(systemConfigService.getString("storage.minio.endpoint", "http://localhost:9000"));
+        config.setDomain(systemConfigService.getString("storage.minio.domain", "http://localhost:9000"));
+        config.setPublicDomain(systemConfigService.getString("storage.minio.public_domain", null));
         config.setAccessKey(systemConfigService.getString("storage.minio.access_key", "minioadmin"));
         config.setSecretKey(systemConfigService.getString("storage.minio.secret_key", "minioadmin"));
         config.setBucket(systemConfigService.getString("storage.minio.bucket", "nexusvoice"));
         config.setRegion(systemConfigService.getString("storage.minio.region", "us-east-1"));
-        config.setPublicUrl(systemConfigService.getString("storage.minio.public_url", ""));
         config.setUseSSL(systemConfigService.getBoolean("storage.minio.use_ssl", false));
+        config.setPathStyleAccess(systemConfigService.getBoolean("storage.minio.path_style_access", true));
+        config.setAutoCreateBucket(systemConfigService.getBoolean("storage.minio.auto_create_bucket", true));
+        config.setBucketPolicy(systemConfigService.getString("storage.minio.bucket_policy", "public-read"));
         
-        // 加载目录配置
+        // 目录配置
         Map<String, String> directories = new HashMap<>();
-        directories.put("audio", systemConfigService.getString("storage.minio.dir.audio", "audio/"));
         directories.put("image", systemConfigService.getString("storage.minio.dir.image", "image/"));
+        directories.put("audio", systemConfigService.getString("storage.minio.dir.audio", "audio/"));
         directories.put("video", systemConfigService.getString("storage.minio.dir.video", "video/"));
+        directories.put("document", systemConfigService.getString("storage.minio.dir.document", "document/"));
         directories.put("other", systemConfigService.getString("storage.minio.dir.other", "other/"));
         config.setDirectories(directories);
         

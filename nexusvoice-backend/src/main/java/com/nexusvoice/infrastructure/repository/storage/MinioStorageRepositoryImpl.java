@@ -49,7 +49,7 @@ public class MinioStorageRepositoryImpl extends AbstractStorageRepository<MinioS
         try {
             // 创建MinIO客户端
             MinioClient.Builder builder = MinioClient.builder()
-                    .endpoint(config.getEndpoint())
+                    .endpoint(config.getDomain())
                     .credentials(config.getAccessKey(), config.getSecretKey());
             
             // 设置区域
@@ -114,6 +114,8 @@ public class MinioStorageRepositoryImpl extends AbstractStorageRepository<MinioS
             result.setEtag(response.etag());
             result.setFilePath(fileKey);
             result.setBucket(config.getBucket());
+            result.setDomain(config.getActualPublicDomain());
+            result.setRegion(config.getRegion());
             result.setMetadata(metadata);
             
             if (response.versionId() != null) {

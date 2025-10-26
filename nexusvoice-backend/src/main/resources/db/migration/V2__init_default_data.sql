@@ -89,9 +89,10 @@ VALUES
 
 -- MinIO存储配置
 (110, 'storage.minio.enabled', 'true', '启用MinIO存储', 'storage.minio', 1, 0, 110, '是否启用MinIO存储', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
-(111, 'storage.minio.endpoint', '', 'MinIO端点', 'storage.minio', 1, 0, 111, 'MinIO服务地址', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
-(112, 'storage.minio.access_key', '', 'MinIO AccessKey', 'storage.minio', 1, 0, 112, 'MinIO访问密钥', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
-(113, 'storage.minio.secret_key', '', 'MinIO SecretKey', 'storage.minio', 1, 0, 113, 'MinIO密钥', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
-(114, 'storage.minio.bucket', 'nexusvoice', 'MinIO Bucket', 'storage.minio', 1, 0, 114, 'MinIO存储桶名称', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
-(115, 'storage.minio.region', 'us-east-1', 'MinIO区域', 'storage.minio', 1, 0, 115, 'MinIO区域配置', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
+(111, 'storage.minio.domain', '', 'MinIO访问域名', 'storage.minio', 1, 0, 111, 'MinIO服务地址（内网），例如：http://localhost:9000', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+(112, 'storage.minio.public_domain', '', 'MinIO公网域名', 'storage.minio', 1, 0, 112, 'MinIO公网访问地址（可选），例如：https://cdn.example.com', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+(113, 'storage.minio.access_key', '', 'MinIO AccessKey', 'storage.minio', 1, 0, 113, 'MinIO访问密钥', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+(114, 'storage.minio.secret_key', '', 'MinIO SecretKey', 'storage.minio', 1, 0, 114, 'MinIO密钥', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+(115, 'storage.minio.bucket', 'nexusvoice', 'MinIO Bucket', 'storage.minio', 1, 0, 115, 'MinIO存储桶名称', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0),
+(116, 'storage.minio.region', 'us-east-1', 'MinIO Region', 'storage.minio', 1, 0, 116, 'MinIO存储区域', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 0)
 ON CONFLICT (id) DO NOTHING;

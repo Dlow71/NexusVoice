@@ -5,7 +5,6 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -48,30 +47,31 @@ public class RedisConfig {
     /**
      * 配置Jackson序列化器
      * 使用Jackson2序列化对象，提供良好的兼容性和性能
+     * 基于全局ObjectMapper进行克隆，添加Redis专用配置
      *
+     * @param globalObjectMapper 全局ObjectMapper（来自JacksonConfig）
      * @return Jackson序列化器
      */
     @Bean
-    public RedisSerializer<Object> jackson2JsonRedisSerializer() {
-        log.info("初始化Redis Jackson序列化器");
+    public RedisSerializer<Object> jackson2JsonRedisSerializer(ObjectMapper globalObjectMapper) {
+        log.info("初始化Redis Jackson序列化器，基于全局ObjectMapper配置");
         
-        ObjectMapper objectMapper = new ObjectMapper();
+        // 克隆全局ObjectMapper，避免影响原有配置
+        ObjectMapper redisObjectMapper = globalObjectMapper.copy();
         
         // 指定要序列化的域，field、get和set，以及修饰符范围
-        objectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
-        
-        // 注册Java时间模块，支持LocalDateTime等时间类型
-        objectMapper.registerModule(new JavaTimeModule());
+        redisObjectMapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
         
         // 启用多态类型处理，存储类型信息（与Spring Security兼容）
-        objectMapper.activateDefaultTyping(
+        // 这是Redis专用配置，全局ObjectMapper不需要
+        redisObjectMapper.activateDefaultTyping(
             LaissezFaireSubTypeValidator.instance,
             ObjectMapper.DefaultTyping.NON_FINAL,
             JsonTypeInfo.As.PROPERTY
         );
         
         // 创建序列化器
-        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(objectMapper);
+        GenericJackson2JsonRedisSerializer serializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper);
         
         log.info("Redis Jackson序列化器初始化完成");
         return serializer;

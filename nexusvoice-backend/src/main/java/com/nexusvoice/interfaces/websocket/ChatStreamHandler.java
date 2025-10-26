@@ -6,6 +6,8 @@ import com.nexusvoice.application.conversation.service.ConversationApplicationSe
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 import com.nexusvoice.application.tts.service.TTSService;
+import com.nexusvoice.application.file.service.TempFileCleanupService;
+import com.nexusvoice.domain.file.model.TempFile.FileCategory;
 import com.nexusvoice.application.role.service.RoleApplicationService;
 import com.nexusvoice.domain.conversation.model.Conversation;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
@@ -62,6 +64,7 @@ public class ChatStreamHandler implements WebSocketHandler {
     private final RoleApplicationService roleApplicationService;
     private final TTSService ttsService;
     private final SystemConfigService systemConfigService;
+    private final TempFileCleanupService tempFileCleanupService;
     private final DynamicAiModelBeanManager modelBeanManager;
     private final ObjectMapper objectMapper;
     
@@ -83,6 +86,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                            RoleApplicationService roleApplicationService,
                            TTSService ttsService,
                            SystemConfigService systemConfigService,
+                           TempFileCleanupService tempFileCleanupService,
                            DynamicAiModelBeanManager modelBeanManager,
                            ObjectMapper objectMapper,
                            @Qualifier("ttsVirtualThreadExecutor") ExecutorService ttsVirtualThreadExecutor,
@@ -94,6 +98,7 @@ public class ChatStreamHandler implements WebSocketHandler {
         this.roleApplicationService = roleApplicationService;
         this.ttsService = ttsService;
         this.systemConfigService = systemConfigService;
+        this.tempFileCleanupService = tempFileCleanupService;
         this.modelBeanManager = modelBeanManager;
         this.objectMapper = objectMapper;
         this.ttsVirtualThreadExecutor = ttsVirtualThreadExecutor;
@@ -378,8 +383,7 @@ public class ChatStreamHandler implements WebSocketHandler {
 
             // 分段器，仅在启用分段TTS时创建
             final SegmentAggregator aggregator = segmentedTtsEnabled
-                    ? new SegmentAggregator(sessionId, ttsGroupId, selectedVoiceType, modelName, firstMinChars, minChars, maxChars, firstGateMs, ttsMaxConcurrency, heartbeatMs, lateUpdateEnabled,
-                    (segText) -> responseContent.append(segText),
+                    ? new SegmentAggregator(sessionId, ttsGroupId, conversation.getId(), selectedVoiceType, modelName, firstMinChars, minChars, maxChars, firstGateMs, ttsMaxConcurrency, heartbeatMs, lateUpdateEnabled,
                     (resp) -> channel.sendMessage(resp))
                     : null;
 
@@ -458,9 +462,11 @@ public class ChatStreamHandler implements WebSocketHandler {
                                         log.warn("分段TTS完成阶段出现异常：{}", ex.getMessage());
                                     }
                                     if (responseContent.length() > 0) {
+                                        String finalContent = responseContent.toString();
+                                        
                                         ConversationMessage aiMessage = ConversationMessage.createAssistantMessage(
                                                 conversation.getId(),
-                                                responseContent.toString(),
+                                                finalContent,
                                                 null,
                                                 null // 分段TTS场景不设置整段audioUrl
                                         );
@@ -599,8 +605,9 @@ public class ChatStreamHandler implements WebSocketHandler {
      * 分段聚合器：按阈值切分文本、并发TTS并按序发送TTS_SEGMENT
      */
     private class SegmentAggregator {
-        private final String sessionId; // WebSocket会话sessionId，用于任务计数
+        private final String sessionId; // WebSocket会话会sessionId，用于任务计数
         private final String groupId;   // TTS分组ID，用于消息分组
+        private final Long conversationId; // 对话ID，用于注册临时文件
         private final String voiceType;
         private final String model;
         private final int firstMinChars;
@@ -610,7 +617,6 @@ public class ChatStreamHandler implements WebSocketHandler {
         private final int heartbeatMs;
         private final boolean lateUpdate;
         private final Semaphore permits;
-        private final Consumer<String> appendTotal;
         private final Consumer<StreamChatResponse> sender;
 
         private final StringBuilder buf = new StringBuilder();
@@ -625,10 +631,11 @@ public class ChatStreamHandler implements WebSocketHandler {
         private CompletableFuture<?> heartbeatTask;
         private CompletableFuture<?> firstSegmentFallbackTask; // 首段超时任务
 
-        SegmentAggregator(String sessionId, String groupId, String voiceType, String model, int firstMinChars, int minChars, int maxChars, int firstGateMs, int concurrency, int heartbeatMs, boolean lateUpdate,
-                          Consumer<String> appendTotal, Consumer<StreamChatResponse> sender) {
+        SegmentAggregator(String sessionId, String groupId, Long conversationId, String voiceType, String model, int firstMinChars, int minChars, int maxChars, int firstGateMs, int concurrency, int heartbeatMs, boolean lateUpdate,
+                          Consumer<StreamChatResponse> sender) {
             this.sessionId = sessionId;
             this.groupId = groupId;
+            this.conversationId = conversationId;
             this.voiceType = voiceType;
             this.model = model;
             this.firstMinChars = firstMinChars;
@@ -638,7 +645,6 @@ public class ChatStreamHandler implements WebSocketHandler {
             this.heartbeatMs = heartbeatMs;
             this.lateUpdate = lateUpdate;
             this.permits = new Semaphore(concurrency);
-            this.appendTotal = appendTotal;
             this.sender = sender;
         }
 
@@ -695,7 +701,8 @@ public class ChatStreamHandler implements WebSocketHandler {
 
         private void scheduleSegment(String text, int index) {
             segText.put(index, text);
-            appendTotal.accept(text);
+            // 注意：text是从buf切分出来的片段，已经通过delta追加到responseContent了
+            // 不要在这里再次追加，否则会导致内容重复
             // 增加任务计数（使用WebSocket的sessionId）
             sessionTaskCounts.computeIfAbsent(sessionId, k -> new AtomicInteger(0)).incrementAndGet();
             
@@ -737,6 +744,21 @@ public class ChatStreamHandler implements WebSocketHandler {
                     
                     if (url != null && !url.isEmpty()) {
                         log.debug("分段TTS成功：index={}，音频URL：{}", index, url);
+                        
+                        // 注册为临时文件（流式聊天语音回复）
+                        Integer expireMinutes = systemConfigService.getTtsStreamResponseExpireMinutes();
+                        java.time.Duration ttl = java.time.Duration.ofMinutes(expireMinutes);
+                        Integer audioSize = (res.getAudioSize() != null) ? res.getAudioSize() : 0;
+                        tempFileCleanupService.registerTempFile(
+                            url,
+                            FileCategory.AUDIO,
+                            "stream_tts_response",
+                            conversationId,
+                            audioSize.longValue(),
+                            ttl
+                        );
+                        log.debug("已注册临时文件：url={}，过期时间={}分钟", url, expireMinutes);
+                        
                         segAudio.put(index, url);
                         // 若此前已经发送过该段文本且未带音频，则补发音频更新
                         maybeSendLateUpdate(index, url);

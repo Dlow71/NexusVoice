@@ -33,9 +33,9 @@ public class UnifiedFileUploadService {
      * 使用默认存储上传文件（自动识别文件类型）
      *
      * @param file 文件
-     * @return 文件访问URL
+     * @return 上传结果，包含URL和存储提供商信息
      */
-    public String upload(MultipartFile file) {
+    public UploadResult uploadWithResult(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw BizException.of(ErrorCodeEnum.FILE_IS_EMPTY, "文件不能为空");
         }
@@ -43,7 +43,18 @@ public class UnifiedFileUploadService {
         String originalFilename = file.getOriginalFilename();
         FileTypeEnum fileType = FileTypeEnum.getFileTypeByFileName(originalFilename);
         
-        return upload(file, fileType);
+        return uploadWithResult(file, fileType);
+    }
+    
+    /**
+     * 使用默认存储上传文件（自动识别文件类型）
+     * 向后兼容方法，仅返回URL
+     *
+     * @param file 文件
+     * @return 文件访问URL
+     */
+    public String upload(MultipartFile file) {
+        return uploadWithResult(file).getFileUrl();
     }
     
     /**
@@ -51,9 +62,9 @@ public class UnifiedFileUploadService {
      *
      * @param file 文件
      * @param fileType 文件类型
-     * @return 文件访问URL
+     * @return 上传结果，包含URL和存储提供商信息
      */
-    public String upload(MultipartFile file, FileTypeEnum fileType) {
+    public UploadResult uploadWithResult(MultipartFile file, FileTypeEnum fileType) {
         StorageRepository repository = storageStrategyManager.getDefaultRepository();
         UploadResult result = repository.upload(file, fileType);
         
@@ -63,7 +74,19 @@ public class UnifiedFileUploadService {
                     "文件上传失败：" + result.getErrorMessage());
         }
         
-        return result.getFileUrl();
+        return result;
+    }
+    
+    /**
+     * 使用默认存储上传文件（指定文件类型）
+     * 向后兼容方法，仅返回URL
+     *
+     * @param file 文件
+     * @param fileType 文件类型
+     * @return 文件访问URL
+     */
+    public String upload(MultipartFile file, FileTypeEnum fileType) {
+        return uploadWithResult(file, fileType).getFileUrl();
     }
     
     /**
@@ -71,13 +94,25 @@ public class UnifiedFileUploadService {
      *
      * @param file 文件
      * @param storageProvider 存储提供商
-     * @return 文件访问URL
+     * @return 上传结果，包含URL和存储提供商信息
      */
-    public String upload(MultipartFile file, StorageProvider storageProvider) {
+    public UploadResult uploadWithResult(MultipartFile file, StorageProvider storageProvider) {
         String originalFilename = file.getOriginalFilename();
         FileTypeEnum fileType = FileTypeEnum.getFileTypeByFileName(originalFilename);
         
-        return upload(file, fileType, storageProvider);
+        return uploadWithResult(file, fileType, storageProvider);
+    }
+    
+    /**
+     * 使用指定存储类型上传文件
+     * 向后兼容方法，仅返回URL
+     *
+     * @param file 文件
+     * @param storageProvider 存储提供商
+     * @return 文件访问URL
+     */
+    public String upload(MultipartFile file, StorageProvider storageProvider) {
+        return uploadWithResult(file, storageProvider).getFileUrl();
     }
     
     /**
@@ -86,9 +121,9 @@ public class UnifiedFileUploadService {
      * @param file 文件
      * @param fileType 文件类型
      * @param storageProvider 存储提供商
-     * @return 文件访问URL
+     * @return 上传结果，包含URL和存储提供商信息
      */
-    public String upload(MultipartFile file, FileTypeEnum fileType, StorageProvider storageProvider) {
+    public UploadResult uploadWithResult(MultipartFile file, FileTypeEnum fileType, StorageProvider storageProvider) {
         StorageRepository repository = storageStrategyManager.getRepository(storageProvider);
         UploadResult result = repository.upload(file, fileType);
         
@@ -98,7 +133,20 @@ public class UnifiedFileUploadService {
                     "文件上传失败：" + result.getErrorMessage());
         }
         
-        return result.getFileUrl();
+        return result;
+    }
+    
+    /**
+     * 使用指定存储类型上传文件
+     * 向后兼容方法，仅返回URL
+     *
+     * @param file 文件
+     * @param fileType 文件类型
+     * @param storageProvider 存储提供商
+     * @return 文件访问URL
+     */
+    public String upload(MultipartFile file, FileTypeEnum fileType, StorageProvider storageProvider) {
+        return uploadWithResult(file, fileType, storageProvider).getFileUrl();
     }
     
     /**
@@ -120,26 +168,6 @@ public class UnifiedFileUploadService {
         }
         
         return result.getFileUrl();
-    }
-    
-    /**
-     * 上传文件（返回完整结果）
-     *
-     * @param file 文件
-     * @param fileType 文件类型
-     * @return 上传结果
-     */
-    public UploadResult uploadWithResult(MultipartFile file, FileTypeEnum fileType) {
-        StorageRepository repository = storageStrategyManager.getDefaultRepository();
-        UploadResult result = repository.upload(file, fileType);
-        
-        if (!result.getSuccess()) {
-            log.error("文件上传失败：{}", result.getErrorMessage());
-            throw BizException.of(ErrorCodeEnum.FILE_UPLOAD_FAILED, 
-                    "文件上传失败：" + result.getErrorMessage());
-        }
-        
-        return result;
     }
     
     /**
