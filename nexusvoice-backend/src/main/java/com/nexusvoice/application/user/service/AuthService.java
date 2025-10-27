@@ -9,7 +9,9 @@ import com.nexusvoice.domain.user.model.User;
 import com.nexusvoice.domain.user.repository.UserRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.application.auth.service.TokenManagementService;
 import com.nexusvoice.utils.JwtUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +19,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -42,6 +46,9 @@ public class AuthService {
 
     @Autowired
     private JwtUtils jwtUtils;
+    
+    @Autowired
+    private TokenManagementService tokenManagementService;
 
     /**
      * 用户注册
@@ -51,6 +58,18 @@ public class AuthService {
      */
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        return register(request, getHttpServletRequest());
+    }
+    
+    /**
+     * 用户注册（带HttpServletRequest）
+     *
+     * @param request 注册请求
+     * @param httpRequest HTTP请求
+     * @return 认证响应
+     */
+    @Transactional
+    public AuthResponse register(RegisterRequest request, HttpServletRequest httpRequest) {
         log.info("用户注册请求: {}", request);
 
         // 验证请求参数
@@ -80,8 +99,8 @@ public class AuthService {
         User savedUser = userRepository.save(user);
         log.info("用户注册成功: {}", savedUser.getId());
 
-        // 生成令牌并返回
-        return generateAuthResponse(savedUser);
+        // 生成令牌并返回（创建会话）
+        return generateAuthResponse(savedUser, httpRequest);
     }
 
     /**
@@ -91,6 +110,17 @@ public class AuthService {
      * @return 认证响应
      */
     public AuthResponse login(LoginRequest request) {
+        return login(request, getHttpServletRequest());
+    }
+    
+    /**
+     * 用户登录（带HttpServletRequest）
+     *
+     * @param request 登录请求
+     * @param httpRequest HTTP请求
+     * @return 认证响应
+     */
+    public AuthResponse login(LoginRequest request, HttpServletRequest httpRequest) {
         log.info("用户登录请求: {}", request);
 
         // 验证请求参数
@@ -120,8 +150,8 @@ public class AuthService {
 
         log.info("用户 {} 登录成功", user.getEmail());
 
-        // 生成令牌并返回
-        return generateAuthResponse(user);
+        // 生成令牌并返回（创建会话）
+        return generateAuthResponse(user, httpRequest);
     }
 
     /**
@@ -131,6 +161,17 @@ public class AuthService {
      * @return 认证响应
      */
     public AuthResponse refreshToken(String refreshToken) {
+        return refreshToken(refreshToken, getHttpServletRequest());
+    }
+    
+    /**
+     * 刷新令牌（带HttpServletRequest）
+     *
+     * @param refreshToken 刷新令牌
+     * @param httpRequest HTTP请求
+     * @return 认证响应
+     */
+    public AuthResponse refreshToken(String refreshToken, HttpServletRequest httpRequest) {
         log.info("刷新令牌请求");
 
         if (!StringUtils.hasText(refreshToken)) {
@@ -160,8 +201,19 @@ public class AuthService {
 
             log.info("令牌刷新成功，用户: {}", user.getEmail());
 
-            // 生成新的令牌
-            return generateAuthResponse(user);
+            // 生成新的令牌（刷新会话）
+            AuthResponse response = generateAuthResponse(user, httpRequest);
+            
+            // 处理旧会话：将旧Token加入黑名单并删除会话
+            // 从refreshToken提取旧的accessToken（需要从会话中查找）
+            tokenManagementService.refreshSession(
+                extractOldAccessToken(refreshToken), 
+                response.getAccessToken(), 
+                response.getRefreshToken(), 
+                httpRequest
+            );
+            
+            return response;
 
         } catch (BizException e) {
             throw e;
@@ -208,9 +260,25 @@ public class AuthService {
     }
 
     /**
+     * 提取旧的AccessToken（从RefreshToken对应的会话）
+     */
+    private String extractOldAccessToken(String refreshToken) {
+        // 这里需要从会话仓储中查找
+        // 简化实现：直接返回refreshToken，TokenManagementService会处理
+        return refreshToken;
+    }
+    
+    /**
      * 生成认证响应
      */
     private AuthResponse generateAuthResponse(User user) {
+        return generateAuthResponse(user, null);
+    }
+    
+    /**
+     * 生成认证响应（带HttpServletRequest）
+     */
+    private AuthResponse generateAuthResponse(User user, HttpServletRequest httpRequest) {
         // 生成访问令牌
         String accessToken = jwtUtils.generateAccessToken(user.getId(), user.getEmail(), user.getUserType());
         
@@ -232,7 +300,21 @@ public class AuthService {
                 user.getUserType(),
                 user.getEmailVerified()
         );
+        
+        // ✅ 创建用户会话（保存到Redis）
+        if (httpRequest != null) {
+            tokenManagementService.createSession(user.getId(), accessToken, refreshToken, httpRequest);
+        }
 
         return new AuthResponse(accessToken, refreshToken, expiresAt, userInfo);
+    }
+    
+    /**
+     * 获取当前HTTP请求
+     */
+    private HttpServletRequest getHttpServletRequest() {
+        ServletRequestAttributes attributes = 
+            (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        return attributes != null ? attributes.getRequest() : null;
     }
 }

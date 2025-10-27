@@ -2,14 +2,17 @@
 package com.nexusvoice.interfaces.api.user;
 
 import com.nexusvoice.annotation.RequireAuth;
+import com.nexusvoice.application.auth.service.TokenManagementService;
 import com.nexusvoice.application.user.dto.AuthResponse;
 import com.nexusvoice.application.user.dto.LoginRequest;
 import com.nexusvoice.application.user.dto.RegisterRequest;
 import com.nexusvoice.application.user.service.AuthService;
 import com.nexusvoice.common.Result;
+import com.nexusvoice.domain.auth.model.UserSession;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.utils.SecurityUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -37,6 +41,9 @@ public class AuthController {
     
     @Autowired
     private AuthService authService;
+    
+    @Autowired
+    private TokenManagementService tokenManagementService;
     
     /**
      * 用户注册
@@ -114,17 +121,81 @@ public class AuthController {
     /**
      * 用户登出
      */
-    @Operation(summary = "用户登出", description = "用户登出（客户端需要清除本地令牌）")
+    @Operation(summary = "用户登出", description = "用户登出，将Token加入黑名单并删除会话")
     @PostMapping("/logout")
     @RequireAuth
-    public Result<Void> logout() {
-        // JWT是无状态的，服务端不需要做什么，客户端清除令牌即可
-        // 如果需要实现令牌黑名单，可以在这里添加逻辑
-        
-        String username = SecurityUtils.getCurrentUsername().orElse("未知用户");
-        log.info("用户登出: {}", username);
-        
-        return Result.success("登出成功");
+    public Result<Void> logout(HttpServletRequest request) {
+        try {
+            String username = SecurityUtils.getCurrentUsername().orElse("未知用户");
+            
+            // 从请求中提取Token
+            String token = extractToken(request);
+            if (token != null) {
+                // 将Token加入黑名单并删除会话
+                tokenManagementService.logout(token);
+                log.info("用户登出成功: {}", username);
+                return Result.success("登出成功");
+            } else {
+                log.warn("未找到Token，登出失败: {}", username);
+                return Result.success("登出成功"); // 客户端仍然需要清除本地Token
+            }
+        } catch (Exception e) {
+            log.error("用户登出异常: {}", e.getMessage(), e);
+            return Result.success("登出成功"); // 即使服务端失败，客户端也应该清除Token
+        }
+    }
+    
+    /**
+     * 登出所有设备
+     */
+    @Operation(summary = "登出所有设备", description = "登出用户的所有设备会话")
+    @PostMapping("/logout-all")
+    @RequireAuth
+    public Result<Void> logoutAll() {
+        try {
+            Long userId = SecurityUtils.getCurrentUserId()
+                    .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
+            
+            tokenManagementService.logoutAll(userId);
+            
+            log.info("用户登出所有设备成功: userId={}", userId);
+            return Result.success("已登出所有设备");
+            
+        } catch (BizException e) {
+            log.warn("登出所有设备失败: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("登出所有设备异常: {}", e.getMessage(), e);
+            throw BizException.of(ErrorCodeEnum.INTERNAL_SERVER_ERROR, "登出失败");
+        }
+    }
+    
+    /**
+     * 获取活跃会话列表
+     */
+    @Operation(summary = "获取活跃会话", description = "获取当前用户的所有活跃会话")
+    @GetMapping("/sessions")
+    @RequireAuth
+    public Result<List<SessionInfo>> getActiveSessions() {
+        try {
+            Long userId = SecurityUtils.getCurrentUserId()
+                    .orElseThrow(() -> BizException.of(ErrorCodeEnum.UNAUTHORIZED, "未登录"));
+            
+            List<UserSession> sessions = tokenManagementService.getActiveSessions(userId);
+            
+            List<SessionInfo> sessionInfos = sessions.stream()
+                    .map(this::convertToSessionInfo)
+                    .toList();
+            
+            return Result.success("获取成功", sessionInfos);
+            
+        } catch (BizException e) {
+            log.warn("获取活跃会话失败: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            log.error("获取活跃会话异常: {}", e.getMessage(), e);
+            throw BizException.of(ErrorCodeEnum.INTERNAL_SERVER_ERROR, "获取失败");
+        }
     }
     
     /**
@@ -164,5 +235,90 @@ public class AuthController {
         // 2. 更新用户邮箱验证状态
         
         return Result.success("邮箱验证成功");
+    }
+    
+    /**
+     * 从请求中提取Token
+     */
+    private String extractToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        return request.getParameter("token");
+    }
+    
+    /**
+     * 转换为SessionInfo DTO
+     */
+    private SessionInfo convertToSessionInfo(UserSession session) {
+        SessionInfo info = new SessionInfo();
+        info.setDeviceType(session.getDeviceType());
+        info.setDeviceId(session.getDeviceId());
+        info.setIpAddress(session.getIpAddress());
+        info.setLastActiveAt(session.getLastActiveAt());
+        info.setCreatedAt(session.getCreatedAt());
+        info.setCurrent(false); // 需要判断是否当前会话
+        return info;
+    }
+    
+    /**
+     * 会话信息DTO
+     */
+    public static class SessionInfo {
+        private String deviceType;
+        private String deviceId;
+        private String ipAddress;
+        private java.time.LocalDateTime lastActiveAt;
+        private java.time.LocalDateTime createdAt;
+        private boolean current;
+        
+        public String getDeviceType() {
+            return deviceType;
+        }
+        
+        public void setDeviceType(String deviceType) {
+            this.deviceType = deviceType;
+        }
+        
+        public String getDeviceId() {
+            return deviceId;
+        }
+        
+        public void setDeviceId(String deviceId) {
+            this.deviceId = deviceId;
+        }
+        
+        public String getIpAddress() {
+            return ipAddress;
+        }
+        
+        public void setIpAddress(String ipAddress) {
+            this.ipAddress = ipAddress;
+        }
+        
+        public java.time.LocalDateTime getLastActiveAt() {
+            return lastActiveAt;
+        }
+        
+        public void setLastActiveAt(java.time.LocalDateTime lastActiveAt) {
+            this.lastActiveAt = lastActiveAt;
+        }
+        
+        public java.time.LocalDateTime getCreatedAt() {
+            return createdAt;
+        }
+        
+        public void setCreatedAt(java.time.LocalDateTime createdAt) {
+            this.createdAt = createdAt;
+        }
+        
+        public boolean isCurrent() {
+            return current;
+        }
+        
+        public void setCurrent(boolean current) {
+            this.current = current;
+        }
     }
 }

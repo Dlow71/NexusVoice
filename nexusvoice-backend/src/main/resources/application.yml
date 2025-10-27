@@ -162,6 +162,10 @@ jwt:
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
   # JWT签发者
   issuer: ${JWT_ISSUER:nexusvoice}
+  # 单用户最大会话数（0表示不限制）
+  max-sessions-per-user: ${JWT_MAX_SESSIONS:5}
+  # 单设备模式（true时一个账号只能在一个设备登录）
+  single-device-mode: ${JWT_SINGLE_DEVICE:false}
 
 
 

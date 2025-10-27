@@ -1,5 +1,6 @@
 package com.nexusvoice.infrastructure.security;
 
+import com.nexusvoice.application.auth.service.TokenManagementService;
 import com.nexusvoice.utils.JwtUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -39,6 +40,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     @Autowired
     private JwtUtils jwtUtils;
     
+    @Autowired
+    private TokenManagementService tokenManagementService;
+    
     @Override
     protected void doFilterInternal(HttpServletRequest request, 
                                   HttpServletResponse response, 
@@ -67,6 +71,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 if (isValid) {
                     log.debug("JWT令牌验证通过");
+                    
+                    // ✅ 检查Token是否在黑名单中或会话是否有效
+                    if (!tokenManagementService.isTokenValid(token)) {
+                        log.warn("Token已失效（黑名单或无会话），拒绝访问: {}", requestURI);
+                        // Token无效，不设置认证信息，让Spring Security拒绝访问
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
                     
                     // 验证是否为访问令牌
                     boolean isAccessToken = jwtUtils.isAccessToken(token);
