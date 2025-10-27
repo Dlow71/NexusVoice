@@ -215,38 +215,4 @@ public class ImageGenerationController {
             return Result.success(healthInfo);
         }
     }
-
-    @Operation(summary = "验证API密钥", description = "验证硅基流动API密钥是否有效")
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "API密钥验证完成")
-    })
-    @PostMapping(value = "/validate-api-key", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Result<Map<String, Object>> validateApiKey(
-            @Parameter(description = "API密钥", required = true)
-            @RequestParam String apiKey) {
-        
-        log.debug("收到API密钥验证请求");
-        
-        if (apiKey == null || apiKey.trim().isEmpty()) {
-            return Result.error("API密钥不能为空");
-        }
-        
-        Map<String, Object> validationResult = new HashMap<>();
-        validationResult.put("timestamp", System.currentTimeMillis());
-        
-        try {
-            boolean valid = imageGenerationService.validateApiKey(apiKey);
-            validationResult.put("valid", valid);
-            validationResult.put("message", valid ? "API密钥有效" : "API密钥无效");
-            
-            log.info("API密钥验证完成，结果: {}", valid ? "有效" : "无效");
-            return Result.success(validationResult);
-            
-        } catch (Exception e) {
-            log.error("API密钥验证失败", e);
-            validationResult.put("valid", false);
-            validationResult.put("message", "验证失败: " + e.getMessage());
-            return Result.success(validationResult);
-        }
-    }
 }

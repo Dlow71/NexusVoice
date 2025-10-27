@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -18,8 +19,9 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/test/search")
-@Tag(name = "搜索测试", description = "搜索功能测试接口")
+@RequestMapping("/api/dev/search")
+@Profile({"local", "dev", "test"})
+@Tag(name = "开发测试-搜索测试", description = "搜索功能测试接口（仅开发环境）")
 public class SearchTestController {
     
     private final SearchRepository searchRepository;

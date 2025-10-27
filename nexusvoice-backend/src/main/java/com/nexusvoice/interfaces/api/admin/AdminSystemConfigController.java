@@ -1,5 +1,6 @@
-package com.nexusvoice.interfaces.api.config;
+package com.nexusvoice.interfaces.api.admin;
 
+import com.nexusvoice.annotation.RequireAdmin;
 import com.nexusvoice.application.config.dto.SystemConfigCreateRequest;
 import com.nexusvoice.application.config.dto.SystemConfigDto;
 import com.nexusvoice.application.config.dto.SystemConfigQueryRequest;
@@ -19,18 +20,19 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 系统配置控制器
+ * 管理员-系统配置管理控制器
  * 
  * @author NexusVoice
  * @since 2025-09-27
  */
-@Tag(name = "系统配置管理", description = "系统配置相关接口")
+@Tag(name = "管理员-系统配置管理", description = "管理员系统配置相关接口")
 @RestController
-@RequestMapping("/api/v1/system/config")
+@RequestMapping("/api/admin/system-configs")
+@RequireAdmin
 @Validated
-public class SystemConfigController {
+public class AdminSystemConfigController {
 
-    private static final Logger logger = LoggerFactory.getLogger(SystemConfigController.class);
+    private static final Logger logger = LoggerFactory.getLogger(AdminSystemConfigController.class);
 
     @Autowired
     private SystemConfigApplicationService systemConfigApplicationService;

@@ -140,19 +140,6 @@ public class ImageGenerationService {
     }
 
     /**
-     * 验证API密钥（此方法已废弃，现在API密钥通过ai_api_keys表管理）
-     * 
-     * @param apiKey API密钥
-     * @return 是否有效
-     * @deprecated 使用数据库管理API密钥，此方法仅用于向后兼容
-     */
-    @Deprecated
-    public boolean validateApiKey(String apiKey) {
-        log.warn("validateApiKey方法已废弃，API密钥现在通过数据库管理");
-        return apiKey != null && apiKey.startsWith("sk-");
-    }
-
-    /**
      * 获取模型推荐参数
      * 
      * @param modelName 模型名称

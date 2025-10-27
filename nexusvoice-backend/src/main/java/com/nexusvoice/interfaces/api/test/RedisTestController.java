@@ -9,6 +9,7 @@ import org.redisson.api.RateIntervalUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -23,8 +24,9 @@ import java.util.concurrent.TimeUnit;
  * @since 2025-10-17
  */
 @RestController
-@RequestMapping("/api/v1/test/redis")
-@Tag(name = "Redis测试", description = "Redis和Redisson功能测试接口")
+@RequestMapping("/api/dev/redis")
+@Profile({"local", "dev", "test"})
+@Tag(name = "开发测试-Redis测试", description = "Redis和Redisson功能测试接口（仅开发环境）")
 public class RedisTestController {
 
     private static final Logger log = LoggerFactory.getLogger(RedisTestController.class);

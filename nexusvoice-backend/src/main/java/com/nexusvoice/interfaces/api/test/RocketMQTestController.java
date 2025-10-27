@@ -21,6 +21,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,9 +39,10 @@ import java.util.concurrent.CompletableFuture;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/test/mq")
+@RequestMapping("/api/dev/mq")
 @RequiredArgsConstructor
-@Tag(name = "RocketMQ测试接口", description = "测试消息队列的各种功能")
+@Profile({"local", "dev", "test"})
+@Tag(name = "开发测试-RocketMQ测试", description = "消息队列功能测试接口（仅开发环境）")
 @ConditionalOnProperty(prefix = "rocketmq", name = "name-server")
 public class RocketMQTestController {
     

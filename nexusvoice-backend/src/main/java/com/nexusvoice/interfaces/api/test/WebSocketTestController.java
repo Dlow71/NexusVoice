@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,8 +22,9 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/test/websocket")
-@Tag(name = "WebSocket测试", description = "WebSocket流式对话测试相关接口")
+@RequestMapping("/api/dev/websocket")
+@Profile({"local", "dev", "test"})
+@Tag(name = "开发测试-WebSocket测试", description = "WebSocket流式对话测试接口（仅开发环境）")
 public class WebSocketTestController {
 
     @Value("${server.port:8080}")
