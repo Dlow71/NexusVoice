@@ -39,7 +39,12 @@ public enum AiModelType {
     /**
      * 语音合成模型：用于文本转语音、TTS合成
      */
-    TTS("tts", "语音合成模型");
+    TTS("tts", "语音合成模型"),
+    
+    /**
+     * 视频生成模型：用于AI视频生成、视频编辑
+     */
+    VIDEO("video", "视频生成模型");
     
     /**
      * 类型代码
@@ -113,5 +118,12 @@ public enum AiModelType {
      */
     public boolean isTts() {
         return this == TTS;
+    }
+    
+    /**
+     * 是否为视频生成模型
+     */
+    public boolean isVideo() {
+        return this == VIDEO;
     }
 }

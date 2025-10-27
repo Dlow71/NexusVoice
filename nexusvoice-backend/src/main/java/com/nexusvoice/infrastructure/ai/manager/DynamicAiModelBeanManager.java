@@ -68,6 +68,9 @@ public class DynamicAiModelBeanManager {
     @Autowired(required = false)
     private com.nexusvoice.infrastructure.tts.adapter.QiniuTtsAdapter qiniuTtsAdapter;
     
+    @Autowired(required = false)
+    private com.nexusvoice.infrastructure.video.adapter.ZhipuVideoAdapter zhipuVideoAdapter;
+    
     /**
      * 模型服务映射表
      * key: provider:model, value: 该模型的服务实例
@@ -93,23 +96,32 @@ public class DynamicAiModelBeanManager {
     private final Map<String, DynamicAiTtsService> ttsServiceMap = new ConcurrentHashMap<>();
     
     /**
-     * 加载对话、图像、ASR和TTS模型服务
+     * 视频生成服务映射表
+     * key: provider:model, value: 该模型的视频生成服务实例
+     */
+    private final Map<String, DynamicAiVideoService> videoServiceMap = new ConcurrentHashMap<>();
+    
+    /**
+     * 加载对话、图像、ASR、TTS和视频模型服务
      * 由AiModelInitializer统一调度，避免重复查询数据库
      * 
      * @param chatModels 对话模型列表
      * @param imageModels 图像模型列表
      * @param asrModels ASR模型列表
      * @param ttsModels TTS模型列表
+     * @param videoModels 视频模型列表
      */
-    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels, List<AiModel> asrModels, List<AiModel> ttsModels) {
+    public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels, List<AiModel> asrModels, 
+                          List<AiModel> ttsModels, List<AiModel> videoModels) {
         try {
-            log.info("开始加载对话、图像、ASR和TTS模型服务...");
+            log.info("开始加载对话、图像、ASR、TTS和视频模型服务...");
             
             // 清空现有服务（用于刷新场景）
             modelServiceMap.clear();
             imageServiceMap.clear();
             asrServiceMap.clear();
             ttsServiceMap.clear();
+            videoServiceMap.clear();
             
             // 加载对话模型
             for (AiModel model : chatModels) {
@@ -143,8 +155,17 @@ public class DynamicAiModelBeanManager {
                 log.debug("加载TTS模型：{}，名称：{}", modelKey, model.getModelName());
             }
             
-            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型，{}个TTS模型", 
-                    modelServiceMap.size(), imageServiceMap.size(), asrServiceMap.size(), ttsServiceMap.size());
+            // 加载视频模型
+            for (AiModel model : videoModels) {
+                String modelKey = model.getModelKey();
+                DynamicAiVideoService videoService = new DynamicAiVideoService(model);
+                videoServiceMap.put(modelKey, videoService);
+                log.debug("加载视频模型：{}，名称：{}", modelKey, model.getModelName());
+            }
+            
+            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型，{}个TTS模型，{}个视频模型", 
+                    modelServiceMap.size(), imageServiceMap.size(), asrServiceMap.size(), 
+                    ttsServiceMap.size(), videoServiceMap.size());
             
         } catch (Exception e) {
             log.error("加载对话、图像、ASR和TTS模型服务失败", e);
@@ -1003,6 +1024,240 @@ public class DynamicAiModelBeanManager {
         }
         
         @Override
+        public String getModelName() {
+            return model.getModelName();
+        }
+    }
+    
+    /**
+     * 获取视频生成服务
+     */
+    public DynamicAiVideoService getVideoService(String providerCode, String modelCode) {
+        String modelKey = providerCode + ":" + modelCode;
+        DynamicAiVideoService service = videoServiceMap.get(modelKey);
+        
+        if (service == null) {
+            log.info("视频服务未加载，尝试动态加载：{}", modelKey);
+            Optional<AiModel> modelOpt = modelRepository.findByProviderAndModel(providerCode, modelCode);
+            if (modelOpt.isEmpty()) {
+                throw BizException.of(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    String.format("视频生成模型%s不存在", modelKey));
+            }
+            
+            AiModel model = modelOpt.get();
+            if (!model.isEnabled()) {
+                throw BizException.of(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                    String.format("视频生成模型%s已禁用", modelKey));
+            }
+            
+            if (!model.isVideoModel()) {
+                throw BizException.of(ErrorCodeEnum.PARAM_ERROR, 
+                    String.format("模型%s不是视频生成模型", modelKey));
+            }
+            
+            service = new DynamicAiVideoService(model);
+            videoServiceMap.put(modelKey, service);
+            log.info("动态加载视频生成服务：{}", modelKey);
+        }
+        
+        return service;
+    }
+    
+    /**
+     * 根据模型键获取视频生成服务
+     */
+    public DynamicAiVideoService getVideoServiceByModelKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw BizException.of(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        
+        String[] parts = modelKey.split(":", 2);
+        return getVideoService(parts[0], parts[1]);
+    }
+    
+    /**
+     * 获取所有可用的视频生成模型信息
+     */
+    public List<AiModel> getAvailableVideoModels() {
+        return videoServiceMap.values().stream()
+                .map(service -> service.model)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 动态AI视频生成服务内部类
+     * 完全复用密钥池、费用统计、调用日志等基础设施
+     */
+    public class DynamicAiVideoService {
+        private final AiModel model;
+        
+        public DynamicAiVideoService(AiModel model) {
+            this.model = model;
+        }
+        
+        /**
+         * 提交视频生成任务（异步）
+         */
+        public com.nexusvoice.domain.video.model.VideoGenerationResult submitTask(
+                com.nexusvoice.domain.video.model.VideoGenerationRequest request) {
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            String requestId = UUID.randomUUID().toString();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 验证请求
+                String validationError = request.validate();
+                if (validationError != null) {
+                    throw BizException.of(ErrorCodeEnum.PARAM_ERROR, validationError);
+                }
+                
+                // 2. 获取API密钥
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 3. 获取适配器并提交任务
+                com.nexusvoice.domain.video.repository.VideoRepository videoRepo = getVideoRepository();
+                com.nexusvoice.domain.video.model.VideoGenerationResult result = 
+                        videoRepo.submitTask(request, model, apiKey);
+                
+                // 4. 记录调用日志（提交阶段）
+                callLog = AiApiCallLog.success(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        request.getUserId(), request.getConversationId(),
+                        requestId, requestTime,
+                        (int)(System.currentTimeMillis() - startTime),
+                        0, 0, BigDecimal.ZERO  // 提交阶段不计费
+                );
+                callLogRepository.save(callLog);
+                
+                DynamicAiModelBeanManager.log.info("视频生成任务提交成功，任务ID：{}，模型：{}", 
+                        result.getTaskId(), model.getModelKey());
+                return result;
+                
+            } catch (Exception e) {
+                DynamicAiModelBeanManager.log.error("视频生成任务提交失败，模型：{}，错误：{}", 
+                        model.getModelKey(), e.getMessage(), e);
+                
+                // 标记密钥失败
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            request.getUserId(), request.getConversationId(),
+                            requestId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                throw BizException.of(ErrorCodeEnum.VIDEO_GENERATION_FAILED, 
+                        "视频生成任务提交失败：" + e.getMessage(), e);
+            }
+        }
+        
+        /**
+         * 查询视频生成结果
+         */
+        public com.nexusvoice.domain.video.model.VideoGenerationResult queryTask(
+                String taskId, 
+                com.nexusvoice.domain.video.model.VideoGenerationRequest originalRequest) {
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 获取API密钥
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 2. 查询任务结果
+                com.nexusvoice.domain.video.repository.VideoRepository videoRepo = getVideoRepository();
+                com.nexusvoice.domain.video.model.VideoGenerationResult result = 
+                        videoRepo.queryTask(taskId, model, apiKey);
+                
+                // 3. 如果成功，计算费用并记录
+                if (result.isSuccess() && result.getTokenUsage() != null) {
+                    int promptTokens = result.getTokenUsage().getPromptTokens() != null 
+                            ? result.getTokenUsage().getPromptTokens() : 0;
+                    int completionTokens = result.getTokenUsage().getCompletionTokens() != null 
+                            ? result.getTokenUsage().getCompletionTokens() : 0;
+                    
+                    BigDecimal cost = model.calculateCost(promptTokens, completionTokens);
+                    
+                    // 更新密钥使用统计
+                    apiKeyPoolManager.markSuccess(apiKey.getId(), promptTokens + completionTokens, cost);
+                    
+                    // 记录调用日志
+                    callLog = AiApiCallLog.success(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            originalRequest.getUserId(), originalRequest.getConversationId(),
+                            taskId, requestTime,
+                            (int)(System.currentTimeMillis() - startTime),
+                            promptTokens, completionTokens, cost
+                    );
+                    callLogRepository.save(callLog);
+                    
+                    DynamicAiModelBeanManager.log.info("视频生成成功，任务ID：{}，模型：{}，Token：{}，费用：{}元", 
+                            taskId, model.getModelKey(), (promptTokens + completionTokens), cost);
+                }
+                
+                return result;
+                
+            } catch (Exception e) {
+                DynamicAiModelBeanManager.log.error("视频生成结果查询失败，任务ID：{}，错误：{}", 
+                        taskId, e.getMessage(), e);
+                
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null && originalRequest != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            originalRequest.getUserId(), originalRequest.getConversationId(),
+                            taskId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                throw BizException.of(ErrorCodeEnum.VIDEO_QUERY_FAILED, 
+                        "视频生成结果查询失败：" + e.getMessage(), e);
+            }
+        }
+        
+        /**
+         * 获取视频仓储实现
+         */
+        private com.nexusvoice.domain.video.repository.VideoRepository getVideoRepository() {
+            // 根据厂商代码选择对应的适配器
+            if ("zhipu".equals(model.getProviderCode())) {
+                if (zhipuVideoAdapter != null) {
+                    return zhipuVideoAdapter;
+                }
+            }
+            
+            throw BizException.of(ErrorCodeEnum.VIDEO_MODEL_NOT_SUPPORTED, 
+                    "不支持的视频生成模型：" + model.getModelKey());
+        }
+        
+        /**
+         * 检查模型是否可用
+         */
+        public boolean isModelAvailable() {
+            return model.isEnabled() && 
+                   apiKeyPoolManager.getAvailableKeyCount(model.getProviderCode(), model.getModelCode()) > 0;
+        }
+        
+        /**
+         * 获取模型名称
+         */
         public String getModelName() {
             return model.getModelName();
         }

@@ -160,8 +160,23 @@ public enum ErrorCodeEnum {
     IMAGE_CFG_INVALID(2112, "图像CFG参数无效"),
     IMAGE_API_KEY_INVALID(2113, "图像生成API密钥无效"),
     
+    // 视频生成相关 22xx
+    VIDEO_SERVICE_ERROR(2201, "视频生成服务错误"),
+    VIDEO_PROMPT_INVALID(2202, "视频描述提示词无效"),
+    VIDEO_MODEL_NOT_SUPPORTED(2203, "视频生成模型不支持"),
+    VIDEO_SIZE_INVALID(2204, "视频尺寸无效"),
+    VIDEO_GENERATION_FAILED(2205, "视频生成失败"),
+    VIDEO_CONNECTION_FAILED(2206, "视频生成服务连接失败"),
+    VIDEO_TIMEOUT(2207, "视频生成处理超时"),
+    VIDEO_QUALITY_INVALID(2208, "视频质量模式无效"),
+    VIDEO_FPS_INVALID(2209, "视频帧率无效"),
+    VIDEO_DURATION_INVALID(2210, "视频时长无效"),
+    VIDEO_TASK_NOT_FOUND(2211, "视频生成任务不存在"),
+    VIDEO_QUERY_FAILED(2212, "视频生成结果查询失败"),
+    VIDEO_API_KEY_INVALID(2213, "视频生成API密钥无效"),
+    
     // 功能实现相关
-    FUNCTION_NOT_IMPLEMENTED(2200, "功能暂未实现"),
+    FUNCTION_NOT_IMPLEMENTED(2250, "功能暂未实现"),
     
     // Redis相关错误码 40xx
     REDIS_CONNECTION_FAILED(4001, "Redis连接失败"),

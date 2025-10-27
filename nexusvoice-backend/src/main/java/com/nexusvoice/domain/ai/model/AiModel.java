@@ -215,6 +215,14 @@ public class AiModel extends BaseDomainEntity {
     }
     
     /**
+     * 是否为视频生成模型
+     */
+    public boolean isVideoModel() {
+        AiModelType type = getModelTypeEnum();
+        return type != null && type.isVideo();
+    }
+    
+    /**
      * 获取配置Map
      */
     public Map<String, Object> getConfigMap() {

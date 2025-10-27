@@ -58,18 +58,20 @@ public class AiModelInitializer {
             int imageCount = modelsByType.getOrDefault("image", List.of()).size();
             int asrCount = modelsByType.getOrDefault("asr", List.of()).size();
             int ttsCount = modelsByType.getOrDefault("tts", List.of()).size();
+            int videoCount = modelsByType.getOrDefault("video", List.of()).size();
             int embeddingCount = modelsByType.getOrDefault("embedding", List.of()).size();
             int rerankCount = modelsByType.getOrDefault("rerank", List.of()).size();
             
-            log.info("模型类型分布 - CHAT: {}, IMAGE: {}, ASR: {}, TTS: {}, EMBEDDING: {}, RERANK: {}", 
-                    chatCount, imageCount, asrCount, ttsCount, embeddingCount, rerankCount);
+            log.info("模型类型分布 - CHAT: {}, IMAGE: {}, ASR: {}, TTS: {}, VIDEO: {}, EMBEDDING: {}, RERANK: {}", 
+                    chatCount, imageCount, asrCount, ttsCount, videoCount, embeddingCount, rerankCount);
             
             // 4. 分发给各个Manager（无需再查询数据库）
             modelBeanManager.loadModels(
                     modelsByType.getOrDefault("chat", List.of()),
                     modelsByType.getOrDefault("image", List.of()),
                     modelsByType.getOrDefault("asr", List.of()),
-                    modelsByType.getOrDefault("tts", List.of())
+                    modelsByType.getOrDefault("tts", List.of()),
+                    modelsByType.getOrDefault("video", List.of())
             );
             
             embeddingBeanManager.loadModels(
@@ -112,7 +114,8 @@ public class AiModelInitializer {
                     modelsByType.getOrDefault("chat", List.of()),
                     modelsByType.getOrDefault("image", List.of()),
                     modelsByType.getOrDefault("asr", List.of()),
-                    modelsByType.getOrDefault("tts", List.of())
+                    modelsByType.getOrDefault("tts", List.of()),
+                    modelsByType.getOrDefault("video", List.of())
             );
             
             embeddingBeanManager.loadModels(
