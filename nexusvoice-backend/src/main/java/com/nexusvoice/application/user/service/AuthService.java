@@ -155,6 +155,63 @@ public class AuthService {
     }
 
     /**
+     * 管理员登录
+     *
+     * @param request 登录请求
+     * @return 认证响应
+     */
+    public AuthResponse adminLogin(LoginRequest request) {
+        return adminLogin(request, getHttpServletRequest());
+    }
+    
+    /**
+     * 管理员登录（带HttpServletRequest）
+     *
+     * @param request 登录请求
+     * @param httpRequest HTTP请求
+     * @return 认证响应
+     */
+    public AuthResponse adminLogin(LoginRequest request, HttpServletRequest httpRequest) {
+        log.info("管理员登录请求: {}", request);
+
+        // 验证请求参数
+        validateLoginRequest(request);
+
+        // 查找用户
+        User user = findUserByUsername(request.getUsername());
+
+        // 验证密码
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            log.warn("管理员 {} 登录密码错误", request.getUsername());
+            throw BizException.of(ErrorCodeEnum.USER_PASSWORD_ERROR, "用户名或密码错误");
+        }
+
+        // ✅ 验证用户类型必须是管理员
+        if (!UserType.ADMIN.equals(user.getUserType())) {
+            log.warn("用户 {} 尝试使用管理员接口登录，但不是管理员", request.getUsername());
+            throw BizException.of(ErrorCodeEnum.ADMIN_ACCESS_DENIED, "需要管理员权限才能登录后台管理系统");
+        }
+
+        // 检查用户状态
+        if (!user.isAccountNormal()) {
+            if (user.isBanned()) {
+                throw BizException.of(ErrorCodeEnum.USER_BANNED, "账户已被封禁，请联系管理员");
+            } else {
+                throw BizException.of(ErrorCodeEnum.USER_STATUS_ABNORMAL, "账户状态异常，无法登录");
+            }
+        }
+
+        // 更新最后登录时间
+        user.updateLastLoginTime();
+        userRepository.update(user);
+
+        log.info("管理员 {} 登录成功", user.getEmail());
+
+        // 生成令牌并返回（创建会话）
+        return generateAuthResponse(user, httpRequest);
+    }
+
+    /**
      * 刷新令牌
      *
      * @param refreshToken 刷新令牌

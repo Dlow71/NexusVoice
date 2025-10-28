@@ -59,6 +59,8 @@ public enum ErrorCodeEnum {
     PERMISSION_DENIED(1201, "权限不足"),
     ROLE_NOT_FOUND(1202, "角色不存在"),
     RESOURCE_ACCESS_DENIED(1203, "资源访问被拒绝"),
+    ADMIN_ACCESS_DENIED(1204, "需要管理员权限"),
+    ADMIN_ONLY(1205, "仅限管理员访问"),
     
     // 数据相关 13xx
     DATA_NOT_FOUND(1301, "数据不存在"),
