@@ -6,6 +6,7 @@ import com.nexusvoice.domain.user.model.User;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.utils.JwtUtils;
+import com.nexusvoice.application.auth.service.TokenManagementService;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -45,6 +46,9 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
     
     @Autowired
     private OAuthUserService oAuthUserService;
+    
+    @Autowired
+    private TokenManagementService tokenManagementService;
     
     @Value("${oauth2.success.redirect.url:http://localhost:5173/oauth/callback}")
     private String frontendRedirectUrl;
@@ -122,7 +126,10 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
             
             log.info("OAuth用户{}登录成功，生成JWT令牌", user.getId());
             
-            // 8. 构建重定向URL，携带令牌和用户信息
+            // 8. 创建会话（区分客户端类型），以便后续JWT校验通过
+            tokenManagementService.createSession(user.getId(), accessToken, refreshToken, request);
+
+            // 9. 构建重定向URL，携带令牌和用户信息
             String redirectUrl = buildSuccessRedirectUrl(
                     accessToken, 
                     refreshToken, 
@@ -130,7 +137,7 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
                     user
             );
             
-            // 9. 重定向到前端
+            // 10. 重定向到前端
             getRedirectStrategy().sendRedirect(request, response, redirectUrl);
             
         } catch (Exception e) {

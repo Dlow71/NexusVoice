@@ -62,6 +62,11 @@ public class TokenManagementService {
             session.setDeviceType(extractDeviceType(request));
             session.setIpAddress(extractIpAddress(request));
             session.setUserAgent(request.getHeader("User-Agent"));
+            // 区分客户端（admin/user），便于并发会话按系统隔离
+            session.setClientType(extractClientType(request));
+        } else {
+            // 默认按用户端处理
+            session.setClientType("user");
         }
         
         // 设置时间
@@ -73,28 +78,33 @@ public class TokenManagementService {
         Date expirationDate = jwtUtils.getExpirationFromToken(accessToken);
         session.setExpiresAt(convertToLocalDateTime(expirationDate));
         
-        // 检查会话数量限制
+        // 检查会话数量限制（按客户端类型隔离：管理端与用户端互不影响）
+        String clientType = normalizeClientType(session.getClientType());
+        List<UserSession> allSessions = sessionRepository.findByUserId(userId);
+        List<UserSession> sameClientSessions = allSessions.stream()
+                .filter(s -> clientType.equals(normalizeClientType(s.getClientType())))
+                .toList();
+
         if (singleDeviceMode) {
-            // 单设备模式：删除该用户的所有其他会话
-            sessionRepository.deleteByUserId(userId);
-            log.info("单设备模式：清除用户所有旧会话，userId={}", userId);
+            // 单设备模式：仅清除同一客户端类型的其他会话
+            sameClientSessions.forEach(s -> {
+                sessionRepository.deleteByAccessToken(s.getAccessToken());
+                log.info("单设备模式：清除同客户端旧会话 userId={}, clientType={}, accessToken={}",
+                        userId, clientType, maskToken(s.getAccessToken()));
+            });
         } else {
-            // 多设备模式：检查是否超过最大会话数
-            long sessionCount = sessionRepository.countByUserId(userId);
+            // 多设备模式：同一客户端类型内检查最大会话数
+            int sessionCount = sameClientSessions.size();
             if (sessionCount >= maxSessionsPerUser) {
-                // 删除最旧的会话（简化实现：删除所有旧会话）
-                List<UserSession> oldSessions = sessionRepository.findByUserId(userId);
-                if (!oldSessions.isEmpty()) {
-                    // 按创建时间排序，删除最旧的
-                    oldSessions.stream()
-                            .sorted((s1, s2) -> s1.getCreatedAt().compareTo(s2.getCreatedAt()))
-                            .limit(sessionCount - maxSessionsPerUser + 1)
-                            .forEach(s -> {
-                                sessionRepository.deleteByAccessToken(s.getAccessToken());
-                                log.info("超过最大会话数限制，删除旧会话: userId={}, accessToken={}", 
-                                        userId, maskToken(s.getAccessToken()));
-                            });
-                }
+                int toDelete = sessionCount - maxSessionsPerUser + 1;
+                sameClientSessions.stream()
+                        .sorted((s1, s2) -> s1.getCreatedAt().compareTo(s2.getCreatedAt()))
+                        .limit(toDelete)
+                        .forEach(s -> {
+                            sessionRepository.deleteByAccessToken(s.getAccessToken());
+                            log.info("超过同客户端最大会话数限制，删除旧会话 userId={}, clientType={}, accessToken={}",
+                                    userId, clientType, maskToken(s.getAccessToken()));
+                        });
             }
         }
         
@@ -148,6 +158,7 @@ public class TokenManagementService {
             newSession.setDeviceType(oldSession.getDeviceType());
             newSession.setIpAddress(oldSession.getIpAddress());
             newSession.setUserAgent(oldSession.getUserAgent());
+            newSession.setClientType(oldSession.getClientType());
             
             LocalDateTime now = LocalDateTime.now();
             newSession.setCreatedAt(now);
@@ -301,6 +312,32 @@ public class TokenManagementService {
         } else {
             return "desktop";
         }
+    }
+
+    /**
+     * 提取客户端类型（admin 或 user）。优先从Header，其次从请求路径判断。
+     */
+    private String extractClientType(HttpServletRequest request) {
+        // 1) 优先从自定义Header读取
+        String fromHeader = request.getHeader("X-Client-Type");
+        if (StringUtils.hasText(fromHeader)) {
+            return normalizeClientType(fromHeader);
+        }
+        // 2) 其次从查询参数读取（用于OAuth回调等无法自定义Header的场景）
+        String fromParam = request.getParameter("client");
+        if (StringUtils.hasText(fromParam)) {
+            return normalizeClientType(fromParam);
+        }
+        // 3) 最后根据路径前缀简单判断
+        String uri = request.getRequestURI();
+        if (uri != null && uri.startsWith("/api/admin/")) {
+            return "admin";
+        }
+        return "user";
+    }
+
+    private String normalizeClientType(String type) {
+        return (StringUtils.hasText(type) ? type.trim().toLowerCase() : "user");
     }
     
     /**

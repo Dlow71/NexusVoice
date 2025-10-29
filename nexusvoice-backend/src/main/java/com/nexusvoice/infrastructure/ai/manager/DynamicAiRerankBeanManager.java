@@ -210,6 +210,7 @@ public class DynamicAiRerankBeanManager {
                         (int)(System.currentTimeMillis() - startTime),
                         totalTokens, 0, cost
                 );
+                com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                 callLogRepository.save(callLog);
                 
                 // 6. 构建响应
@@ -229,6 +230,7 @@ public class DynamicAiRerankBeanManager {
                             request.getUserId(), null,
                             requestId, requestTime, e.getMessage()
                     );
+                    com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                     callLogRepository.save(callLog);
                 }
                 

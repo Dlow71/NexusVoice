@@ -153,8 +153,8 @@ const handleSubmit = async () => {
 
 // GitHub登录处理
 const handleGitHubLogin = () => {
-  // 跳转到后端的OAuth2授权端点
-  window.location.href = 'http://localhost:8081/oauth2/authorization/github';
+  // 跳转到后端的OAuth2授权端点，并标注客户端类型，便于后端在OAuth回调中识别
+  window.location.href = 'http://localhost:8081/oauth2/authorization/github?client=user';
 };
 </script>
 

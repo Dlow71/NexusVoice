@@ -5,6 +5,7 @@ import CharacterSelectionView from '../views/CharacterSelectionView.vue'
 import ChatStreamView from '../views/ChatStreamView.vue'
 import LabView from '../views/LabView.vue'
 import OAuthCallbackView from '../views/OAuthCallbackView.vue'
+import ApiKeyManagementView from '../views/ApiKeyManagementView.vue'
 import {useAuthStore} from "../stores/auth.js";
 
 // 定义应用的路由规则
@@ -48,6 +49,12 @@ const routes = [
         path: '/oauth/callback',
         name: 'OAuthCallback',
         component: OAuthCallbackView
+    },
+    {
+        path: '/developer/api-keys',
+        name: 'ApiKeyManagement',
+        component: ApiKeyManagementView,
+        meta: { requiresAuth: true }
     }
 ]
 

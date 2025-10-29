@@ -227,6 +227,7 @@ public class DynamicAiEmbeddingBeanManager {
                         (int)(System.currentTimeMillis() - startTime),
                         totalTokens, 0, cost
                 );
+                com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                 callLogRepository.save(callLog);
                 
                 // 9. 构建响应
@@ -250,6 +251,7 @@ public class DynamicAiEmbeddingBeanManager {
                             request.getUserId(), null,
                             requestId, requestTime, e.getMessage()
                     );
+                    com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                     callLogRepository.save(callLog);
                 }
                 

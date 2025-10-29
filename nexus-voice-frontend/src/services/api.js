@@ -19,6 +19,10 @@ apiClient.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        // 标识客户端类型，便于后端按端隔离会话（OAuth回调后的后续请求、刷新请求等也会带上）
+        if (!config.headers['X-Client-Type']) {
+            config.headers['X-Client-Type'] = 'user';
+        }
         return config;
     },
     (error) => {
@@ -36,13 +40,65 @@ apiClient.interceptors.response.use(
         return response;
     },
     (error) => {
-        // 超出 2xx 范围的状态码都会触发该函数
+        const authStore = useAuthStore();
+        const originalRequest = error.config || {};
+
+        // 仅处理 401 未授权
         if (error.response && error.response.status === 401) {
-            // 如果收到 401 (未授权) 错误，自动登出用户
-            const authStore = useAuthStore();
+            // 避免重复刷新
+            if (originalRequest._retry) {
+                // 已重试过，仍然 401，执行登出
+                authStore.logout();
+                return Promise.reject(error);
+            }
+
+            // 若存在 refreshToken，则尝试刷新并重试原请求
+            const storedRefreshToken = authStore.refreshToken;
+            if (storedRefreshToken) {
+                originalRequest._retry = true;
+
+                // 使用裸 axios 调用刷新接口，避免拦截器相互影响
+                const baseURL = apiClient.defaults.baseURL || '';
+                const refreshUrl = (baseURL.endsWith('/'))
+                    ? `${baseURL}auth/refresh`
+                    : `${baseURL}/auth/refresh`;
+
+                return axios.post(
+                    refreshUrl,
+                    { refreshToken: storedRefreshToken },
+                    { headers: { 'X-Client-Type': 'user' } }
+                ).then((res) => {
+                    // 兼容后端统一返回结构：{ success, data: { accessToken, refreshToken, ... } }
+                    const body = res.data || {};
+                    if (!body.success || !body.data || !body.data.accessToken) {
+                        throw new Error(body.message || '刷新令牌失败');
+                    }
+
+                    const newAccessToken = body.data.accessToken;
+                    const newRefreshToken = body.data.refreshToken || storedRefreshToken;
+
+                    // 更新 store 和本地缓存
+                    authStore.token = newAccessToken;
+                    authStore.refreshToken = newRefreshToken;
+                    localStorage.setItem('user-token', newAccessToken);
+                    localStorage.setItem('user-refresh-token', newRefreshToken);
+
+                    // 更新并重试原请求
+                    originalRequest.headers = originalRequest.headers || {};
+                    originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+                    originalRequest.headers['X-Client-Type'] = originalRequest.headers['X-Client-Type'] || 'user';
+                    return apiClient(originalRequest);
+                }).catch((refreshErr) => {
+                    // 刷新失败则登出
+                    authStore.logout();
+                    return Promise.reject(refreshErr);
+                });
+            }
+
+            // 无 refreshToken，直接登出
             authStore.logout();
         }
-        // 对响应错误做点什么
+
         return Promise.reject(error);
     }
 );
@@ -50,4 +106,3 @@ apiClient.interceptors.response.use(
 
 // 4. 导出配置好的 Axios 实例
 export default apiClient;
-

@@ -29,6 +29,18 @@ public class AiApiCallLogPO extends BasePO {
     @TableField("api_key_id")
     private Long apiKeyId;
 
+    /**
+     * 开发者API Key ID（用户侧密钥）
+     */
+    @TableField("developer_api_key_id")
+    private Long developerApiKeyId;
+
+    /**
+     * 认证类型：JWT/API_KEY
+     */
+    @TableField("auth_type")
+    private String authType;
+
     @TableField("provider_code")
     private String providerCode;
 

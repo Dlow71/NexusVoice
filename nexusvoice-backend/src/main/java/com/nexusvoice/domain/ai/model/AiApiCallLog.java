@@ -21,6 +21,16 @@ public class AiApiCallLog extends BaseDomainEntity {
      * API密钥ID
      */
     private Long apiKeyId;
+
+    /**
+     * 开发者API Key ID（用户侧密钥）
+     */
+    private Long developerApiKeyId;
+
+    /**
+     * 认证类型：JWT/API_KEY
+     */
+    private String authType;
     
     /**
      * 厂商代码

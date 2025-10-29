@@ -334,6 +334,7 @@ public class DynamicAiModelBeanManager {
                         (int)(System.currentTimeMillis() - startTime),
                         promptTokens, completionTokens, cost
                 );
+                com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                 callLogRepository.save(callLog);
                 
                 // 8. 构建响应
@@ -363,6 +364,7 @@ public class DynamicAiModelBeanManager {
                             request.getUserId(), request.getConversationId(),
                             requestId, requestTime, e.getMessage()
                     );
+                    com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                     callLogRepository.save(callLog);
                 }
                 
@@ -460,6 +462,7 @@ public class DynamicAiModelBeanManager {
                                 (int)(System.currentTimeMillis() - startTime),
                                 promptTokens, completionTokens, cost
                         );
+                        com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                         callLogRepository.save(callLog);
                         
                         // 发送结束信号
@@ -483,6 +486,7 @@ public class DynamicAiModelBeanManager {
                                 finalRequest.getUserId(), finalRequest.getConversationId(),
                                 requestId, requestTime, throwable.getMessage()
                         );
+                        com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                         callLogRepository.save(callLog);
                         
                         onError.accept(throwable);
@@ -638,6 +642,7 @@ public class DynamicAiModelBeanManager {
                         0, imageCount, // promptTokens=0, completionTokens=imageCount
                         cost
                 );
+                com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                 callLogRepository.save(callLog);
                 
                 log.info("图像生成成功，模型：{}，图片数量：{}，费用：{}元", 
@@ -660,6 +665,7 @@ public class DynamicAiModelBeanManager {
                             request.getUserId(), null,
                             requestId, requestTime, e.getMessage()
                     );
+                    com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                     callLogRepository.save(callLog);
                 }
                 
@@ -1201,6 +1207,7 @@ public class DynamicAiModelBeanManager {
                             (int)(System.currentTimeMillis() - startTime),
                             promptTokens, completionTokens, cost
                     );
+                    com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                     callLogRepository.save(callLog);
                     
                     DynamicAiModelBeanManager.log.info("视频生成成功，任务ID：{}，模型：{}，Token：{}，费用：{}元", 
@@ -1224,6 +1231,7 @@ public class DynamicAiModelBeanManager {
                             originalRequest.getUserId(), originalRequest.getConversationId(),
                             taskId, requestTime, e.getMessage()
                     );
+                    com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                     callLogRepository.save(callLog);
                 }
                 

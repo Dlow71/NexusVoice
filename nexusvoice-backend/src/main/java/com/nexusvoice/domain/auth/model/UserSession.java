@@ -66,6 +66,11 @@ public class UserSession {
      * 过期时间
      */
     private LocalDateTime expiresAt;
+
+    /**
+     * 客户端类型（admin 或 user），用于区分管理端与用户端的会话
+     */
+    private String clientType;
     
     /**
      * 是否已过期

@@ -43,6 +43,9 @@ public class SecurityConfig {
     private JwtAuthenticationFilter jwtAuthenticationFilter;
     
     @Autowired
+    private com.nexusvoice.infrastructure.security.DeveloperApiKeyAuthenticationFilter developerApiKeyAuthenticationFilter;
+    
+    @Autowired
     private JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
     
     @Autowired
@@ -91,6 +94,8 @@ public class SecurityConfig {
                     "/",
                     "/api/health",
                     "/api/auth/**",
+                    // 开发者API密钥测试端点：使用X-API-Key自行校验，不走JWT
+                    "/api/v1/developer/test/**",
                     "/api/admin/auth/login",
                     "/actuator/health",
                     "/actuator/info",
@@ -117,6 +122,8 @@ public class SecurityConfig {
                 .accessDeniedHandler(jwtAccessDeniedHandler)
             )
             
+            // 添加API Key过滤器（先于JWT，以便无JWT时也能认证）
+            .addFilterBefore(developerApiKeyAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             // 添加JWT过滤器
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
             

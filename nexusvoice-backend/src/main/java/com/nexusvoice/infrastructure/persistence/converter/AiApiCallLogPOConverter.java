@@ -28,6 +28,8 @@ public class AiApiCallLogPOConverter {
         
         // 业务字段
         po.setApiKeyId(log.getApiKeyId());
+        po.setDeveloperApiKeyId(log.getDeveloperApiKeyId());
+        po.setAuthType(log.getAuthType());
         po.setProviderCode(log.getProviderCode());
         po.setModelCode(log.getModelCode());
         po.setUserId(log.getUserId());
@@ -64,6 +66,8 @@ public class AiApiCallLogPOConverter {
         
         // 业务字段
         log.setApiKeyId(po.getApiKeyId());
+        log.setDeveloperApiKeyId(po.getDeveloperApiKeyId());
+        log.setAuthType(po.getAuthType());
         log.setProviderCode(po.getProviderCode());
         log.setModelCode(po.getModelCode());
         log.setUserId(po.getUserId());
