@@ -2,11 +2,14 @@ package com.nexusvoice.infrastructure.aspect;
 
 import com.nexusvoice.annotation.RequireAdmin;
 import com.nexusvoice.annotation.RequireAuth;
+import com.nexusvoice.annotation.RequirePermission;
 import com.nexusvoice.annotation.RequireUser;
 import com.nexusvoice.domain.user.constant.UserType;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.security.PermissionChecker;
 import com.nexusvoice.utils.SecurityUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -32,6 +35,9 @@ import java.util.Optional;
 public class AuthorizationAspect {
 
     private static final Logger log = LoggerFactory.getLogger(AuthorizationAspect.class);
+
+    @Autowired
+    private PermissionChecker permissionChecker;
 
     /**
      * 处理@RequireAuth注解
@@ -65,6 +71,18 @@ public class AuthorizationAspect {
         RequireUser requireUser = getRequireUserAnnotation(joinPoint);
         if (requireUser != null) {
             validateUserAuth(requireUser, joinPoint);
+        }
+        return joinPoint.proceed();
+    }
+
+    /**
+     * 处理@RequirePermission注解
+     */
+    @Around("@annotation(com.nexusvoice.annotation.RequirePermission) || @within(com.nexusvoice.annotation.RequirePermission)")
+    public Object handleRequirePermission(ProceedingJoinPoint joinPoint) throws Throwable {
+        RequirePermission requirePermission = getRequirePermissionAnnotation(joinPoint);
+        if (requirePermission != null) {
+            validatePermission(requirePermission, joinPoint);
         }
         return joinPoint.proceed();
     }
@@ -192,6 +210,71 @@ public class AuthorizationAspect {
         
         // 再检查类上的注解
         return AnnotationUtils.findAnnotation(method.getDeclaringClass(), RequireUser.class);
+    }
+
+    /**
+     * 验证细粒度权限
+     */
+    private void validatePermission(RequirePermission requirePermission, ProceedingJoinPoint joinPoint) {
+        String methodName = getMethodName(joinPoint);
+        
+        // 检查用户是否已登录
+        if (!SecurityUtils.isAuthenticated()) {
+            log.warn("用户未登录，无法访问需要权限的方法: {}", methodName);
+            throw BizException.of(ErrorCodeEnum.UNAUTHORIZED, "请先登录");
+        }
+
+        // 管理员拥有所有权限，直接放行
+        if (permissionChecker.isAdmin()) {
+            log.debug("管理员访问，跳过权限验证: {}", methodName);
+            return;
+        }
+
+        String[] permissions = requirePermission.value();
+        if (permissions.length == 0) {
+            log.debug("未配置权限要求，允许访问: {}", methodName);
+            return;
+        }
+
+        boolean hasPermission;
+        if (requirePermission.logical() == RequirePermission.Logical.AND) {
+            // AND关系：必须拥有所有权限
+            hasPermission = permissionChecker.hasAllPermissions(permissions);
+            if (!hasPermission) {
+                log.warn("用户权限不足，无法访问方法: {}，需要所有权限: {}", 
+                        methodName, Arrays.toString(permissions));
+                throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, 
+                        "权限不足，需要权限: " + String.join(", ", permissions));
+            }
+        } else {
+            // OR关系：拥有任一权限即可
+            hasPermission = permissionChecker.hasAnyPermission(permissions);
+            if (!hasPermission) {
+                log.warn("用户权限不足，无法访问方法: {}，需要任一权限: {}", 
+                        methodName, Arrays.toString(permissions));
+                throw BizException.of(ErrorCodeEnum.PERMISSION_DENIED, 
+                        "权限不足，需要权限: " + String.join(" 或 ", permissions));
+            }
+        }
+
+        log.debug("权限验证通过，允许访问方法: {}", methodName);
+    }
+
+    /**
+     * 获取@RequirePermission注解
+     */
+    private RequirePermission getRequirePermissionAnnotation(ProceedingJoinPoint joinPoint) {
+        MethodSignature signature = (MethodSignature) joinPoint.getSignature();
+        Method method = signature.getMethod();
+        
+        // 先检查方法上的注解
+        RequirePermission annotation = AnnotationUtils.findAnnotation(method, RequirePermission.class);
+        if (annotation != null) {
+            return annotation;
+        }
+        
+        // 再检查类上的注解
+        return AnnotationUtils.findAnnotation(method.getDeclaringClass(), RequirePermission.class);
     }
 
     /**

@@ -62,6 +62,32 @@ public enum ErrorCodeEnum {
     ADMIN_ACCESS_DENIED(1204, "需要管理员权限"),
     ADMIN_ONLY(1205, "仅限管理员访问"),
     
+    // 角色管理相关 12xx
+    ROLE_CODE_ALREADY_EXISTS(1210, "角色编码已存在"),
+    ROLE_NAME_ALREADY_EXISTS(1211, "角色名称已存在"),
+    ROLE_CODE_INVALID(1212, "角色编码格式不正确"),
+    ROLE_SYSTEM_CANNOT_DELETE(1213, "系统内置角色不允许删除"),
+    ROLE_SYSTEM_CANNOT_EDIT(1214, "系统内置角色不允许编辑"),
+    ROLE_HAS_USERS(1215, "角色下有用户，无法删除"),
+    ROLE_STATUS_INVALID(1216, "角色状态无效"),
+    
+    // 菜单管理相关 12xx
+    MENU_NOT_FOUND(1220, "菜单不存在"),
+    MENU_NAME_ALREADY_EXISTS(1221, "菜单名称已存在"),
+    MENU_HAS_CHILDREN(1222, "菜单下有子菜单，无法删除"),
+    MENU_PARENT_NOT_FOUND(1223, "父菜单不存在"),
+    MENU_PARENT_INVALID(1224, "父菜单类型不正确"),
+    MENU_TYPE_INVALID(1225, "菜单类型无效"),
+    MENU_PATH_REQUIRED(1226, "菜单路由路径不能为空"),
+    MENU_COMPONENT_REQUIRED(1227, "菜单组件路径不能为空"),
+    MENU_PERMISSION_REQUIRED(1228, "按钮权限标识不能为空"),
+    MENU_CIRCULAR_REFERENCE(1229, "菜单存在循环引用"),
+    
+    // 用户角色关联相关 12xx
+    USER_ROLE_ALREADY_EXISTS(1230, "用户已拥有该角色"),
+    USER_ROLE_NOT_FOUND(1231, "用户角色关联不存在"),
+    USER_HAS_NO_ROLE(1232, "用户没有任何角色"),
+    
     // 数据相关 13xx
     DATA_NOT_FOUND(1301, "数据不存在"),
     DATA_ALREADY_EXISTS(1302, "数据已存在"),

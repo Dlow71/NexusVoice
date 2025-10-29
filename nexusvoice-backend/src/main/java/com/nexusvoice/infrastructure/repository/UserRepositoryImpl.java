@@ -166,7 +166,8 @@ public class UserRepositoryImpl implements UserRepository {
         }
         
         if (status != null) {
-            wrapper.eq(UserPO::getStatus, status.name());
+            // 使用枚举的code值（数字），因为数据库字段是smallint类型
+            wrapper.eq(UserPO::getStatus, status.getCode());
         }
         
         wrapper.orderByDesc(UserPO::getCreatedAt);

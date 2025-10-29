@@ -358,6 +358,16 @@ public class AuthService {
                 user.getEmailVerified()
         );
         
+        // 临时方案：根据用户类型返回固定角色
+        // TODO: 未来实现完整RBAC权限系统后，从数据库查询用户实际角色
+        java.util.List<String> roles = new java.util.ArrayList<>();
+        if (user.getUserType() != null && user.getUserType().isAdmin()) {
+            roles.add("admin"); // 管理员角色
+        } else {
+            roles.add("user"); // 普通用户角色
+        }
+        userInfo.setRoles(roles);
+        
         // ✅ 创建用户会话（保存到Redis）
         if (httpRequest != null) {
             tokenManagementService.createSession(user.getId(), accessToken, refreshToken, httpRequest);

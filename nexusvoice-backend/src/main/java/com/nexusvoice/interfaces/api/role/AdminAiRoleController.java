@@ -17,34 +17,36 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 /**
- * 管理端 - 公共角色与用户私人角色审核管理
+ * 管理端 - AI对话角色管理（哈利波特、苏格拉底等）
  *
  * 提供：
- * - 公共角色的创建、查询、编辑、删除
- * - 查看所有用户创建的私人角色
+ * - 公共AI角色的创建、查询、编辑、删除
+ * - 查看所有用户创建的私人AI角色
+ * 
+ * 与 /api/admin/roles (RBAC系统角色) 不同，这里管理的是AI对话角色
  */
-@Tag(name = "管理端-角色管理", description = "公共角色管理与私人角色审核")
+@Tag(name = "管理端-AI角色管理", description = "公共AI角色管理与私人AI角色审核")
 @RestController
-@RequestMapping("/api/admin/roles")
+@RequestMapping("/api/admin/ai-roles")
 @RequireAdmin
-public class AdminRoleController {
+public class AdminAiRoleController {
 
-    private static final Logger log = LoggerFactory.getLogger(AdminRoleController.class);
+    private static final Logger log = LoggerFactory.getLogger(AdminAiRoleController.class);
 
     @Autowired
     private RoleApplicationService roleApplicationService;
 
-    // ===================== 公共角色管理 =====================
+    // ===================== 公共AI角色管理 =====================
 
-    @Operation(summary = "创建公共角色", description = "管理员创建平台级公共角色。后端会根据 greetingMessage 自动进行文本转语音（TTS），并将音频上传到七牛云，返回的 URL 会写入 greetingAudioUrl 字段，无需前端传入 greetingAudioUrl。")
+    @Operation(summary = "创建公共AI角色", description = "管理员创建平台级公共AI角色。后端会根据 greetingMessage 自动进行文本转语音（TTS），并将音频上传到七牛云，返回的 URL 会写入 greetingAudioUrl 字段，无需前端传入 greetingAudioUrl。")
     @PostMapping
     public Result<RoleDTO> createPublicRole(@Valid @RequestBody RoleCreateRequest request) {
-        log.info("管理员创建公共角色: name={}", request.getName());
+        log.info("管理员创建公共AI角色: name={}", request.getName());
         RoleDTO dto = roleApplicationService.createPublicRole(request);
         return Result.success("创建成功", dto);
     }
 
-    @Operation(summary = "分页查询公共角色", description = "管理员分页查询与搜索公共角色")
+    @Operation(summary = "分页查询公共AI角色", description = "管理员分页查询与搜索公共AI角色")
     @GetMapping("/public")
     public Result<PageResult<RoleDTO>> pagePublicRoles(
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,
@@ -54,14 +56,14 @@ public class AdminRoleController {
         return Result.success("查询成功", result);
     }
 
-    @Operation(summary = "公共角色详情", description = "获取公共角色详情")
+    @Operation(summary = "公共AI角色详情", description = "获取公共AI角色详情")
     @GetMapping("/public/{id}")
     public Result<RoleDTO> getPublicRoleDetail(@PathVariable("id") Long id) {
         RoleDTO dto = roleApplicationService.getPublicRoleDetail(id);
         return Result.success("查询成功", dto);
     }
 
-    @Operation(summary = "编辑公共角色", description = "管理员编辑公共角色")
+    @Operation(summary = "编辑公共AI角色", description = "管理员编辑公共AI角色")
     @PutMapping("/public/{id}")
     public Result<Void> updatePublicRole(@PathVariable("id") Long id,
                                          @Valid @RequestBody RoleUpdateRequest request) {
@@ -69,16 +71,16 @@ public class AdminRoleController {
         return Result.success("更新成功");
     }
 
-    @Operation(summary = "删除公共角色", description = "管理员删除公共角色（逻辑删除）")
+    @Operation(summary = "删除公共AI角色", description = "管理员删除公共AI角色（逻辑删除）")
     @DeleteMapping("/public/{id}")
     public Result<Void> deletePublicRole(@PathVariable("id") Long id) {
         roleApplicationService.deletePublicRole(id);
         return Result.success("删除成功");
     }
 
-    // ===================== 用户私人角色审核 =====================
+    // ===================== 用户私人AI角色审核 =====================
 
-    @Operation(summary = "查看所有私人角色", description = "管理员分页查看所有用户创建的私人角色，可按用户过滤")
+    @Operation(summary = "查看所有私人AI角色", description = "管理员分页查看所有用户创建的私人AI角色，可按用户过滤")
     @GetMapping("/private")
     public Result<PageResult<RoleDTO>> pageAllPrivateRoles(
             @Parameter(description = "页码", example = "1") @RequestParam(defaultValue = "1") Integer page,

@@ -67,6 +67,9 @@ public class AuthResponse {
 
         @Schema(description = "邮箱是否已验证")
         private Boolean emailVerified;
+        
+        @Schema(description = "用户角色列表")
+        private java.util.List<String> roles;
 
         // 构造函数
         public UserInfo() {}
@@ -139,6 +142,14 @@ public class AuthResponse {
 
         public void setEmailVerified(Boolean emailVerified) {
             this.emailVerified = emailVerified;
+        }
+        
+        public java.util.List<String> getRoles() {
+            return roles;
+        }
+        
+        public void setRoles(java.util.List<String> roles) {
+            this.roles = roles;
         }
     }
 
