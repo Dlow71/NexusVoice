@@ -1,19 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
-// 角色选择页面
-import CharacterSelectionView from '../views/CharacterSelectionView.vue'
-import ChatStreamView from '../views/ChatStreamView.vue'
-import LabView from '../views/LabView.vue'
-import OAuthCallbackView from '../views/OAuthCallbackView.vue'
-import ApiKeyManagementView from '../views/ApiKeyManagementView.vue'
 import {useAuthStore} from "../stores/auth.js";
+
+// 使用路由懒加载，按需加载组件，减少首屏加载时间
 
 // 定义应用的路由规则
 const routes = [
     {
         path:'/login',
         name:'Login',
-        component: LoginView,
+        component: () => import('../views/LoginView.vue'),
     },
     {
         path: '/', // 网站的根路径，重定向到 /characters
@@ -22,7 +17,7 @@ const routes = [
     {
         path: '/characters', // 角色选择页面
         name: 'CharacterSelection',
-        component: CharacterSelectionView,
+        component: () => import('../views/CharacterSelectionView.vue'),
         meta:{requiresAuth: true},
     },
     {
@@ -36,24 +31,30 @@ const routes = [
     {
         path: '/stream/:roleId',
         name: 'StreamChat',
-        component: ChatStreamView,
+        component: () => import('../views/ChatStreamView.vue'),
         meta: { requiresAuth: true }
     },
     {
         path: '/lab',
         name: 'Lab',
-        component: LabView,
+        component: () => import('../views/LabView.vue'),
         meta: { requiresAuth: true }
+    },
+    {
+        path: '/random-video',
+        name: 'RandomVideo',
+        component: () => import('../views/RandomVideoView.vue'),
+        meta: { requiresAuth: false }
     },
     {
         path: '/oauth/callback',
         name: 'OAuthCallback',
-        component: OAuthCallbackView
+        component: () => import('../views/OAuthCallbackView.vue')
     },
     {
         path: '/developer/api-keys',
         name: 'ApiKeyManagement',
-        component: ApiKeyManagementView,
+        component: () => import('../views/ApiKeyManagementView.vue'),
         meta: { requiresAuth: true }
     }
 ]

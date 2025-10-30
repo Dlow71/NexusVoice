@@ -3,6 +3,7 @@
     <div v-if="user" class="user-info-bar">
       <span class="welcome-text">欢迎, {{ user.nickname || '用户' }}</span>
       <button @click="goToLab" class="lab-button">🧪 实验室</button>
+      <button @click="goToRandomVideo" class="video-button">🎬 随机视频</button>
       <button @click="goToApiKeys" class="apikey-button">🔑 API密钥</button>
       <button @click="handleLogout" class="logout-button">退出登录</button>
     </div>
@@ -188,6 +189,10 @@ const goToLab = () => {
   router.push('/lab'); 
 };
 
+const goToRandomVideo = () => {
+  router.push('/random-video');
+};
+
 const goToApiKeys = () => {
   router.push('/developer/api-keys');
 };
@@ -362,6 +367,8 @@ watch(searchQuery, () => {
 .welcome-text { color: #d1d5db; font-weight: 500; }
 .lab-button { background-color: #1e3a8a; border: 1px solid #2563eb; color: #e0f2fe; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
 .lab-button:hover { background-color: #1e40af; border-color: #3b82f6; }
+.video-button { background-color: #7c3aed; border: 1px solid #8b5cf6; color: #ede9fe; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
+.video-button:hover { background-color: #6d28d9; border-color: #a78bfa; }
 .apikey-button { background-color: #065f46; border: 1px solid #059669; color: #d1fae5; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; font-weight: 500; }
 .apikey-button:hover { background-color: #047857; border-color: #10b981; }
 .logout-button { background-color: transparent; border: 1px solid #4b5563; color: #d1d5db; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; transition: all 0.2s; }

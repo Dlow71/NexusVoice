@@ -1,5 +1,11 @@
 <template>
   <div class="auth-container">
+    <!-- 视频入口按钮 -->
+    <button @click="goToRandomVideo" class="video-entrance-btn">
+      <span class="video-icon">🎬</span>
+      <span>随机视频</span>
+    </button>
+
     <div class="auth-box">
       <h1 class="title">Nexus Voice</h1>
       <h2 class="subtitle">{{ isLoginMode ? '欢迎回来' : '创建新账户' }}</h2>
@@ -156,6 +162,11 @@ const handleGitHubLogin = () => {
   // 跳转到后端的OAuth2授权端点，并标注客户端类型，便于后端在OAuth回调中识别
   window.location.href = 'http://localhost:8081/oauth2/authorization/github?client=user';
 };
+
+// 跳转到随机视频页面
+const goToRandomVideo = () => {
+  window.open('/random-video', '_blank');
+};
 </script>
 
 <style scoped>
@@ -306,5 +317,55 @@ const handleGitHubLogin = () => {
 }
 .github-icon {
   flex-shrink: 0;
+}
+
+/* 视频入口按钮 */
+.video-entrance-btn {
+  position: fixed;
+  top: 1.5rem;
+  right: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(124, 58, 237, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  border-radius: 12px;
+  padding: 12px 20px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+}
+
+.video-entrance-btn:hover {
+  background: rgba(109, 40, 217, 0.95);
+  border-color: rgba(167, 139, 250, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.5);
+}
+
+.video-entrance-btn:active {
+  transform: translateY(0);
+}
+
+.video-icon {
+  font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  .video-entrance-btn {
+    top: 1rem;
+    right: 1rem;
+    padding: 10px 16px;
+    font-size: 13px;
+  }
+
+  .video-icon {
+    font-size: 16px;
+  }
 }
 </style>
