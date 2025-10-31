@@ -14,8 +14,8 @@ export default defineConfig({
           'vue-vendor': ['vue', 'vue-router', 'pinia'],
           // Element Plus UI库
           'element-plus': ['element-plus'],
-          // Markdown和代码高亮
-          'markdown': ['marked', 'dompurify', 'highlight.js'],
+          // Markdown渲染
+          'markdown': ['marked', 'dompurify'],
           // 工具库
           'utils': ['axios'],
         },
@@ -29,15 +29,8 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     // 启用CSS代码分割
     cssCodeSplit: true,
-    // 压缩选项
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        // 生产环境移除console
-        drop_console: true,
-        drop_debugger: true,
-      }
-    }
+    // 使用 esbuild 压缩（更快）
+    minify: 'esbuild'
   },
   
   // 生产环境优化
