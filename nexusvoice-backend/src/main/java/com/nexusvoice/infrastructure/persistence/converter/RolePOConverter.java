@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
  * 
  * @author NexusVoice
  * @since 2025-10-21
+ * @updated 2025-10-31 V19扩展Agent能力
  */
 @Component
 public class RolePOConverter {
@@ -41,6 +42,15 @@ public class RolePOConverter {
         po.setIsPublic(role.getIsPublic());
         po.setUserId(role.getUserId());
         
+        // Agent扩展字段（V19）
+        po.setToolIds(role.getToolIds());
+        po.setToolPresetParams(role.getToolPresetParams());
+        po.setKnowledgeBaseIds(role.getKnowledgeBaseIds());
+        po.setMultiModal(role.getMultiModal());
+        po.setEnabled(role.getEnabled());
+        po.setTags(role.getTags());
+        po.setConfigParams(role.getConfigParams());
+        
         return po;
     }
 
@@ -70,6 +80,15 @@ public class RolePOConverter {
         role.setVoiceType(po.getVoiceType());
         role.setIsPublic(po.getIsPublic());
         role.setUserId(po.getUserId());
+        
+        // Agent扩展字段（V19）
+        role.setToolIds(po.getToolIds());
+        role.setToolPresetParams(po.getToolPresetParams());
+        role.setKnowledgeBaseIds(po.getKnowledgeBaseIds());
+        role.setMultiModal(po.getMultiModal());
+        role.setEnabled(po.getEnabled());
+        role.setTags(po.getTags());
+        role.setConfigParams(po.getConfigParams());
         
         return role;
     }

@@ -2,15 +2,20 @@ package com.nexusvoice.infrastructure.persistence.po;
 
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
+import java.util.List;
+import java.util.Map;
+
 /**
- * 角色持久化对象
+ * 角色/Agent持久化对象
  * 包含所有MyBatis-Plus相关的技术注解
  * 
  * @author NexusVoice
  * @since 2025-10-21
+ * @updated 2025-10-31 V19扩展Agent能力
  */
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -70,4 +75,48 @@ public class RolePO extends BasePO {
      */
     @TableField("user_id")
     private Long userId;
+
+    // ============ Agent扩展字段（V19） ============
+
+    /**
+     * 可用工具ID列表
+     */
+    @TableField(value = "tool_ids", typeHandler = JacksonTypeHandler.class)
+    private List<Long> toolIds;
+
+    /**
+     * 工具预设参数
+     */
+    @TableField(value = "tool_preset_params", typeHandler = JacksonTypeHandler.class)
+    private Map<String, Object> toolPresetParams;
+
+    /**
+     * 关联的知识库ID列表
+     */
+    @TableField(value = "knowledge_base_ids", typeHandler = JacksonTypeHandler.class)
+    private List<Long> knowledgeBaseIds;
+
+    /**
+     * 是否支持多模态
+     */
+    @TableField("multi_modal")
+    private Boolean multiModal;
+
+    /**
+     * 是否启用
+     */
+    @TableField("enabled")
+    private Boolean enabled;
+
+    /**
+     * 角色标签
+     */
+    @TableField(value = "tags", typeHandler = JacksonTypeHandler.class)
+    private List<String> tags;
+
+    /**
+     * 扩展配置参数
+     */
+    @TableField(value = "config_params", typeHandler = JacksonTypeHandler.class)
+    private Map<String, Object> configParams;
 }
