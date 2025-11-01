@@ -2,7 +2,9 @@ spring:
   application:
     name: nexusvoice-backend
   profiles:
-    include: local  # 引入本地配置文件
+    include:
+      - local  # 引入本地配置文件
+      - rtc    # 引入WebRTC实时语音对话配置
   sql:
     init:
       mode: never  # 禁用Spring Boot的SQL初始化，避免与MyBatis-Plus冲突

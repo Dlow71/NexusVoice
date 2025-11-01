@@ -1,0 +1,128 @@
+# ==================== WebRTC实时语音对话配置 ====================
+# 
+# 说明：WebRTC + Kurento + gRPC双向流的实时语音对话系统配置
+# 架构：浏览器 ↔ KMS ↔ 桥接进程 ↔ ASR/TTS
+# 模式：半双工MVP（先说完播）
+#
+# 创建时间：2025-11-01
+# ==================== ====================
+
+rtc:
+  # ⭐ WebRTC功能总开关
+  # 设置为false时，不会连接Kurento服务器，应用可以正常启动
+  enabled: false
+  # 并发控制
+  max-concurrent-sessions: 3        # 每用户最大并发会话数
+  session-timeout-minutes: 30       # 会话超时（分钟）
+  
+  # gRPC服务配置
+  grpc:
+    asr:
+      host: localhost
+      port: 50051
+      max-message-size: 16777216    # 16MB
+      timeout-seconds: 60
+    
+    tts:
+      host: localhost
+      port: 50052
+      max-message-size: 33554432    # 32MB
+      timeout-seconds: 120
+  
+  # Kurento媒体服务器配置
+  kurento:
+    ws-url: ws://localhost:8888/kurento
+    timeout-seconds: 10
+    external-address: ${KURENTO_EXTERNAL_IP:}  # KMS公网IP（可选）
+    stun-server: stun:stun.l.google.com:19302
+  
+  # TURN服务器配置（MVP阶段暂不启用）
+  turn:
+    enabled: false
+    urls: turns:turn.nexusvoice.com:5349
+    username: nexusvoice
+    credential: ${TURN_CREDENTIAL:}
+  
+  # 音频配置
+  audio:
+    # ASR上行配置
+    asr:
+      sample-rate: 16000            # 采样率（Hz）
+      channels: 1                   # 单声道
+      format: PCM_16BIT             # 音频格式
+      enable-vad: true              # 启用VAD
+      enable-punctuation: true      # 启用标点符号
+      # VAD配置
+      vad:
+        speech-start-threshold-ms: 100
+        speech-end-threshold-ms: 200
+        min-speech-duration-ms: 120
+        max-silence-duration-ms: 1000
+    
+    # TTS下行配置
+    tts:
+      sample-rate: 48000            # 采样率（Hz）
+      channels: 1                   # 单声道
+      format: PCM_16BIT             # 音频格式
+      voice-id: zh_female_wwxkjx    # 默认音色
+      speed: 1.0                    # 语速
+      volume: 0.8                   # 音量
+      pitch: 1.0                    # 音调
+      emotion: NEUTRAL              # 情感
+      
+    # WebRTC编解码配置
+    webrtc:
+      opus-bitrate: 40000           # Opus码率（32-48kbps）
+      ptime: 20                     # 帧长（ms）
+      dtx-enabled: false            # 默认关闭DTX（弱网再开）
+      fec-enabled: true             # 启用inband FEC
+  
+  # 桥接进程配置
+  bridge:
+    # rtp2grpc-asr配置
+    asr:
+      rtp-listen-host: 127.0.0.1
+      rtp-listen-port: 50060
+      jitter-buffer-ms: 60          # 抖动缓冲（30-120ms自适应）
+      fec-enabled: true
+      plc-enabled: true
+    
+    # grpc2rtp-tts配置
+    tts:
+      rtp-dest-host: 127.0.0.1
+      rtp-dest-port: 50061
+      silence-injection-ms: 60      # 静音注入时长（40-80ms）
+      opus-bitrate: 40000
+  
+  # 性能配置
+  performance:
+    # 指标收集
+    metrics:
+      enabled: true
+      report-interval-seconds: 5
+    
+    # 背压控制
+    backpressure:
+      enabled: true
+      asr-queue-threshold: 100      # ASR队列阈值（ms）
+      tts-queue-threshold: 200      # TTS队列阈值（ms）
+      
+  # 短语可播触发器配置
+  phrase-trigger:
+    min-time-ms: 220                # 最小时间阈值（ms）
+    min-tokens: 4                   # 最小token数
+    punctuation-marks: "，。？！、"   # 触发标点
+  
+  # 调试配置
+  debug:
+    enabled: false                  # 详细日志
+    save-audio: false               # 保存音频文件（调试用）
+    audio-save-path: /tmp/rtc-audio
+  
+  # 旁路录制配置
+  recording:
+    enabled: false                  # MVP阶段默认关闭
+    save-path: /data/rtc-recordings
+    format: PCM_16BIT
+    region-notice: true             # 按区域提示
+

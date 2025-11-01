@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+package com.nexusvoice.rtc.grpc;
+
+option java_multiple_files = true;
+option java_package = "com.nexusvoice.infrastructure.rtc.grpc.common";
+option java_outer_classname = "CommonProto";
+
+/**
+ * 通用消息定义
+ * 
+ * 说明：ASR和TTS共享的消息类型
+ */
+
+// ==================== 通用消息 ====================
+
+/**
+ * 音频数据
+ */
+message AudioData {
+  bytes audio_content = 1;            // 音频内容
+  int64 sequence = 2;                 // 序列号
+  int64 timestamp_ms = 3;             // 时间戳（ms）
+}
+
+/**
+ * 结束信号
+ */
+message EndSignal {
+  EndReason reason = 1;               // 结束原因
+  string message = 2;                 // 附加消息
+}
+
+/**
+ * 错误信息
+ */
+message ErrorInfo {
+  string error_code = 1;              // 错误码
+  string error_message = 2;           // 错误消息
+  int64 timestamp_ms = 3;             // 时间戳（ms）
+}
+
+/**
+ * 会话状态
+ */
+message SessionStatus {
+  SessionState state = 1;             // 状态
+  string session_id = 2;              // 会话ID
+  int64 timestamp_ms = 3;             // 时间戳（ms）
+}
+
+/**
+ * 健康检查请求
+ */
+message HealthCheckRequest {
+  string service = 1;                 // 服务名称
+}
+
+/**
+ * 健康检查响应
+ */
+message HealthCheckResponse {
+  bool healthy = 1;                   // 是否健康
+  string message = 2;                 // 状态消息
+  int64 timestamp_ms = 3;             // 时间戳
+}
+
+// ==================== 通用枚举 ====================
+
+/**
+ * 音频格式
+ */
+enum AudioFormat {
+  AUDIO_FORMAT_UNSPECIFIED = 0;
+  PCM_16BIT = 1;                      // PCM 16bit
+  OPUS = 2;                           // Opus编码
+  MP3 = 3;                            // MP3编码
+  FLAC = 4;                           // FLAC无损
+  WAV = 5;                            // WAV格式
+}
+
+/**
+ * 结束原因
+ */
+enum EndReason {
+  END_REASON_UNSPECIFIED = 0;
+  NORMAL_END = 1;                     // 正常结束
+  USER_INTERRUPT = 2;                 // 用户中断
+  TIMEOUT = 3;                        // 超时
+  ERROR_REASON = 4;                   // 错误（重命名避免与ERROR状态冲突）
+}
+
+/**
+ * 会话状态
+ */
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  INITIALIZED = 1;                    // 已初始化
+  STREAMING = 2;                      // 流式中
+  ENDED = 3;                          // 已结束
+  ERROR_STATE = 4;                    // 错误状态
+}
+

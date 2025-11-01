@@ -1,0 +1,121 @@
+syntax = "proto3";
+
+package com.nexusvoice.rtc.grpc;
+
+import "common.proto";
+
+option java_multiple_files = true;
+option java_package = "com.nexusvoice.infrastructure.rtc.grpc.asr";
+option java_outer_classname = "AsrServiceProto";
+
+/**
+ * ASR流式识别服务
+ * 
+ * 功能：双向流式语音识别
+ * 协议：gRPC双向流
+ * 安全：TLS加密（mTLS可选）
+ */
+service AsrService {
+  // 流式识别（双向流）
+  rpc StreamRecognize(stream AsrRequest) returns (stream AsrResponse);
+  
+  // 健康检查
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// ==================== 请求消息 ====================
+
+/**
+ * ASR请求消息（双向流）
+ */
+message AsrRequest {
+  oneof request_type {
+    AsrConfig config = 1;      // 配置（首消息）
+    AudioData audio = 2;       // 音频数据（来自common.proto）
+    EndSignal end = 3;         // 结束信号（来自common.proto）
+  }
+}
+
+/**
+ * ASR配置
+ */
+message AsrConfig {
+  string session_id = 1;              // 会话ID
+  AudioFormat audio_format = 2;       // 音频格式（来自common.proto）
+  int32 sample_rate = 3;              // 采样率（Hz）
+  int32 channels = 4;                 // 声道数（1=单声道）
+  string language_code = 5;           // 语言代码（zh-CN/en-US）
+  bool enable_vad = 6;                // 启用VAD
+  bool enable_punctuation = 7;        // 启用标点符号
+  int32 max_alternatives = 8;         // 最大候选数
+  VadConfig vad_config = 9;           // VAD配置
+}
+
+/**
+ * VAD配置
+ */
+message VadConfig {
+  int32 speech_start_threshold_ms = 1;   // 语音开始阈值（ms）
+  int32 speech_end_threshold_ms = 2;     // 语音结束阈值（ms）
+  int32 min_speech_duration_ms = 3;      // 最小语音时长（ms）
+  int32 max_silence_duration_ms = 4;     // 最大静音时长（ms）
+}
+
+// ==================== 响应消息 ====================
+
+/**
+ * ASR响应消息（双向流）
+ */
+message AsrResponse {
+  oneof response_type {
+    RecognitionResult result = 1;     // 识别结果
+    VadEvent vad_event = 2;           // VAD事件
+    ErrorInfo error = 3;              // 错误信息（来自common.proto）
+    SessionStatus status = 4;         // 会话状态（来自common.proto）
+  }
+}
+
+/**
+ * 识别结果
+ */
+message RecognitionResult {
+  string session_id = 1;              // 会话ID
+  int64 sequence = 2;                 // 序列号
+  string text = 3;                    // 识别文本
+  bool is_final = 4;                  // 是否最终结果
+  float confidence = 5;               // 置信度（0.0-1.0）
+  repeated WordInfo words = 6;        // 词级别信息
+  int64 start_time_ms = 7;            // 开始时间（ms）
+  int64 end_time_ms = 8;              // 结束时间（ms）
+}
+
+/**
+ * 词级别信息
+ */
+message WordInfo {
+  string word = 1;                    // 词
+  int64 start_time_ms = 2;            // 开始时间（ms）
+  int64 end_time_ms = 3;              // 结束时间（ms）
+  float confidence = 4;               // 置信度
+}
+
+/**
+ * VAD事件
+ */
+message VadEvent {
+  VadEventType event_type = 1;        // 事件类型
+  int64 timestamp_ms = 2;             // 时间戳（ms）
+  string session_id = 3;              // 会话ID
+}
+
+// ==================== ASR特有枚举 ====================
+
+/**
+ * VAD事件类型
+ */
+enum VadEventType {
+  VAD_EVENT_UNSPECIFIED = 0;
+  SPEECH_START = 1;                   // 语音开始
+  SPEECH_END = 2;                     // 语音结束
+  SILENCE_START = 3;                  // 静音开始
+}

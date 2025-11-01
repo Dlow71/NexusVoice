@@ -19,6 +19,7 @@
 
   <properties>
     <java.version>21</java.version>
+    <lombok.version>1.18.36</lombok.version>
     <springdoc.version>2.6.0</springdoc.version>
     <mybatis-plus.version>3.5.11</mybatis-plus.version>
     <hutool.version>5.8.26</hutool.version>
@@ -35,6 +36,13 @@
     <tika.version>2.6.0</tika.version>
     <commons-io.version>2.16.1</commons-io.version>
     <pgvector.version>0.1.6</pgvector.version>
+    <!-- gRPC/Protobuf版本 - WebRTC实时语音对话 -->
+    <grpc.version>1.60.0</grpc.version>
+    <protobuf.version>3.25.1</protobuf.version>
+    <protobuf-plugin.version>0.6.1</protobuf-plugin.version>
+    <os-plugin.version>1.7.1</os-plugin.version>
+    <!-- Kurento媒体服务器 -->
+    <kurento.version>7.2.0</kurento.version>
   </properties>
 
   <dependencies>
@@ -297,18 +305,6 @@
       <artifactId>jackson-datatype-jsr310</artifactId>
     </dependency>
 
-    <!-- 七牛云SDK -->
-    <dependency>
-      <groupId>com.qiniu</groupId>
-      <artifactId>qiniu-java-sdk</artifactId>
-      <version>7.13.0</version>
-    </dependency>
-
-    <dependency>
-      <groupId>org.java-websocket</groupId>
-      <artifactId>Java-WebSocket</artifactId>
-      <version>1.5.4</version>
-    </dependency>
 
     <!-- Lombok -->
     <dependency>
@@ -322,12 +318,6 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
       <scope>test</scope>
-    </dependency>
-    <!-- Caffeine Cache for fast in-memory caching -->
-    <dependency>
-      <groupId>com.github.ben-manes.caffeine</groupId>
-      <artifactId>caffeine</artifactId>
-      <version>3.1.8</version>
     </dependency>
 
     <!-- Apache HttpClient5 for pooled RestTemplate -->
@@ -362,6 +352,54 @@
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-pool2</artifactId>
     </dependency>
+
+    <!-- ==================== gRPC/Protobuf依赖 - WebRTC实时语音对话 ==================== -->
+    
+    <!-- gRPC核心库 -->
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-netty-shaded</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-protobuf</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+      <version>${grpc.version}</version>
+    </dependency>
+    
+    <!-- Protobuf Java -->
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>${protobuf.version}</version>
+    </dependency>
+    
+    <!-- javax.annotation API (Java 9+需要) -->
+    <dependency>
+      <groupId>javax.annotation</groupId>
+      <artifactId>javax.annotation-api</artifactId>
+      <version>1.3.2</version>
+    </dependency>
+    
+    <!-- Kurento Client -->
+    <dependency>
+      <groupId>org.kurento</groupId>
+      <artifactId>kurento-client</artifactId>
+      <version>${kurento.version}</version>
+    </dependency>
+    
+    <dependency>
+      <groupId>org.kurento</groupId>
+      <artifactId>kurento-jsonrpc-client</artifactId>
+      <version>${kurento.version}</version>
+    </dependency>
   </dependencies>
 
   <repositories>
@@ -381,9 +419,30 @@
         <enabled>false</enabled>
       </releases>
     </repository>
+    <!-- Kurento官方仓库 -->
+    <repository>
+      <id>kurento-releases</id>
+      <name>Kurento Repository</name>
+      <url>https://maven.kurento.org/releases</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
   </repositories>
 
   <build>
+    <!-- OS检测扩展 - 用于Protobuf编译器平台识别 -->
+    <extensions>
+      <extension>
+        <groupId>kr.motd.maven</groupId>
+        <artifactId>os-maven-plugin</artifactId>
+        <version>${os-plugin.version}</version>
+      </extension>
+    </extensions>
+    
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
@@ -400,10 +459,58 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
+          <showWarnings>true</showWarnings>
+          <showDeprecation>true</showDeprecation>
+          <fork>true</fork>
+          <compilerArgs>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.main=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+            <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.jvm=ALL-UNNAMED</arg>
+            <arg>-Xlint:unchecked</arg>
+          </compilerArgs>
+          <annotationProcessorPaths>
+            <!-- Lombok注解处理器 -->
+            <path>
+              <groupId>org.projectlombok</groupId>
+              <artifactId>lombok</artifactId>
+              <version>${lombok.version}</version>
+            </path>
+          </annotationProcessorPaths>
         </configuration>
+      </plugin>
+      
+      <!-- Protobuf Maven Plugin - 自动编译.proto文件生成Java代码 -->
+      <plugin>
+        <groupId>org.xolstice.maven.plugins</groupId>
+        <artifactId>protobuf-maven-plugin</artifactId>
+        <version>${protobuf-plugin.version}</version>
+        <configuration>
+          <protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
+          <pluginId>grpc-java</pluginId>
+          <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
+          <protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
+          <outputDirectory>${project.build.directory}/generated-sources/protobuf/java</outputDirectory>
+          <clearOutputDirectory>false</clearOutputDirectory>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>compile</goal>
+              <goal>compile-custom</goal>
+            </goals>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

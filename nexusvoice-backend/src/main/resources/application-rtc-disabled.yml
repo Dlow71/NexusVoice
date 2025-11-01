@@ -1,0 +1,13 @@
+# ==================== WebRTC功能禁用配置示例 ====================
+# 
+# 使用方式：
+# 1. 如果不需要使用WebRTC实时语音功能，可以将此配置合并到 application.yml
+# 2. 或者在启动时指定：--spring.profiles.active=rtc-disabled
+# 3. 或者在 application.yml 中添加：rtc.enabled: false
+#
+# ==================== ====================
+
+rtc:
+  # 禁用WebRTC功能
+  # 设置为false时，不会加载Kurento和gRPC相关的Bean，应用可以正常启动
+  enabled: false

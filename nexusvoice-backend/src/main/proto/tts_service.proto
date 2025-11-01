@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package com.nexusvoice.rtc.grpc;
+
+import "common.proto";
+
+option java_multiple_files = true;
+option java_package = "com.nexusvoice.infrastructure.rtc.grpc.tts";
+option java_outer_classname = "TtsServiceProto";
+
+/**
+ * TTS流式合成服务
+ * 
+ * 功能：双向流式语音合成
+ * 协议：gRPC双向流
+ * 安全：TLS加密（mTLS可选）
+ */
+service TtsService {
+  // 流式合成（双向流）
+  rpc StreamSynthesize(stream TtsRequest) returns (stream TtsResponse);
+  
+  // 健康检查
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// ==================== 请求消息 ====================
+
+/**
+ * TTS请求消息（双向流）
+ */
+message TtsRequest {
+  oneof request_type {
+    TtsConfig config = 1;      // 配置（首消息）
+    TextData text = 2;         // 文本数据
+    EndSignal end = 3;         // 结束信号（来自common.proto）
+  }
+}
+
+/**
+ * TTS配置
+ */
+message TtsConfig {
+  string session_id = 1;              // 会话ID
+  string voice_id = 2;                // 音色ID（zh_female_wwxkjx）
+  string language_code = 3;           // 语言代码（zh-CN/en-US）
+  AudioFormat audio_format = 4;       // 音频格式（来自common.proto）
+  int32 sample_rate = 5;              // 采样率（Hz）
+  int32 channels = 6;                 // 声道数（1=单声道）
+  float speed = 7;                    // 语速（0.5-2.0）
+  float volume = 8;                   // 音量（0.0-1.0）
+  float pitch = 9;                    // 音调（0.5-2.0）
+  EmotionType emotion = 10;           // 情感类型
+  bool enable_ssml = 11;              // 启用SSML
+}
+
+/**
+ * 文本数据
+ */
+message TextData {
+  string text = 1;                    // 文本内容
+  int32 segment_id = 2;               // 片段ID
+  bool is_last = 3;                   // 是否最后片段
+  int64 timestamp_ms = 4;             // 时间戳（ms）
+  bool is_ssml = 5;                   // 是否SSML格式
+}
+
+// ==================== 响应消息 ====================
+
+/**
+ * TTS响应消息（双向流）
+ */
+message TtsResponse {
+  oneof response_type {
+    TtsAudioData audio = 1;           // 音频数据（TTS专用）
+    SynthesisProgress progress = 2;   // 合成进度
+    ErrorInfo error = 3;              // 错误信息（来自common.proto）
+    SessionStatus status = 4;         // 会话状态（来自common.proto）
+  }
+}
+
+/**
+ * TTS音频数据（扩展版）
+ */
+message TtsAudioData {
+  bytes audio_content = 1;            // 音频内容
+  int32 segment_id = 2;               // 片段ID
+  int64 sequence = 3;                 // 序列号
+  int64 timestamp_ms = 4;             // 时间戳（ms）
+  AudioFormat format = 5;             // 音频格式（来自common.proto）
+  int32 sample_rate = 6;              // 采样率
+  bool is_silence = 7;                // 是否静音帧
+}
+
+/**
+ * 合成进度
+ */
+message SynthesisProgress {
+  string session_id = 1;              // 会话ID
+  int32 segment_id = 2;               // 片段ID
+  int32 progress_percentage = 3;      // 进度百分比（0-100）
+  int64 timestamp_ms = 4;             // 时间戳（ms）
+}
+
+// ==================== TTS特有枚举 ====================
+
+/**
+ * 情感类型
+ */
+enum EmotionType {
+  EMOTION_UNSPECIFIED = 0;
+  NEUTRAL = 1;                        // 中性
+  HAPPY = 2;                          // 快乐
+  SAD = 3;                            // 悲伤
+  ANGRY = 4;                          // 愤怒
+  CALM = 5;                           // 平静
+  EXCITED = 6;                        // 兴奋
+  GENTLE = 7;                         // 温柔
+}

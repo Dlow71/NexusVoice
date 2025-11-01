@@ -1,0 +1,391 @@
+## TL;DR · AI优先遵循（精简版）
+
+- **角色定位**: 以顶级 Java 架构师标准产出，纯血 DDD，极致规范优雅。
+- **协作流程**: 先提出方案与任务清单，得到确认后再开始编码；过程保持简洁的状态更新。
+- **语言与表达**: 所有回复使用简体中文；先给结论，结构清晰、可扫读；必要处给短代码引用或精炼清单。
+- **分层与依赖**: 严格 DDD 依赖约束（Application → Domain+Infrastructure；Infrastructure → Domain；禁止其他），Domain 纯 POJO 无任何技术注解。
+- **持久化规范**: PO/Converter/Mapper/Repository 四件套；Repository 字段必须命名为 `mapper`、`converter`；仅生成 PostgreSQL 语法 SQL；MyBatis-Plus 标准用法（如 LambdaQueryWrapper）。
+- **API 设计**: RESTful；请求用 DTO、响应用 VO；统一返回 `Result<T>`；异常一律 `BizException + ErrorCodeEnum`；日志/注释使用中文。
+- **缓存与中间件**: 优先使用内置工具模式（CacheUtils/LockUtils/RateLimiterUtils/RedissonUtils），遵循示例与限流/防穿透策略。
+- **流式对话关键约束**: 协议无关 `StreamChannel`；WebSocket(`/ws/chat/stream`) 走握手 JWT；SSE(`POST /api/v1/conversations/stream`) 走标准过滤链；遵循单 flight 保护与分段 TTS 机制。
+- **代码风格**: 可读性优先、命名语义化、早返回、显式类型、避免空捕获；仅写必要评论（非显而易见处）。
+- **工程实践**: 优先修改现有文件，不新建；提交完整可运行实现与必要 import；文档统一中文命名；Git 提交遵循 `<type>(<scope>): <subject>`。
+- **产出强度**: 实现阶段不节省 token，提供完整、优雅、可运行代码；讨论阶段保持简洁高信噪。
+
+---
+
+# NexusVoice AI开发规范
+
+## 🎯 项目概述
+
+Spring Boot 3.3.5 + LangChain4j 0.35.0 + PostgreSQL + pgvector的AI角色扮演对话系统，采用DDD架构。
+
+## SQL生成
+
+当前项目是PostgreSQL，所以生成出来的SQL必须遵循PostgreSQL语法！
+
+## 🏗️ DDD分层架构
+
+### 依赖原则 ⚠️ 严格遵守
+
+- ✅ Infrastructure → Domain
+- ✅ Application → Infrastructure + Domain  
+- ❌ Infrastructure → Application (禁止)
+- ❌ Domain层禁止依赖任何其他层
+
+### 目录结构
+
+```
+src/main/java/com/nexusvoice/
+├── interfaces/         # Controller、WebSocket
+├── application/        # 业务编排、DTO
+├── domain/            # 实体(纯POJO)、仓储接口
+└── infrastructure/
+    ├── persistence/   # ⭐ 持久化层
+    │   ├── po/       # PO(含MyBatis-Plus注解)
+    │   ├── mapper/   # MyBatis-Plus Mapper
+    │   └── converter/ # PO↔Domain转换器
+    └── repository/   # 仓储实现
+```
+
+## 生成的文档统一使用中文命名
+
+## 🎯 PO层核心规范
+
+### 对象模型
+
+```
+Domain(纯POJO) → Converter → PO(含注解) → Mapper → PostgreSQL
+```
+
+### 代码模板
+
+#### 1. PO类
+
+```java
+@Data
+@EqualsAndHashCode(callSuper = true)
+@TableName("table_name")
+public class XxxPO extends BasePO {
+    @TableField("column_name")
+    private String fieldName;
+}
+// BasePO提供：id、createdAt、updatedAt、deleted
+```
+
+#### 2. Converter
+
+```java
+@Component
+public class XxxPOConverter {
+    public XxxPO toPO(Xxx domain) { /* Domain→PO */ }
+    public Xxx toDomain(XxxPO po) { /* PO→Domain */ }
+}
+```
+
+#### 3. Mapper
+
+```java
+@Mapper
+public interface XxxPOMapper extends BaseMapper<XxxPO> {
+}
+```
+
+#### 4. Repository ⭐
+
+```java
+@Repository
+public class XxxRepositoryImpl implements XxxRepository {
+    private final XxxPOMapper mapper;        // ⚠️ 必须命名mapper
+    private final XxxPOConverter converter;   // ⚠️ 必须命名converter
+    
+    public XxxRepositoryImpl(XxxPOMapper mapper, XxxPOConverter converter) {
+        this.mapper = mapper;
+        this.converter = converter;
+    }
+    
+    public Optional<Xxx> findById(Long id) {
+        return Optional.ofNullable(converter.toDomain(mapper.selectById(id)));
+    }
+    
+    public Xxx save(Xxx domain) {
+        XxxPO po = converter.toPO(domain);
+        if (domain.getId() == null) {
+            mapper.insert(po);
+            domain.setId(po.getId());
+        } else {
+            mapper.updateById(po);
+        }
+        return domain;
+    }
+}
+```
+
+### 核心规则
+
+**DO ✅**：
+
+```java
+// 1. Domain纯POJO
+public class User { private String email; }
+
+// 2. 通过Converter转换
+User user = converter.toDomain(po);
+UserPO po = converter.toPO(user);
+
+// 3. LambdaQueryWrapper
+wrapper.eq(UserPO::getEmail, email);
+```
+
+**DON'T ❌**：
+
+```java
+// 1. Domain禁止注解
+@TableName("users")  // ❌
+
+// 2. 禁止直接操作Domain
+mapper.insert(user);  // ❌
+
+// 3. 避免魔法值
+wrapper.eq(UserPO::getStatus, 1);  // ❌
+wrapper.eq(UserPO::getStatus, UserStatus.ACTIVE.getCode());  // ✅
+```
+
+## 💻 技术栈
+
+- **Spring Boot**: 3.3.5
+- **LangChain4j**: 0.35.0
+- **PostgreSQL**: + pgvector扩展
+- **MyBatis-Plus**: 3.5.11
+- **Redis**: 缓存、锁、限流
+- **Hutool**: 5.8.26
+
+## 📝 编码规范
+
+### 异常处理
+
+```java
+// ✅ 使用BizException
+throw new BizException(ErrorCodeEnum.USER_NOT_FOUND);
+
+// ❌ 直接抛RuntimeException
+throw new RuntimeException("用户不存在");
+```
+
+### API设计
+
+- RESTful风格
+- 统一返回`Result<T>`
+- 请求用DTO，响应用VO
+
+### 命名规范
+
+- 类名：PascalCase
+- 方法名：camelCase
+- 常量：UPPER_SNAKE_CASE
+- 中文注释和日志
+
+## 🚀 Redis工具
+
+### 核心工具类
+
+- **CacheUtils** - 二级缓存，防穿透/击穿/雪崩
+- **LockUtils** - 分布式锁
+- **RateLimiterUtils** - 限流
+- **RedissonUtils** - 布隆过滤器/消息队列
+
+### 使用示例
+
+**缓存**：
+
+```java
+User user = cacheUtils.getOrLoad("user:" + id, 
+    () -> userRepository.findById(id), 
+    3600, User.class);
+```
+
+**分布式锁**：
+
+```java
+lockUtils.executeWithLock("order:" + orderId, () -> {
+    createOrder(orderId);
+});
+```
+
+**限流**：
+
+```java
+if (!rateLimiterUtils.tryAcquireApi("/api/chat")) {
+    throw new BizException(ErrorCodeEnum.RATE_LIMIT_EXCEEDED);
+}
+```
+
+**布隆过滤器**：
+
+```java
+if (!redissonUtils.bloomContains("users", userId)) {
+    return null; // 一定不存在
+}
+```
+
+## 📨 RocketMQ消息队列
+
+### 核心服务
+
+- **MessageService** - 消息发送服务（应用层）
+- **AbstractMessageListener** - 消息消费者基类
+
+### 发送消息
+
+**普通消息**：
+
+```java
+@Autowired
+private MessageService messageService;
+
+// 发送普通消息
+messageService.sendMessage("topic_name", payload);
+
+// 发送带标签的消息
+messageService.sendMessage("topic_name", "tag_name", payload);
+```
+
+**异步消息**：
+
+```java
+CompletableFuture<SendResult> future = messageService.sendAsyncMessage("topic_name", payload);
+future.thenAccept(result -> log.info("发送成功: {}", result.getMsgId()));
+```
+
+**单向消息**（不关心结果）：
+
+```java
+messageService.sendOnewayMessage("topic_name", payload);
+```
+
+**延迟消息**：
+
+```java
+// 使用延迟级别
+messageService.sendDelayMessage("topic_name", payload, DelayLevelEnum.DELAY_5M);
+
+// 按秒数延迟
+messageService.sendDelayMessageBySeconds("topic_name", payload, 30);
+
+// 按分钟延迟
+messageService.sendDelayMessageByMinutes("topic_name", payload, 5);
+```
+
+**顺序消息**：
+
+```java
+// 相同orderKey的消息会按顺序消费
+messageService.sendOrderlyMessage("topic_name", payload, "order_123");
+```
+
+**批量消息**：
+
+```java
+List<Object> payloads = Arrays.asList(payload1, payload2, payload3);
+messageService.sendBatchMessages("topic_name", payloads);
+```
+
+### 消费消息
+
+**创建消费者**：
+
+```java
+@Slf4j
+@Component
+@RocketMQMessageListener(
+    topic = "your_topic",
+    consumerGroup = "your_consumer_group",
+    consumeMode = ConsumeMode.CONCURRENTLY,
+    messageModel = MessageModel.CLUSTERING,
+    maxReconsumeTimes = 3
+)
+public class YourMessageListener extends AbstractMessageListener<YourDataType> {
+    
+    @Override
+    protected String getTopic() {
+        return "your_topic";
+    }
+    
+    @Override
+    protected String getConsumerGroup() {
+        return "your_consumer_group";
+    }
+    
+    @Override
+    protected TypeReference<Message<YourDataType>> getMessageType() {
+        return new TypeReference<Message<YourDataType>>() {};
+    }
+    
+    @Override
+    protected void handleBusiness(Message<YourDataType> message) throws Exception {
+        // 处理业务逻辑
+        YourDataType data = message.getPayload();
+        log.info("处理消息: {}", data);
+        
+        // 抛出BizException不会重试，直接进入死信队列
+        // 抛出其他异常会触发重试（最多maxReconsumeTimes次）
+    }
+}
+```
+
+### 延迟级别
+
+18个预设延迟级别：1s、5s、10s、30s、1m、2m、3m、4m、5m、6m、7m、8m、9m、10m、20m、30m、1h、2h
+
+## 🔒 配置安全
+
+- `application.yml` - 非敏感配置
+- `application-local.yml` - 敏感信息(Git忽略)
+- 数据库密码、JWT密钥存储在`application-local.yml`
+
+## 🧪 开发流程
+
+### 标准流程
+
+1. **Domain层**：定义实体和仓储接口
+2. **Application层**：业务逻辑和DTO
+3. **Infrastructure层**：PO+Converter+Mapper+Repository
+4. **Interfaces层**：Controller暴露接口
+
+### 检查清单
+
+- [ ] PO继承BasePO + @Data + @EqualsAndHashCode(callSuper = true)
+- [ ] Converter标注@Component，实现toPO/toDomain
+- [ ] Mapper继承BaseMapper<XxxPO> + @Mapper
+- [ ] Repository字段统一命名：mapper、converter
+- [ ] Domain层完全无注解，纯POJO
+- [ ] 异常使用BizException，错误码在ErrorCodeEnum
+- [ ] 日志使用中文
+
+### 测试和数据库
+
+- 不需要编写自动化测试，提供手动测试说明
+- 数据库变更不做迁移，提供DDL说明即可
+
+## 🎨 AI响应规范
+
+- 所有回答使用简体中文
+- 发挥全部实力，不保留内容
+- 运行命令前先查看当前目录
+- 优先修改现有文件，避免创建新文件
+- 保持现有代码风格
+- 提供完整可运行代码
+- 添加必要import
+
+## 🚀 Git提交
+
+```
+<type>(<scope>): <subject>
+```
+
+**type**：feat/fix/docs/refactor/perf/test/chore
+
+---
+
+**版本**: v2.0 | **更新**: 2025-01-21
+
