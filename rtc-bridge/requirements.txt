@@ -1,0 +1,22 @@
+# RTC桥接进程依赖
+# Python 3.10+
+
+# gRPC核心
+grpcio==1.60.0
+grpcio-tools==1.60.0
+protobuf==4.25.1
+
+# GStreamer Python绑定
+PyGObject==3.46.0
+
+# 音频处理
+numpy==1.26.0
+
+# 工具库
+python-dotenv==1.0.0
+
+
+
+
+
+

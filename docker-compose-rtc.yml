@@ -1,0 +1,133 @@
+version: '3.8'
+
+# ==================== WebRTC实时语音对话系统 - Docker Compose ====================
+#
+# 说明：Kurento Media Server + 桥接进程部署配置
+# 架构：hostNetwork模式，RTP仅走127.0.0.1
+#
+# 使用：docker-compose -f docker-compose-rtc.yml up -d
+# ==================== ====================
+
+services:
+  # Kurento Media Server
+  kurento:
+    image: kurento/kurento-media-server:7.0.1
+    container_name: nexusvoice-kurento
+    network_mode: "host"  # 使用主机网络，RTP绑定127.0.0.1
+    environment:
+      # STUN服务器配置
+      - KMS_STUN_IP=stun.l.google.com
+      - KMS_STUN_PORT=19302
+      # 外部IP（可选，用于ICE候选者）
+      - KMS_EXTERNAL_ADDRESS=${KMS_EXTERNAL_IP:-}
+      # 日志级别
+      - GST_DEBUG=2
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - kurento-logs:/var/log/kurento-media-server
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8888/kurento"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # ASR桥接进程（rtp2grpc-asr）
+  # 说明：Python + GStreamer实现
+  rtp2grpc-asr:
+    build:
+      context: ./rtc-bridge
+      dockerfile: Dockerfile.rtp2grpc-asr
+    container_name: nexusvoice-rtp2grpc-asr
+    network_mode: "host"  # 与KMS共享网络栈，RTP走127.0.0.1
+    environment:
+      - LISTEN_HOST=127.0.0.1
+      - LISTEN_PORT=50060
+      - GRPC_ASR_HOST=${ASR_GRPC_HOST:-localhost}
+      - GRPC_ASR_PORT=${ASR_GRPC_PORT:-50051}
+      - SESSION_ID=${RTC_SESSION_ID:-default}
+      - DEBUG=${DEBUG:-false}
+    command: >
+      python3 rtp2grpc_asr.py
+      --listen-host 127.0.0.1
+      --listen-port 50060
+      --grpc-host ${ASR_GRPC_HOST:-localhost}
+      --grpc-port ${ASR_GRPC_PORT:-50051}
+      --session-id ${RTC_SESSION_ID:-default}
+      ${DEBUG:+--debug}
+    restart: unless-stopped
+    depends_on:
+      - kurento
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+  # TTS桥接进程（grpc2rtp-tts）
+  # 说明：Python + GStreamer实现
+  grpc2rtp-tts:
+    build:
+      context: ./rtc-bridge
+      dockerfile: Dockerfile.grpc2rtp-tts
+    container_name: nexusvoice-grpc2rtp-tts
+    network_mode: "host"  # 与KMS共享网络栈，RTP走127.0.0.1
+    environment:
+      - GRPC_TTS_HOST=${TTS_GRPC_HOST:-localhost}
+      - GRPC_TTS_PORT=${TTS_GRPC_PORT:-50052}
+      - RTP_DEST_HOST=127.0.0.1
+      - RTP_DEST_PORT=50061
+      - OPUS_BITRATE=40000
+      - SESSION_ID=${RTC_SESSION_ID:-default}
+      - DEBUG=${DEBUG:-false}
+    command: >
+      python3 grpc2rtp_tts.py
+      --grpc-host ${TTS_GRPC_HOST:-localhost}
+      --grpc-port ${TTS_GRPC_PORT:-50052}
+      --rtp-host 127.0.0.1
+      --rtp-port 50061
+      --opus-bitrate 40000
+      --session-id ${RTC_SESSION_ID:-default}
+      ${DEBUG:+--debug}
+    restart: unless-stopped
+    depends_on:
+      - kurento
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+
+volumes:
+  kurento-logs:
+    driver: local
+
+# ==================== 使用说明 ====================
+#
+# 1. 启动服务：
+#    docker-compose -f docker-compose-rtc.yml up -d
+#
+# 2. 查看日志：
+#    docker-compose -f docker-compose-rtc.yml logs -f kurento
+#
+# 3. 停止服务：
+#    docker-compose -f docker-compose-rtc.yml down
+#
+# 4. 环境变量（可选）：
+#    export KMS_EXTERNAL_IP=1.2.3.4
+#    export ASR_GRPC_HOST=asr-service.example.com
+#    export TTS_GRPC_HOST=tts-service.example.com
+#
+# 5. 桥接进程实现：
+#    MVP阶段：使用GStreamer/FFmpeg脚本
+#    升级阶段：使用Rust/Go高性能实现
+#
+# ==================== ====================
+
+
