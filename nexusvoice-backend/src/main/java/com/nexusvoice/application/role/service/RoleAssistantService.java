@@ -3,12 +3,16 @@ package com.nexusvoice.application.role.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nexusvoice.application.agent.dto.AgentExecuteRequest;
+import com.nexusvoice.application.agent.dto.AgentExecuteResponse;
+import com.nexusvoice.application.agent.service.AgentApplicationService;
 import com.nexusvoice.application.role.assembler.RoleAssembler;
 import com.nexusvoice.application.role.dto.RoleBriefDto;
 import com.nexusvoice.application.role.dto.RoleCreateRequest;
 import com.nexusvoice.application.role.dto.RoleDTO;
 import com.nexusvoice.application.role.dto.RoleAssistantConfirmRequest;
 import com.nexusvoice.application.role.dto.RoleResearchApplyRequest;
+import com.nexusvoice.domain.agent.enums.AgentType;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
 import com.nexusvoice.domain.conversation.repository.ConversationMessageRepository;
 import com.nexusvoice.domain.conversation.repository.ConversationRepository;
@@ -30,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -51,6 +56,7 @@ public class RoleAssistantService {
     private final com.nexusvoice.application.tts.service.TTSService ttsService;
     private final SearchRepository searchRepository;
     private final ObjectMapper objectMapper;
+    private final AgentApplicationService agentApplicationService;  // 新增：Agent服务
 
     public RoleAssistantService(ConversationRepository conversationRepository,
                                 ConversationMessageRepository messageRepository,
@@ -59,7 +65,8 @@ public class RoleAssistantService {
                                 RoleApplicationService roleApplicationService,
                                 com.nexusvoice.application.tts.service.TTSService ttsService,
                                 SearchRepository searchRepository,
-                                ObjectMapper objectMapper) {
+                                ObjectMapper objectMapper,
+                                AgentApplicationService agentApplicationService) {  // 新增
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
@@ -68,6 +75,7 @@ public class RoleAssistantService {
         this.ttsService = ttsService;
         this.searchRepository = searchRepository;
         this.objectMapper = objectMapper;
+        this.agentApplicationService = agentApplicationService;  // 新增
     }
 
     /**
@@ -184,7 +192,15 @@ public class RoleAssistantService {
                     ? Math.min(request.getResearchLimit(), 20) : 12; // 默认12，上限20
             List<String> overrideQueries = (request.getResearchQueries() != null && !request.getResearchQueries().isEmpty())
                     ? request.getResearchQueries() : null;
-            finalBrief = deepResearchEnhance(draft, limit, userId, conversationId, overrideQueries);
+            
+            // 使用Agent驱动的深研增强（新方式）
+            try {
+                finalBrief = deepResearchEnhanceWithAgent(draft, limit, userId, conversationId, overrideQueries);
+                log.info("使用Agent成功完成深研增强");
+            } catch (Exception e) {
+                log.warn("Agent深研失败，降级使用传统方式：{}", e.getMessage());
+                finalBrief = deepResearchEnhance(draft, limit, userId, conversationId, overrideQueries);
+            }
         }
 
         // 转角色创建请求（私人）
@@ -346,6 +362,198 @@ public class RoleAssistantService {
         return deepResearchEnhance(draft, limit, userId, conversationId, null);
     }
 
+    /**
+     * 使用Agent驱动的深研增强（新方式）
+     */
+    private RoleBriefDto deepResearchEnhanceWithAgent(RoleBriefDto draft, int limit, Long userId, Long conversationId, List<String> overrideQueries) {
+        log.info("开始使用Agent进行深研增强，角色：{}", draft.getName());
+        
+        // 构造Agent任务描述
+        String query = buildAgentResearchQuery(draft, limit, overrideQueries);
+        
+        // 构造Agent请求
+        AgentExecuteRequest agentRequest = AgentExecuteRequest.builder()
+            .query(query)
+            .agentType(AgentType.PLAN_SOLVE)  // 使用planExecute模式
+            .userId(userId)
+            .conversationId(conversationId)
+            .availableTools(List.of("web_search"))  // ⚠️ 关键：深研只用搜索，不用role_draft_generator
+            .maxSteps(5)  // 深研最多5步
+            .temperature(0.4)  // 较低温度，保持稳定
+            .contextVariables(new java.util.HashMap<String, Object>() {{
+                put("originalDraft", toJson(draft));
+                put("researchLimit", limit);
+                put("purpose", "role_research");
+            }})
+            .build();
+        
+        // 执行Agent
+        AgentExecuteResponse response = agentApplicationService.executeTask(agentRequest);
+        
+        if (!response.getSuccess() || response.getResult() == null) {
+            throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                "Agent深研失败：" + response.getErrorMessage());
+        }
+        
+        // 解析Agent返回的增强草稿
+        RoleBriefDto enhancedBrief = parseEnhancedBriefFromAgent(response.getResult(), draft);
+        
+        // 记录使用的工具
+        if (response.getUsedTools() != null && !response.getUsedTools().isEmpty()) {
+            log.info("Agent使用了工具：{}", String.join(", ", response.getUsedTools()));
+        }
+        
+        // 记录深研结果
+        saveSystemNote(conversationId, 
+            String.format("Agent深研完成（步数：%d，耗时：%dms）", response.getSteps(), response.getTotalTimeMs()),
+            makeMetadata("AGENT_RESEARCH", toJson(new java.util.HashMap<String, Object>() {{
+                put("steps", response.getSteps());
+                put("usedTools", response.getUsedTools());
+                put("executionHistory", response.getExecutionHistory());
+            }}))
+        );
+        
+        return enhancedBrief;
+    }
+    
+    /**
+     * 构造Agent研究任务描述（针对DeepSeek V3.1优化）
+     */
+    private String buildAgentResearchQuery(RoleBriefDto draft, int limit, List<String> overrideQueries) {
+        StringBuilder query = new StringBuilder();
+        
+        query.append("【角色深度研究任务】\n\n");
+        
+        query.append("📋 当前草稿：\n");
+        query.append("━━━━━━━━━━━━━━━━━━━━━━━━\n");
+        query.append("角色名称：").append(draft.getName()).append("\n");
+        query.append("角色描述：").append(draft.getDescription()).append("\n\n");
+        query.append("现有人设：\n").append(draft.getPersonaPrompt()).append("\n");
+        query.append("━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+        
+        query.append("🎯 研究目标：\n");
+        query.append("通过联网搜索，获取相关信息，增强角色的人设提示词和开场白，使其更生动、更专业、更有趣。\n\n");
+        
+        query.append("🔍 搜索策略：\n");
+        query.append("1. 使用web_search工具搜索").append(limit).append("条相关信息\n");
+        
+        if (overrideQueries != null && !overrideQueries.isEmpty()) {
+            query.append("2. 建议搜索关键词（可调整）：\n");
+            for (int i = 0; i < overrideQueries.size(); i++) {
+                query.append("   ").append(i + 1).append(") ").append(overrideQueries.get(i)).append("\n");
+            }
+        } else {
+            query.append("2. 自动生成搜索关键词，建议包括：\n");
+            query.append("   • 角色风格、说话特点、经典用语\n");
+            query.append("   • 相关领域的知识点、术语\n");
+            query.append("   • 类似角色的对话技巧、互动方式\n");
+        }
+        query.append("3. 从搜索结果中提取有价值的内容\n");
+        query.append("4. 记录参考来源（sources字段）\n\n");
+        
+        query.append("✨ 增强要求：\n");
+        query.append("• personaPrompt增强：\n");
+        query.append("  - 补充更具体的说话风格示例\n");
+        query.append("  - 丰富知识背景和专业度\n");
+        query.append("  - 增加行为准则和边界说明\n");
+        query.append("  - 保持原有角色定位，不偏离\n\n");
+        
+        query.append("• greetingMessage增强：\n");
+        query.append("  - 更生动、更有角色特色\n");
+        query.append("  - 友好且引导性强\n");
+        query.append("  - 体现角色个性\n\n");
+        
+        query.append("• disclaimers完善：\n");
+        query.append("  - 版权声明（避免侵权）\n");
+        query.append("  - 内容边界（禁止话题）\n");
+        query.append("  - 免责说明（娱乐用途）\n\n");
+        
+        query.append("⚠️ 重要约束：\n");
+        query.append("- 避免使用具体IP、影视、小说的专有名词\n");
+        query.append("- 保持抽象的风格和特征描述\n");
+        query.append("- 合法合规，不涉及敏感内容\n\n");
+        
+        query.append("📤 输出格式：\n");
+        query.append("```json\n");
+        query.append("{\n");
+        query.append("  \"name\": \"角色名称\",\n");
+        query.append("  \"description\": \"角色描述\",\n");
+        query.append("  \"personaPrompt\": \"增强后的详细人设\",\n");
+        query.append("  \"greetingMessage\": \"增强后的开场白\",\n");
+        query.append("  \"voiceType\": \"qiniu_zh_female_dmytwz\",\n");
+        query.append("  \"sources\": [{\"title\": \"参考来源标题\", \"url\": \"链接\", \"snippet\": \"摘要\"}],\n");
+        query.append("  \"disclaimers\": [\"版权声明\", \"内容边界说明\", \"免责声明\"]\n");
+        query.append("}\n");
+        query.append("```\n\n");
+        
+        query.append("请开始执行深度研究任务！\n");
+        
+        return query.toString();
+    }
+    
+    /**
+     * 从Agent结果中解析增强后的草稿
+     */
+    private RoleBriefDto parseEnhancedBriefFromAgent(String agentResult, RoleBriefDto originalDraft) {
+        try {
+            // 提取JSON（Agent的回答中可能包含其他文字）
+            String json = extractJsonFromText(agentResult);
+            
+            RoleBriefDto enhanced = objectMapper.readValue(json, RoleBriefDto.class);
+            
+            // 应用默认值
+            applyBriefDefaults(enhanced);
+            
+            // 合并来源（保留原始+新增）
+            if (originalDraft.getSources() != null) {
+                List<RoleBriefDto.SourceItem> merged = new ArrayList<>(originalDraft.getSources());
+                if (enhanced.getSources() != null) {
+                    merged.addAll(enhanced.getSources());
+                }
+                enhanced.setSources(merged);
+            }
+            
+            return enhanced;
+            
+        } catch (Exception e) {
+            log.error("解析Agent返回的增强草稿失败：{}", agentResult, e);
+            throw BizException.of(ErrorCodeEnum.AI_SERVICE_ERROR, "解析增强结果失败");
+        }
+    }
+    
+    /**
+     * 从文本中提取JSON
+     */
+    private String extractJsonFromText(String text) {
+        // 尝试提取 ```json ... ``` 或 ``` ... ``` 代码块
+        if (text.contains("```json")) {
+            int start = text.indexOf("```json") + 7;
+            int end = text.indexOf("```", start);
+            if (end > start) {
+                return text.substring(start, end).trim();
+            }
+        } else if (text.contains("```")) {
+            int start = text.indexOf("```") + 3;
+            int end = text.indexOf("```", start);
+            if (end > start) {
+                return text.substring(start, end).trim();
+            }
+        }
+        
+        // 尝试提取 { ... } JSON对象
+        int start = text.indexOf("{");
+        int end = text.lastIndexOf("}");
+        if (start != -1 && end > start) {
+            return text.substring(start, end + 1).trim();
+        }
+        
+        // 直接返回原文本
+        return text.trim();
+    }
+    
+    /**
+     * 传统深研增强方法（保留作为降级方案）
+     */
     private RoleBriefDto deepResearchEnhance(RoleBriefDto draft, int limit, Long userId, Long conversationId, List<String> overrideQueries) {
         // 生成若干查询词（保守、泛化，避免指向具体版权内容）
         List<String> queries = (overrideQueries != null && !overrideQueries.isEmpty()) ? overrideQueries : buildResearchQueries(draft);
