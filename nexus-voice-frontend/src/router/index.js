@@ -56,6 +56,12 @@ const routes = [
         name: 'ApiKeyManagement',
         component: () => import('../views/ApiKeyManagementView.vue'),
         meta: { requiresAuth: true }
+    },
+    {
+        path: '/rtc-voice',
+        name: 'RtcVoice',
+        component: () => import('../views/RtcVoiceView.vue'),
+        meta: { requiresAuth: true }
     }
 ]
 
