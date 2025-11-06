@@ -453,10 +453,14 @@
                 class="task-item"
             >
               <input type="checkbox" v-model="task.enabled" :id="'task-' + index" />
-              <input type="text" v-model="task.query" class="task-query" />
+              <div class="task-content">
+                <input type="text" v-model="task.query" class="task-query" placeholder="搜索关键词" />
+                <span v-if="task.rationale" class="task-rationale">{{ task.rationale }}</span>
+              </div>
               <button
                   @click="researchTasks.splice(index, 1)"
                   class="task-delete-btn"
+                  title="删除此任务"
               >
                 -
               </button>
@@ -1872,6 +1876,257 @@ const forceEndStream = () => {
   ElMessage.warning('已强制停止AI回复');
 };
 
+// ==================== 角色创建助手方法 ====================
+
+// 打开助手面板
+const openAssistantPanel = () => {
+  if (!conversationId.value) {
+    ElMessage.warning('请先开始对话再使用角色生成功能');
+    return;
+  }
+  isAssistantPanelVisible.value = true;
+  assistantStep.value = 'initial';
+};
+
+// 生成角色草稿
+const handleGenerateBrief = async () => {
+  if (!conversationId.value) {
+    ElMessage.error('没有找到对话ID');
+    return;
+  }
+  
+  isAssistantLoading.value = true;
+  try {
+    console.log('[角色助手] 开始生成草稿，conversationId:', conversationId.value);
+    const response = await characterApi.generateRoleBrief(conversationId.value, false);
+    
+    if (response.data.code === 200 && response.data.data) {
+      roleBrief.value = response.data.data;
+      assistantStep.value = 'brief_generated';
+      ElMessage.success('草稿生成成功');
+      console.log('[角色助手] 草稿生成成功:', roleBrief.value);
+    } else {
+      throw new Error(response.data.message || '生成失败');
+    }
+  } catch (error) {
+    console.error('[角色助手] 生成草稿失败:', error);
+    ElMessage.error('生成草稿失败：' + (error.response?.data?.message || error.message));
+  } finally {
+    isAssistantLoading.value = false;
+  }
+};
+
+// 预览研究任务
+const handlePreviewTasks = async () => {
+  if (!conversationId.value) {
+    ElMessage.error('没有找到对话ID');
+    return;
+  }
+  
+  isAssistantLoading.value = true;
+  try {
+    const response = await characterApi.getResearchTasks(conversationId.value);
+    
+    if (response.data.code === 200 && response.data.data) {
+      const taskData = response.data.data;
+      // 后端返回的是 { tasks: [...], defaultLimit, maxLimit }
+      const tasks = taskData.tasks || [];
+      researchTasks.value = tasks.map((task) => ({
+        id: task.id || `task-${Date.now()}-${Math.random()}`,
+        query: task.query,
+        rationale: task.rationale,
+        enabled: task.enabled !== false // 默认启用
+      }));
+      assistantStep.value = 'tasks_previewed';
+      ElMessage.success('任务列表加载成功');
+      console.log('[角色助手] 加载到研究任务:', researchTasks.value);
+    } else {
+      throw new Error(response.data.message || '加载失败');
+    }
+  } catch (error) {
+    console.error('[角色助手] 加载任务失败:', error);
+    ElMessage.error('加载任务失败：' + (error.response?.data?.message || error.message));
+  } finally {
+    isAssistantLoading.value = false;
+  }
+};
+
+// 确认创建角色
+const handleConfirmCreation = async (withResearch) => {
+  if (!roleBrief.value) {
+    ElMessage.error('没有找到角色草稿');
+    return;
+  }
+  
+  // 验证必填字段
+  if (!roleBrief.value.name || !roleBrief.value.voiceType) {
+    ElMessage.warning('请填写角色名称并选择声音类型');
+    return;
+  }
+  
+  isAssistantLoading.value = true;
+  try {
+    const payload = {
+      conversationId: conversationId.value,
+      voiceType: roleBrief.value.voiceType,
+      avatarUrl: roleBrief.value.avatarUrl,
+      overrideName: roleBrief.value.name,
+      deepResearch: withResearch,  // 修正字段名：executeResearch -> deepResearch
+      researchLimit: 12,
+      researchQueries: withResearch ? researchTasks.value.filter(t => t.enabled).map(t => t.query) : []
+    };
+    
+    console.log('[角色助手] 提交创建请求:', payload);
+    const response = await characterApi.confirmRoleCreation(payload);
+    
+    if (response.data.code === 200) {
+      ElMessage.success('角色创建成功！');
+      isAssistantPanelVisible.value = false;
+      
+      // 重置状态
+      assistantStep.value = 'initial';
+      roleBrief.value = null;
+      researchTasks.value = [];
+      
+      // 可选：跳转到角色列表
+      setTimeout(() => {
+        router.push('/characters');
+      }, 1500);
+    } else {
+      throw new Error(response.data.message || '创建失败');
+    }
+  } catch (error) {
+    console.error('[角色助手] 创建角色失败:', error);
+    ElMessage.error('创建角色失败：' + (error.response?.data?.message || error.message));
+  } finally {
+    isAssistantLoading.value = false;
+  }
+};
+
+// 触发文件选择
+const triggerFileInput = () => {
+  fileInput.value?.click();
+};
+
+// 处理图片上传
+const handleImageUpload = async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  
+  // 检查文件类型
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件');
+    return;
+  }
+  
+  // 检查文件大小（限制10MB）
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.warning('图片大小不能超过10MB');
+    return;
+  }
+  
+  isUploading.value = true;
+  try {
+    const response = await characterApi.uploadImage(file);
+    
+    if (response.data.success && response.data.data) {
+      roleBrief.value.avatarUrl = response.data.data.url;
+      ElMessage.success('图片上传成功');
+    } else {
+      throw new Error(response.data.message || '上传失败');
+    }
+  } catch (error) {
+    console.error('上传图片失败:', error);
+    ElMessage.error('上传图片失败：' + (error.response?.data?.message || error.message));
+  } finally {
+    isUploading.value = false;
+    // 清空input，允许重复选择同一文件
+    event.target.value = '';
+  }
+};
+
+// AI生成头像
+const handleImageGeneration = async () => {
+  if (!roleBrief.value || !roleBrief.value.name) {
+    ElMessage.warning('请先填写角色名称');
+    return;
+  }
+  
+  isGeneratingImage.value = true;
+  try {
+    // 构建prompt
+    const prompt = `A professional avatar for a character named "${roleBrief.value.name}". ${roleBrief.value.description || ''}. High quality, detailed, portrait style.`;
+    
+    console.log('[AI生成头像] prompt:', prompt);
+    const response = await characterApi.generateImage(prompt);
+    
+    if (response.data.code === 200 && response.data.data) {
+      // 后端返回的是ImageGenerationResponseDTO，包含imageUrls数组
+      const imageUrl = response.data.data.imageUrls?.[0] || response.data.data.url;
+      if (imageUrl) {
+        roleBrief.value.avatarUrl = imageUrl;
+        ElMessage.success('头像生成成功');
+        console.log('[AI生成头像] 成功，URL:', imageUrl);
+      } else {
+        throw new Error('未获取到图片URL');
+      }
+    } else {
+      throw new Error(response.data.message || '生成失败');
+    }
+  } catch (error) {
+    console.error('生成头像失败:', error);
+    ElMessage.error('生成头像失败：' + (error.response?.data?.message || error.message));
+  } finally {
+    isGeneratingImage.value = false;
+  }
+};
+
+// 试听声音
+const previewVoice = async () => {
+  if (!roleBrief.value || !roleBrief.value.voiceType) {
+    return;
+  }
+  
+  // 停止当前正在播放的试听
+  if (currentPreviewAudio) {
+    currentPreviewAudio.pause();
+    currentPreviewAudio = null;
+  }
+  
+  try {
+    // 使用角色名称或默认文本作为试听内容
+    const testText = roleBrief.value.greetingMessage || `你好，我是${roleBrief.value.name || '角色'}`;
+    
+    const response = await characterApi.textToSpeech({
+      text: testText,
+      voiceType: roleBrief.value.voiceType
+    });
+    
+    if (response.data.success && response.data.data) {
+      const audioUrl = response.data.data.audioUrl;
+      currentPreviewAudio = new Audio(audioUrl);
+      
+      currentPreviewAudio.addEventListener('ended', () => {
+        currentPreviewAudio = null;
+      });
+      
+      currentPreviewAudio.addEventListener('error', (e) => {
+        console.error('音频播放失败:', e);
+        ElMessage.error('音频播放失败');
+        currentPreviewAudio = null;
+      });
+      
+      await currentPreviewAudio.play();
+      ElMessage.success('开始播放试听');
+    } else {
+      throw new Error(response.data.message || '生成失败');
+    }
+  } catch (error) {
+    console.error('试听声音失败:', error);
+    ElMessage.error('试听失败：' + (error.response?.data?.message || error.message));
+  }
+};
+
 // 生命周期
 onMounted(async () => {
   isLoading.value = true;
@@ -2936,19 +3191,56 @@ input:checked + .slider:before {
 
 .task-item {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  align-items: flex-start;
+  gap: 0.75rem;
   margin-bottom: 1rem;
   padding: 0.75rem;
   background-color: var(--bg-main);
   border-radius: 6px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.task-item:hover {
+  border-color: var(--primary-color);
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.task-item input[type="checkbox"] {
+  margin-top: 0.5rem;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.task-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .task-query {
-  flex-grow: 1;
+  width: 100%;
   border: none;
-  background: none;
+  background: transparent;
   color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0.25rem 0;
+  outline: none;
+}
+
+.task-query:focus {
+  border-bottom: 1px solid var(--primary-color);
+}
+
+.task-rationale {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  font-style: italic;
 }
 
 .task-delete-btn {
@@ -2956,10 +3248,20 @@ input:checked + .slider:before {
   border: none;
   color: white;
   border-radius: 50%;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   cursor: pointer;
   flex-shrink: 0;
+  font-size: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.task-delete-btn:hover {
+  background-color: #dc2626;
+  transform: scale(1.1);
 }
 
 /* 头像上传区域 */
