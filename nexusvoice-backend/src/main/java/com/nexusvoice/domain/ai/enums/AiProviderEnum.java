@@ -10,6 +10,7 @@ package com.nexusvoice.domain.ai.enums;
 public enum AiProviderEnum {
     
     OPENAI("openai", "OpenAI", "OpenAI GPT系列模型"),
+    DEEPSEEK("deepseek", "DeepSeek", "DeepSeek深度求索系列模型"),
     CLAUDE("claude", "Anthropic Claude", "Anthropic Claude系列模型"),
     GEMINI("gemini", "Google Gemini", "Google Gemini系列模型"),
     WENXIN("wenxin", "百度文心", "百度文心一言系列模型"),
