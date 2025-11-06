@@ -48,6 +48,7 @@ public class GrpcAsrClient {
     @Value("${rtc.grpc.asr.max-message-size:16777216}")
     private int maxMessageSize; // 16MB
 
+    // ASR超时设置：60秒（短语音识别，通常数秒内完成）
     @Value("${rtc.grpc.asr.timeout-seconds:60}")
     private long timeoutSeconds;
 

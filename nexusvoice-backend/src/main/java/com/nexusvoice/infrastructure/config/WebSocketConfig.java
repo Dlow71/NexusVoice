@@ -1,8 +1,11 @@
 package com.nexusvoice.infrastructure.config;
 
 import com.nexusvoice.interfaces.websocket.ChatStreamHandler;
+import com.nexusvoice.interfaces.websocket.RtcSignalHandler;
 import com.nexusvoice.infrastructure.websocket.WebSocketJwtInterceptor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -12,23 +15,27 @@ import org.springframework.web.socket.server.standard.ServletServerContainerFact
 
 /**
  * WebSocket配置类
- * 配置聊天流式接口，集成JWT认证
+ * 配置聊天流式接口和RTC信令接口，集成JWT认证
  * 
  * @author NexusVoice
  * @since 2025-09-25
  */
+@Slf4j
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final ChatStreamHandler chatStreamHandler;
     private final WebSocketJwtInterceptor webSocketJwtInterceptor;
+    private final RtcSignalHandler rtcSignalHandler;
 
     @Autowired
     public WebSocketConfig(ChatStreamHandler chatStreamHandler, 
-                          WebSocketJwtInterceptor webSocketJwtInterceptor) {
+                          WebSocketJwtInterceptor webSocketJwtInterceptor,
+                          @Autowired(required = false) RtcSignalHandler rtcSignalHandler) {
         this.chatStreamHandler = chatStreamHandler;
         this.webSocketJwtInterceptor = webSocketJwtInterceptor;
+        this.rtcSignalHandler = rtcSignalHandler;
     }
 
     @Override
@@ -40,6 +47,15 @@ public class WebSocketConfig implements WebSocketConfigurer {
                 .setAllowedOrigins("*"); // 允许所有来源（生产环境需要限制）
                 // 注意：移除.withSockJS()，使用原生WebSocket协议
                 // 支持子协议传递token：Bearer.{token}
+        
+        // 注册RTC信令WebSocket端点（条件化加载）
+        if (rtcSignalHandler != null) {
+            registry.addHandler(rtcSignalHandler, "/ws/rtc/signal")
+                    .setAllowedOriginPatterns("*")
+                    .addInterceptors(webSocketJwtInterceptor)
+                    .setAllowedOrigins("*");
+            log.info("RTC信令WebSocket端点已注册: /ws/rtc/signal");
+        }
     }
     
     /**

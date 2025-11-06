@@ -67,8 +67,15 @@ public class WebRtcEndpointManager {
             // 开始收集ICE候选者
             webRtcEndpoint.gatherCandidates();
             
+            // 添加缓存的ICE候选者（如果有）
+            addCachedIceCandidates(sessionId);
+            
             log.info("SDP Answer生成成功: sessionId={}", sessionId);
-            log.debug("SDP Answer内容: {}", sdpAnswer);
+            // 不打印完整SDP内容，避免泄露IP等敏感信息
+            if (log.isDebugEnabled()) {
+                log.debug("SDP Answer前100字符: {}", 
+                        sdpAnswer != null && sdpAnswer.length() > 100 ? sdpAnswer.substring(0, 100) : sdpAnswer);
+            }
             
             return sdpAnswer;
         } catch (Exception e) {

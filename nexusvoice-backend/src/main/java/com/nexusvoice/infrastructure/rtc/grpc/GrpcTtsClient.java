@@ -49,6 +49,7 @@ public class GrpcTtsClient {
     @Value("${rtc.grpc.tts.max-message-size:33554432}")
     private int maxMessageSize; // 32MB
 
+    // TTS超时设置：120秒（长文本合成需要更长时间，是ASR的2倍）
     @Value("${rtc.grpc.tts.timeout-seconds:120}")
     private long timeoutSeconds;
 
