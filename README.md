@@ -10,65 +10,128 @@
 
 ## ✨ 项目介绍
 
-NexusVoice 是一个**生产级的多模态AI对话平台**，采用严格的DDD架构设计，集成了智能对话、图像生成、语音合成、实时搜索等AI能力。项目核心亮点在于**完全动态化的模型管理**、**Java 21虚拟线程并发优化**、**责任链增强系统**和**三级缓存架构**，为企业级AI应用提供坚实的技术基础。
+NexusVoice 是一个**生产级的多模态AI对话平台**，采用严格的DDD架构设计，集成了智能对话、图像生成、语音合成、实时搜索等AI能力。项目核心亮点在于**WebRTC实时语音对话**、**通用Agent智能体系统**、**工具生态封装**、**完全动态化的模型管理**、**Java 21虚拟线程并发优化**和**三级缓存架构**，为企业级AI应用提供坚实的技术基础。
+
+## 📸 项目预览
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="images/index.png" alt="首页" />
+    </td>
+    <td width="50%">
+      <img src="images/chat.png" alt="对话界面" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="images/createRole.png" alt="Agent角色生成" />
+    </td>
+    <td width="50%">
+      <img src="images/sk.png" alt="密钥管理" />
+    </td>
+  </tr>
+</table>
+
+
 
 ### 🎯 为什么选择 NexusVoice？
 
 #### 🤖 多模态AI能力
 - **智能对话** - 支持OpenAI、Grok、DeepSeek等多种模型，动态热切换
+- **实时语音对话(WebRTC)** ⭐ - 端到端延迟P95<600ms，Kurento媒体网关 + gRPC双向流（测试阶段）
+- **通用Agent系统** ⭐ - 模板方法模式，支持多步推理、工具调用、上下文管理
+- **工具生态封装** ⭐ - BaseTool接口 + ToolRegistry注册中心，即插即用
 - **实时联网搜索** - MCP搜索系统，AI智能判断何时搜索，DuckDuckGo集成
 - **AI图像生成** - 硅基流动API，支持Qwen/Kolors 4种模型，自动CDN上传
 - **语音合成(TTS)** - 智能文本分段 + 虚拟线程并发上传 + 实时音频播放
-- **流式对话** - WebSocket实时响应，支持分段TTS流式输出
+- **流式对话** - SSE/WebSocket双协议支持切换，支持分段TTS流式输出
 
 #### 🏗️ 核心技术亮点
 
-##### 1️⃣ **完全动态化的AI模型管理系统** ⭐⭐⭐
+##### 🔥 **最新技术亮点** ⭐⭐⭐
+
+###### 1️⃣ **WebRTC实时语音对话系统**（🚧 测试阶段）
+- **当前状态**：核心功能已实现，正在进行稳定性测试和性能优化
+- **企业级架构**：浏览器 ↔ Kurento媒体网关 ↔ gRPC双向流 ↔ ASR/TTS
+- **极致低延迟**：端到端P95 < 600ms，P99 < 800ms
+- **安全传输**：SRTP/DTLS/ICE，RTP永不出主机，经本地桥接进程转换
+- **信令系统**：WebSocket信令 + ICE候选者收集 + 连接状态监控
+- **音频优化**：Opus 48k编码，支持FEC前向纠错，弱网下自适应
+- **半双工MVP**：先说完播模式，打断机制基于源头停推 + 零样本静音帧
+- **未来规划**：计划改造成Go语言实现，提升性能和部署效率
+
+###### 2️⃣ **通用Agent智能体系统**
+- **模板方法模式**：`BaseAgentExecutor`定义标准执行流程，子类实现策略
+- **多步推理**：支持多步执行循环，自动管理执行上下文和状态
+- **工具调用能力**：集成工具注册中心，Agent可动态调用外部工具
+- **超时保护**：最大步数限制、执行时长监控、错误恢复机制
+- **执行记录**：完整记录每步执行历史，便于调试和优化
+- **状态管理**：`AgentState`状态机管理（IDLE/RUNNING/FINISHED/FAILED）
+
+###### 3️⃣ **工具生态封装（Tool Framework）**
+- **BaseTool接口**：统一工具接口，定义execute方法、参数定义、元数据
+- **ToolRegistry注册中心**：ConcurrentHashMap保证线程安全，启动时自动注册
+- **工具元数据**：名称、描述、参数列表、分类、优先级、预估执行时间
+- **参数验证**：`ToolParameter`定义参数类型、必需性、默认值、示例
+- **即插即用**：实现`BaseTool`接口并标注`@Component`即可自动注册
+- **分类管理**：支持按分类查询工具（search/data_processing/communication等）
+- **动态扩展**：支持运行时注册/注销工具，灵活扩展Agent能力
+
+#### 🏗️ 经典技术亮点
+
+##### 4️⃣ **完全动态化的AI模型管理系统** ⭐⭐⭐
 - **数据库驱动配置**：`ai_models`、`ai_api_keys`、`ai_api_call_logs`三张表管理模型
 - **API密钥池**：支持加权轮询、健康检查、自动熔断恢复、配额管理
 - **热更新支持**：修改配置无需重启服务，实时生效
 - **费用追踪**：精确统计每次调用的token使用量和费用
 - **多模型适配**：抽象适配器模式，轻松接入新模型（OpenAI/Grok/DeepSeek）
 
-##### 2️⃣ **TTS智能分段并发处理（Java 21虚拟线程）** ⭐⭐⭐
+##### 5️⃣ **TTS智能分段并发处理（Java 21虚拟线程）** ⭐⭐⭐
 - **智能文本切分**：`TextChunker`按句子边界切分，最大300字/段
 - **虚拟线程并发**：`Executors.newVirtualThreadPerTaskExecutor()`实现轻量级并发
 - **Semaphore控制**：限制最大并发数（可配置，默认4），避免API限流
 - **实时上传CDN**：每段TTS完成后立即上传七牛云/MinIO
 - **性能提升**：相比单线程处理，性能提升10倍以上
 
-##### 3️⃣ **存储策略管理（模板+策略模式）** ⭐⭐
+##### 6️⃣ **存储策略管理（模板+策略模式）** ⭐⭐
 - **模板方法模式**：`AbstractStorageRepository`定义上传流程骨架
 - **策略模式**：`StorageStrategyManager`根据`system_config`动态切换存储
 - **支持多提供商**：七牛云、MinIO，无缝切换
 - **健康检查**：定期检查存储服务可用性，自动切换到备用存储
 - **文件迁移**：提供完整的跨存储迁移工具
 
-##### 4️⃣ **SystemConfig三级缓存架构** ⭐⭐
+##### 7️⃣ **SystemConfig三级缓存架构** ⭐⭐
 - **三级缓存**：Caffeine本地缓存（30秒）+ Redis缓存（1小时）+ PostgreSQL
 - **Redis Pub/Sub**：配置变更实时广播到所有实例
 - **强一致性**：CUD操作立即失效缓存并通知其他实例
 - **多实例支持**：每个实例有唯一ID，避免重复处理自己发布的事件
 - **配置热更新**：修改数据库配置后立即生效，无需重启
 
-##### 5️⃣ **责任链增强系统** ⭐
+##### 8️⃣ **责任链增强系统** ⭐
 - **ChatEnhancementChain**：统一管理增强器链
 - **SearchEnhancer**：智能联网搜索增强（AI判断是否需要搜索）
 - **动态扩展**：支持添加新的增强器（RAG、多模态等）
 - **可配置开关**：每个增强器可独立启用/禁用
 
-##### 6️⃣ **WebSocket流式对话** ⭐
-- **JWT握手鉴权**：支持Header和Query参数两种认证方式
+##### 9️⃣ **SSE/WebSocket双协议流式对话** ⭐
+- **双协议支持**：SSE（Server-Sent Events）和WebSocket灵活切换
+- **JWT握手鉴权**：WebSocket支持Header和Query参数两种认证方式
 - **实时流式输出**：逐字推送AI回复，打字机效果
 - **分段TTS流式**：音频片段生成后立即推送，边说边听
 - **单flight保护**：防止同一会话并发请求冲突
-- **心跳保活**：5秒心跳机制，保持连接稳定
+- **心跳保活**：WebSocket 5秒心跳机制，保持连接稳定
 
-##### 7️⃣ **角色助手系统** ⭐
-- **从对话生成角色**：分析历史对话，AI自动生成角色设定
-- **联网深度研究**：可选启用联网搜索，增强角色背景知识
-- **自动TTS开场白**：角色创建后自动生成专属语音
-- **完整工作流**：草稿生成 → 深研预览 → 应用深研 → 确认创建
+##### 🔟 **Agent角色生成系统** ⭐
+- **智能分析对话**：基于历史对话记录，AI自动提取角色特征和对话风格
+- **Agent工作流**：
+  1. **草稿生成阶段** - 分析对话内容，生成初始角色设定（名称、人设、性格、语气）
+  2. **深度研究阶段**（可选）- 启用联网搜索，AI深入研究角色背景知识，增强人设深度
+  3. **深研预览** - 展示增强后的角色设定，用户可对比原始版本和深研版本
+  4. **应用深研** - 用户确认后应用深研结果，替换原始草稿
+  5. **最终确认** - 用户审核并调整，确认创建角色
+- **自动化增强**：角色创建完成后自动生成专属TTS语音开场白
+- **私有化隔离**：每个用户的角色互不干扰，支持个性化定制
 
 #### 🎨 用户体验创新
 - **实时音频队列**：智能管理分段音频播放，错误自动跳过
@@ -263,26 +326,57 @@ roles                  # AI角色配置（人设、语音、开场白）
 users                  # 用户信息（JWT认证）
 ```
 
-### Flyway迁移脚本
-项目使用Flyway进行数据库版本管理，迁移脚本位于：
-```
-nexusvoice-backend/src/main/resources/db/migration/
-├── V1__init_database.sql
-├── V2__create_users_table_mysql.sql
-├── V3__create_conversation_tables_mysql.sql
-├── V4__create_ai_model_tables_mysql.sql
-├── V5__create_system_config_table_mysql.sql
-├── V6__add_storage_config_mysql.sql
-├── V7__add_deepseek_models_mysql.sql
-└── ...
-```
+### Flyway数据库迁移脚本
+
+> ⚠️ **重要提示**：所有迁移脚本使用 **PostgreSQL** 语法，不兼容MySQL
+
+项目使用Flyway进行数据库版本管理，迁移脚本位于 `nexusvoice-backend/src/main/resources/db/migration/`
+
+#### 核心表初始化（V1-V2）
+- **V1__init_database.sql** - 核心表结构：用户、角色、会话、消息、AI模型、系统配置等
+- **V2__init_default_data.sql** - 初始数据：默认角色、系统配置、AI模型预置数据
+
+#### AI模型扩展（V3-V4, V7, V9-V10, V15）
+- **V3__add_model_type_to_ai_models.sql** - 为AI模型表添加模型类型字段
+- **V4__add_doubao_model.sql** - 新增豆包（Doubao）大模型配置
+- **V7__add_image_generation_models.sql** - 图像生成模型（Qwen/Kolors系列）
+- **V9__add_tts_models.sql** - TTS语音合成模型配置
+- **V10__add_video_models.sql** - 视频生成模型配置
+- **V15__add_asr_models.sql** - ASR语音识别模型配置
+
+#### RAG知识库系统（V5-V6）
+- **V5__create_rag_document_tables.sql** - RAG文档表、分片表、向量索引
+- **V6__create_rag_version_and_user_tables.sql** - RAG版本管理、用户配置表
+
+#### 功能增强（V8, V12）
+- **V8__add_tts_temp_file_expire_config.sql** - TTS临时文件过期配置
+- **V12__add_message_attachments_support.sql** - 消息附件支持（图片、文件）
+
+#### 权限管理系统（V16-V17）
+- **V16__create_rbac_tables.sql** - RBAC权限表（角色、权限、用户角色关联）
+- **V17__init_rbac_data.sql** - RBAC初始权限数据（管理员、普通用户角色）
+
+#### 开发者功能（V18-V19）
+- **V18__create_developer_api_keys_table.sql** - 开发者API密钥管理表
+- **V19__extend_roles_to_agent_capabilities.sql** - 角色表扩展Agent能力字段
+
+#### WebRTC实时通信（V20）
+- **V20__create_rtc_tables.sql** - WebRTC会话表、信令表、统计表（测试阶段）
+
+> 📌 **PostgreSQL特性使用**：
+> - UUID类型、JSONB字段
+> - 数组类型（TEXT[]）
+> - 时间类型（TIMESTAMP WITH TIME ZONE）
+> - 部分索引、GIN索引
+> - pgvector扩展（RAG向量检索）
 
 ## 🎮 核心功能
 
 ### 💬 流式对话
-- **WebSocket实时推送**：逐字显示AI回复，打字机效果
+- **双协议支持**：SSE/WebSocket灵活切换，满足不同场景需求
+- **实时流式输出**：逐字显示AI回复，打字机效果
 - **多模型支持**：OpenAI GPT-4/GPT-4o-mini、Grok、DeepSeek V3等
-- **联网搜索**：AI智能判断何时需要搜索，自动获取最新信息
+- **智能联网搜索**：AI自动判断何时需要搜索，获取最新信息
 - **上下文管理**：自动管理对话历史，支持多轮对话
 - **模型热切换**：数据库配置，无需重启服务
 
@@ -298,11 +392,12 @@ nexusvoice-backend/src/main/resources/db/migration/
 - **实时推送**：WebSocket流式推送音频片段
 - **音频队列**：前端智能管理播放顺序，错误自动跳过
 
-### 🎭 AI角色助手
-- **从对话生成**：分析历史对话，AI自动生成角色设定
-- **深度研究**：可选联网搜索，增强角色背景知识
-- **自动语音**：角色创建后自动生成专属TTS开场白
-- **私有化**：每个用户的角色互不干扰
+### 🎭 Agent角色生成
+- **智能分析**：基于历史对话，AI自动提取角色特征生成人设
+- **五步工作流**：草稿生成 → 深度研究（可选）→ 深研预览 → 应用深研 → 最终确认
+- **联网增强**：可选启用联网搜索，深入研究角色背景，增强人设深度
+- **自动TTS**：角色创建后自动生成专属语音开场白
+- **私有隔离**：每个用户的角色独立管理，互不干扰
 
 ## 🔧 性能优化
 
@@ -350,6 +445,124 @@ nexusvoice-backend/src/main/resources/db/migration/
 - 📖 **运行说明**：`运行说明.md`
 - 📖 **API文档**：http://localhost:8081/swagger-ui.html
 - 📖 **数据库迁移脚本**：`nexusvoice-backend/src/main/resources/db/migration/`
+
+## 📋 待办列表 (Roadmap)
+
+### 🚧 进行中的工作
+
+#### WebRTC改造
+- [ ] **WebRTC迁移至Go语言** - 提升实时语音性能和部署效率
+  - [ ] Go实现Kurento桥接进程（rtp2grpc-asr / grpc2rtp-tts）
+  - [ ] Go实现信令服务器（WebSocket + ICE处理）
+  - [ ] 性能压测与优化（目标：端到端延迟 < 500ms）
+  - [ ] 完善测试用例（单元测试 + 集成测试 + 压力测试）
+
+#### 前端优化
+- [ ] **前端页面样式优化** - 提升用户体验和视觉美感
+  - [ ] 对话界面UI/UX重构（参考ChatGPT/Claude界面）
+  - [ ] 响应式布局优化，适配更多屏幕尺寸
+  - [ ] 暗黑模式支持
+  - [ ] 动画效果优化（消息发送、加载动画）
+  - [ ] 无障碍访问（Accessibility）支持
+
+### 🎯 计划功能
+
+#### 管理端
+- [ ] **完整的管理后台实现**
+  - [ ] 用户管理（用户列表、权限管理、配额分配）
+  - [ ] 角色管理（角色库、人设编辑、语音配置）
+  - [ ] 模型管理（模型配置、API密钥管理、费用统计）
+  - [ ] 系统配置（动态配置、缓存管理、存储切换）
+  - [ ] 监控面板（调用统计、性能监控、错误日志）
+  - [ ] 数据分析（用户行为、对话分析、费用趋势）
+
+#### 移动端
+- [ ] **移动端前端开发**
+  - [ ] React Native / Flutter 跨平台应用
+  - [ ] 移动端专属UI设计
+  - [ ] 语音输入优化（长按录音、实时识别）
+  - [ ] 消息推送（FCM/APNs集成）
+  - [ ] 离线模式（本地缓存、离线消息）
+  - [ ] 手势操作（滑动删除、下拉刷新）
+
+#### RAG与文档处理
+- [ ] **RAG知识库系统**
+  - [ ] 文档解析（PDF、Word、Markdown、TXT）
+  - [ ] 文本分块（智能切分、重叠策略）
+  - [ ] 向量化存储（pgvector / Milvus）
+  - [ ] 语义检索（Embedding模型、相似度计算）
+  - [ ] 知识库管理（文档上传、索引构建、版本控制）
+  - [ ] RAG增强器（检索 + 重排序 + 上下文注入）
+
+- [ ] **文档智能处理**
+  - [ ] 文档问答（基于知识库的智能问答）
+  - [ ] 文档摘要（自动生成文档概要）
+  - [ ] 文档对比（版本差异分析）
+  - [ ] OCR识别（图片文字提取）
+  - [ ] 表格提取（结构化数据解析）
+
+#### 数据分析能力
+- [ ] **Python数据分析服务**
+  - [ ] Python微服务搭建（FastAPI / Flask）
+  - [ ] Jupyter Notebook集成（代码执行沙箱）
+  - [ ] 数据可视化（Matplotlib / Plotly）
+  - [ ] 统计分析（Pandas / NumPy / SciPy）
+  - [ ] 机器学习（Scikit-learn / XGBoost）
+  - [ ] 数据源连接（MySQL / PostgreSQL / CSV / Excel）
+  - [ ] Agent工具封装（PythonExecuteTool）
+
+#### 高级Agent能力
+- [ ] **多Agent协作**
+  - [ ] Agent编排系统（Workflow Engine）
+  - [ ] 并行Agent执行（多任务并发处理）
+  - [ ] Agent间通信（消息传递、共享上下文）
+  - [ ] 角色分工（研究员、分析师、总结者）
+
+- [ ] **更多工具集成**
+  - [ ] 代码执行工具（Code Interpreter）
+  - [ ] API调用工具（RESTful API Tool）
+  - [ ] 数据库查询工具（SQL Tool）
+  - [ ] 文件操作工具（File I/O Tool）
+  - [ ] 邮件发送工具（Email Tool）
+  - [ ] 日历管理工具（Calendar Tool）
+
+### 🔧 技术优化
+
+#### 性能优化
+- [ ] 对话历史分页加载（虚拟滚动）
+- [ ] 图片懒加载（Intersection Observer）
+- [ ] 音频预加载与缓存策略
+- [ ] 前端状态持久化（IndexedDB）
+- [ ] WebSocket断线重连优化
+- [ ] CDN加速配置（静态资源）
+
+#### 安全加固
+- [ ] API接口限流（Sentinel / Guava RateLimiter）
+- [ ] XSS防护增强（CSP策略）
+- [ ] CSRF防护（Token验证）
+- [ ] 敏感信息脱敏（日志、错误信息）
+- [ ] 数据加密（传输加密、存储加密）
+- [ ] 安全审计日志
+
+#### 可观测性
+- [ ] 分布式链路追踪（Jaeger / Zipkin）
+- [ ] 性能监控（Prometheus + Grafana）
+- [ ] 日志聚合（ELK / Loki）
+- [ ] 告警系统（钉钉 / 邮件 / 短信）
+- [ ] 健康检查增强（深度检查、依赖检测）
+
+### 💡 实验性功能
+
+- [ ] **语音克隆**：基于用户语音样本生成专属TTS
+- [ ] **情感分析**：识别用户情绪，调整AI回复风格
+- [ ] **多语言支持**：国际化（i18n）+ 多语言对话
+- [ ] **语音变声**：实时音频处理，角色声音定制
+- [ ] **3D虚拟形象**：Live2D / VRM集成，虚拟主播
+- [ ] **AR/VR对话**：沉浸式AI交互体验
+
+---
+
+> **贡献提示**：如果你对以上功能感兴趣，欢迎参与贡献！请先创建Issue讨论方案，再提交Pull Request。
 
 ## 🌟 Star History
 
