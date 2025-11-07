@@ -122,10 +122,28 @@ public class PlanSolveAgentExecutor extends BaseAgentExecutor {
             // 没有可执行任务，检查是否有pending任务（可能存在循环依赖或配置错误）
             List<AgentTask> pendingTasks = plan.getPendingTasks();
             if (!pendingTasks.isEmpty()) {
-                log.error("存在待执行任务但无法执行，可能存在循环依赖");
-                // 标记这些任务为失败
+                // 详细分析每个pending任务的依赖状态
                 for (AgentTask task : pendingTasks) {
-                    task.markAsFailed("无法执行：依赖关系错误");
+                    List<String> unsatisfiedDeps = new ArrayList<>();
+                    if (task.getDependencies() != null) {
+                        for (String depId : task.getDependencies()) {
+                            AgentTask depTask = plan.getTaskById(depId);
+                            if (depTask == null) {
+                                unsatisfiedDeps.add(depId + "(不存在)");
+                            } else if (depTask.getStatus() != com.nexusvoice.domain.agent.enums.TaskStatus.COMPLETED) {
+                                unsatisfiedDeps.add(depId + "(状态:" + depTask.getStatus() + ")");
+                            } else if (depTask.getResult() == null || depTask.getResult().isEmpty()) {
+                                unsatisfiedDeps.add(depId + "(结果为空)");
+                            }
+                        }
+                    }
+                    
+                    String errorMsg = unsatisfiedDeps.isEmpty() 
+                        ? "无法执行：依赖关系错误（可能存在循环依赖）" 
+                        : "无法执行：依赖未满足 - " + String.join(", ", unsatisfiedDeps);
+                    
+                    log.error("任务{}无法执行，原因：{}", task.getTaskId(), errorMsg);
+                    task.markAsFailed(errorMsg);
                 }
             }
             return null;  // 继续到汇总阶段

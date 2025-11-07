@@ -73,9 +73,15 @@ public class SearchToolAdapter implements BaseTool {
     @Override
     public String execute(Map<String, Object> parameters) {
         try {
-            // 提取参数
+            // 提取参数（兼容query和keywords两种参数名）
             String query = (String) parameters.get("query");
             if (query == null || query.trim().isEmpty()) {
+                // 尝试使用keywords参数（兼容LLM可能生成的不同参数名）
+                query = (String) parameters.get("keywords");
+            }
+            
+            if (query == null || query.trim().isEmpty()) {
+                log.error("搜索参数缺失，实际参数：{}", parameters);
                 throw BizException.of(ErrorCodeEnum.PARAM_ERROR, "搜索关键词不能为空");
             }
             

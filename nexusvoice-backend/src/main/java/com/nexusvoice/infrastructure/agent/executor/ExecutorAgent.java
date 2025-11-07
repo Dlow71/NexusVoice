@@ -101,6 +101,14 @@ public class ExecutorAgent {
             log.info("执行工具：{}，参数：{}", toolName, params);
             String result = tool.execute(params);
             
+            // 验证结果是否有效
+            if (result == null || result.trim().isEmpty()) {
+                String errorMsg = "工具执行返回空结果";
+                log.warn("任务{}：{}", task.getTaskId(), errorMsg);
+                task.markAsFailed(errorMsg);
+                return errorMsg;
+            }
+            
             // 标记完成
             task.markAsCompleted(result);
             log.info("任务执行成功：{}", task.getTaskId());
@@ -160,6 +168,19 @@ public class ExecutorAgent {
         // 解析LLM返回的工具和参数
         try {
             String content = response.getContent();
+            
+            // 如果LLM直接返回结果（不需要工具），直接使用
+            if (!content.contains("\"tool\"") && !content.contains("'tool'")) {
+                log.info("任务{}：LLM直接给出结果，不需要工具", task.getTaskId());
+                if (content == null || content.trim().isEmpty()) {
+                    String errorMsg = "LLM返回空结果";
+                    task.markAsFailed(errorMsg);
+                    return errorMsg;
+                }
+                task.markAsCompleted(content);
+                return content;
+            }
+            
             String json = extractJson(content);
             
             @SuppressWarnings("unchecked")
@@ -168,6 +189,14 @@ public class ExecutorAgent {
             String toolName = (String) decision.get("tool");
             @SuppressWarnings("unchecked")
             Map<String, Object> params = (Map<String, Object>) decision.get("params");
+            
+            // 验证工具名称
+            if (toolName == null || toolName.trim().isEmpty()) {
+                String errorMsg = "LLM未指定有效工具";
+                log.warn("任务{}：{}", task.getTaskId(), errorMsg);
+                task.markAsFailed(errorMsg);
+                return errorMsg;
+            }
             
             // 更新任务信息
             task.setToolName(toolName);
@@ -189,7 +218,7 @@ public class ExecutorAgent {
     private String buildTaskAnalysisPrompt(AgentTask task) {
         StringBuilder prompt = new StringBuilder();
         
-        prompt.append("请分析以下任务，并选择合适的工具执行。\n\n");
+        prompt.append("请分析以下任务，决定是否需要工具，或直接给出结果。\n\n");
         
         prompt.append("【任务描述】\n");
         prompt.append(task.getDescription()).append("\n\n");
@@ -197,14 +226,20 @@ public class ExecutorAgent {
         prompt.append("【可用工具】\n");
         prompt.append(buildAvailableToolsDescription()).append("\n");
         
+        prompt.append("【判断规则】\n");
+        prompt.append("1. 如果任务是「整理、分析、总结、提炼」已有信息，直接给出结果，不需要工具\n");
+        prompt.append("2. 如果任务需要「搜索、查询、获取」新信息，使用web_search工具\n");
+        prompt.append("3. 如果任务需要其他外部操作，选择对应工具\n\n");
+        
         prompt.append("【输出要求】\n");
-        prompt.append("请以JSON格式返回：\n");
+        prompt.append("情况A - 需要工具：\n");
         prompt.append("{\n");
         prompt.append("  \"tool\": \"工具名称\",\n");
         prompt.append("  \"params\": {\n");
-        prompt.append("    \"参数名\": \"参数值\"\n");
+        prompt.append("    \"参数名\": \"参数值\"  // ⚠️ 参数名必须与工具定义完全一致\n");
         prompt.append("  }\n");
-        prompt.append("}\n");
+        prompt.append("}\n\n");
+        prompt.append("情况B - 不需要工具（直接输出结果文本即可）\n");
         
         return prompt.toString();
     }
@@ -216,7 +251,39 @@ public class ExecutorAgent {
         StringBuilder sb = new StringBuilder();
         
         for (com.nexusvoice.domain.agent.model.Tool tool : toolRegistry.getEnabledTools()) {
-            sb.append(String.format("- %s: %s\n", tool.getName(), tool.getDescription()));
+            sb.append(String.format("【%s】%s\n", tool.getName(), tool.getDescription()));
+            
+            // 添加参数说明和示例
+            if (tool.getParameters() != null && !tool.getParameters().isEmpty()) {
+                sb.append("  参数定义：\n");
+                for (com.nexusvoice.domain.agent.model.ToolParameter param : tool.getParameters()) {
+                    sb.append(String.format("    - %s (%s)：%s%s\n", 
+                        param.getName(),
+                        param.getType(),
+                        param.getDescription(),
+                        param.getRequired() ? " [必填]" : " [可选]"
+                    ));
+                    if (param.getExample() != null) {
+                        sb.append(String.format("      示例：%s\n", param.getExample()));
+                    }
+                }
+                
+                // 添加完整JSON示例
+                sb.append("  调用示例：\n");
+                sb.append("  {\n");
+                sb.append(String.format("    \"tool\": \"%s\",\n", tool.getName()));
+                sb.append("    \"params\": {\n");
+                boolean first = true;
+                for (com.nexusvoice.domain.agent.model.ToolParameter param : tool.getParameters()) {
+                    if (!first) sb.append(",\n");
+                    String exampleValue = param.getExample() != null ? param.getExample().toString() : "值";
+                    sb.append(String.format("      \"%s\": \"%s\"", param.getName(), exampleValue));
+                    first = false;
+                }
+                sb.append("\n    }\n");
+                sb.append("  }\n");
+            }
+            sb.append("\n");
         }
         
         return sb.toString();
