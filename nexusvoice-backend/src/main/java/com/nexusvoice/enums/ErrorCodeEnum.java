@@ -93,6 +93,7 @@ public enum ErrorCodeEnum {
     DATA_ALREADY_EXISTS(1302, "数据已存在"),
     DATA_VALIDATION_ERROR(1303, "数据验证失败"),
     DATA_INTEGRITY_ERROR(1304, "数据完整性错误"),
+    OPERATION_FAILED(1305, "操作失败"),
     
     // 文件相关 14xx
     FILE_NOT_FOUND(1401, "文件不存在"),

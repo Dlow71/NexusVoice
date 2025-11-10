@@ -2,14 +2,11 @@ package com.nexusvoice.infrastructure.ai.factory;
 
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
+import com.nexusvoice.domain.ai.model.AiProvider;
+import com.nexusvoice.domain.ai.repository.AiProviderRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
-import com.nexusvoice.infrastructure.ai.model.DeepSeekModelAdapter;
-import com.nexusvoice.infrastructure.ai.model.DoubaoModelAdapter;
-import com.nexusvoice.infrastructure.ai.model.GrokModelAdapter;
-import com.nexusvoice.infrastructure.ai.model.OpenAiModelAdapter;
-import com.nexusvoice.infrastructure.ai.model.SiliconFlowChatModelAdapter;
-import com.nexusvoice.infrastructure.ai.model.SiliconFlowEmbeddingAdapter;
+import com.nexusvoice.infrastructure.ai.adapter.ProviderAdapter;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -21,33 +18,27 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * LangChain4j模型工厂
- * 负责根据配置动态创建LangChain4j的模型实例
+ * LangChain4j模型工厂（重构版）
+ * 使用Provider + Protocol驱动模型创建，支持动态扩展
+ * 
+ * 核心改进：
+ * 1. 通过providerId关联Provider配置
+ * 2. 根据Protocol自动选择对应的ProviderAdapter
+ * 3. 支持向后兼容（providerCode降级）
+ * 4. 三级BaseURL优先级：API密钥 > 模型 > 服务商
  *
  * @author NexusVoice
- * @since 2025-10-16
+ * @since 2025-01-11
  */
 @Slf4j
 @Component
 public class LangChain4jModelFactory {
     
     @Autowired
-    private OpenAiModelAdapter openAiModelAdapter;
+    private AiProviderRepository providerRepository;
     
     @Autowired
-    private GrokModelAdapter grokModelAdapter;
-    
-    @Autowired
-    private DeepSeekModelAdapter deepSeekModelAdapter;
-    
-    @Autowired
-    private DoubaoModelAdapter doubaoModelAdapter;
-    
-    @Autowired
-    private SiliconFlowChatModelAdapter siliconFlowChatModelAdapter;
-    
-    @Autowired
-    private SiliconFlowEmbeddingAdapter siliconFlowEmbeddingAdapter;
+    private Map<String, ProviderAdapter> adapterMap;
     
     /**
      * 模型实例缓存
@@ -58,7 +49,7 @@ public class LangChain4jModelFactory {
     private final Map<String, EmbeddingModel> embeddingModelCache = new ConcurrentHashMap<>();
     
     /**
-     * 创建聊天模型
+     * 创建聊天模型（重构版）
      * 
      * @param model AI模型配置
      * @param apiKey API密钥配置
@@ -73,40 +64,8 @@ public class LangChain4jModelFactory {
             return cachedModel;
         }
         
-        // 根据提供商创建不同的模型实例
-        ChatLanguageModel chatModel;
-        switch (model.getProviderCode().toLowerCase()) {
-            case "openai":
-                chatModel = openAiModelAdapter.createChatModel(model, apiKey);
-                break;
-            case "grok":
-                chatModel = grokModelAdapter.createChatModel(model, apiKey);
-                break;
-            case "deepseek":
-                chatModel = deepSeekModelAdapter.createChatModel(model, apiKey);
-                break;
-            case "doubao":
-                chatModel = doubaoModelAdapter.createChatModel(model, apiKey);
-                break;
-            case "siliconflow":
-                chatModel = siliconFlowChatModelAdapter.createChatModel(model, apiKey);
-                break;
-            case "claude":
-                chatModel = createClaudeChatModel(model, apiKey);
-                break;
-            case "qwen":
-                chatModel = createQwenChatModel(model, apiKey);
-                break;
-            case "wenxin":
-                chatModel = createWenxinChatModel(model, apiKey);
-                break;
-            case "zhipu":
-                chatModel = createZhipuChatModel(model, apiKey);
-                break;
-            default:
-                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
-                    "不支持的AI提供商：" + model.getProviderCode());
-        }
+        // 新方案：通过Provider + Protocol创建模型
+        ChatLanguageModel chatModel = createChatModelByProvider(model, apiKey);
         
         // 缓存模型实例
         modelCache.put(cacheKey, chatModel);
@@ -116,7 +75,7 @@ public class LangChain4jModelFactory {
     }
     
     /**
-     * 创建流式聊天模型
+     * 创建流式聊天模型（重构版）
      */
     public StreamingChatLanguageModel createStreamingChatModel(AiModel model, AiApiKey apiKey) {
         String cacheKey = model.getModelKey() + ":" + apiKey.getId();
@@ -127,40 +86,8 @@ public class LangChain4jModelFactory {
             return cachedModel;
         }
         
-        // 根据提供商创建不同的模型实例
-        StreamingChatLanguageModel streamingModel;
-        switch (model.getProviderCode().toLowerCase()) {
-            case "openai":
-                streamingModel = openAiModelAdapter.createStreamingChatModel(model, apiKey);
-                break;
-            case "grok":
-                streamingModel = grokModelAdapter.createStreamingChatModel(model, apiKey);
-                break;
-            case "deepseek":
-                streamingModel = deepSeekModelAdapter.createStreamingChatModel(model, apiKey);
-                break;
-            case "doubao":
-                streamingModel = doubaoModelAdapter.createStreamingChatModel(model, apiKey);
-                break;
-            case "siliconflow":
-                streamingModel = siliconFlowChatModelAdapter.createStreamingChatModel(model, apiKey);
-                break;
-            case "claude":
-                streamingModel = createClaudeStreamingChatModel(model, apiKey);
-                break;
-            case "qwen":
-                streamingModel = createQwenStreamingChatModel(model, apiKey);
-                break;
-            case "wenxin":
-                streamingModel = createWenxinStreamingChatModel(model, apiKey);
-                break;
-            case "zhipu":
-                streamingModel = createZhipuStreamingChatModel(model, apiKey);
-                break;
-            default:
-                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
-                    "不支持的AI提供商：" + model.getProviderCode());
-        }
+        // 新方案：通过Provider + Protocol创建模型
+        StreamingChatLanguageModel streamingModel = createStreamingChatModelByProvider(model, apiKey);
         
         // 缓存模型实例
         streamingModelCache.put(cacheKey, streamingModel);
@@ -169,12 +96,78 @@ public class LangChain4jModelFactory {
         return streamingModel;
     }
     
-    // 注意：OpenAI和Grok模型的创建已移至各自的适配器类
-    // - OpenAiModelAdapter: 处理OpenAI官方和兼容API
-    // - GrokModelAdapter: 处理Grok (xAI) API
+    /**
+     * 通过Provider创建聊天模型（核心方法）
+     */
+    private ChatLanguageModel createChatModelByProvider(AiModel model, AiApiKey apiKey) {
+        // 1. 获取Provider配置
+        AiProvider provider = getProvider(model);
+        
+        // 2. 根据Protocol获取适配器
+        ProviderAdapter adapter = getAdapter(provider.getProtocol());
+        
+        // 3. 使用适配器创建模型
+        return adapter.createChatModel(provider, model, apiKey);
+    }
     
     /**
-     * 创建向量模型
+     * 通过Provider创建流式聊天模型（核心方法）
+     */
+    private StreamingChatLanguageModel createStreamingChatModelByProvider(AiModel model, AiApiKey apiKey) {
+        // 1. 获取Provider配置
+        AiProvider provider = getProvider(model);
+        
+        // 2. 根据Protocol获取适配器
+        ProviderAdapter adapter = getAdapter(provider.getProtocol());
+        
+        // 3. 使用适配器创建模型
+        return adapter.createStreamingChatModel(provider, model, apiKey);
+    }
+    
+    /**
+     * 获取Provider（支持降级）
+     */
+    private AiProvider getProvider(AiModel model) {
+        // 优先使用providerId
+        if (model.getProviderId() != null) {
+            return providerRepository.findById(model.getProviderId())
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    "服务商不存在，ID：" + model.getProviderId()));
+        }
+        
+        // 降级：使用providerCode（向后兼容）
+        if (model.getProviderCode() != null && !model.getProviderCode().trim().isEmpty()) {
+            log.warn("模型{}未配置providerId，降级使用providerCode：{}", 
+                    model.getModelKey(), model.getProviderCode());
+            
+            return providerRepository.findByCode(model.getProviderCode())
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    "服务商不存在，代码：" + model.getProviderCode()));
+        }
+        
+        throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
+            "模型既没有providerId也没有providerCode");
+    }
+    
+    /**
+     * 根据协议获取适配器
+     */
+    private ProviderAdapter getAdapter(String protocol) {
+        // 适配器bean名称格式：协议代码 + "Adapter"，对协议做规范化处理
+        String normalized = com.nexusvoice.domain.ai.model.ProviderProtocol.fromCode(protocol).getCode();
+        String adapterBeanName = normalized + "Adapter";
+        ProviderAdapter adapter = adapterMap.get(adapterBeanName);
+        
+        if (adapter == null) {
+            throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                "不支持的协议类型：" + protocol + "，请检查是否有对应的ProviderAdapter实现（期望Bean：" + adapterBeanName + ")");
+        }
+        
+        return adapter;
+    }
+    
+    /**
+     * 创建向量模型（重构版）
      * 
      * @param model AI模型配置
      * @param apiKey API密钥配置
@@ -189,20 +182,8 @@ public class LangChain4jModelFactory {
             return cachedModel;
         }
         
-        // 根据提供商创建不同的模型实例
-        EmbeddingModel embeddingModel;
-        switch (model.getProviderCode().toLowerCase()) {
-            case "siliconflow":
-                embeddingModel = siliconFlowEmbeddingAdapter.createEmbeddingModel(model, apiKey);
-                break;
-            case "openai":
-                // OpenAI官方embedding模型
-                embeddingModel = siliconFlowEmbeddingAdapter.createEmbeddingModel(model, apiKey);
-                break;
-            default:
-                throw new BizException(ErrorCodeEnum.PARAM_ERROR, 
-                    "不支持的向量模型提供商：" + model.getProviderCode());
-        }
+        // 新方案：通过Provider + Protocol创建模型
+        EmbeddingModel embeddingModel = createEmbeddingModelByProvider(model, apiKey);
         
         // 缓存模型实例
         embeddingModelCache.put(cacheKey, embeddingModel);
@@ -212,141 +193,18 @@ public class LangChain4jModelFactory {
     }
     
     /**
-     * 创建Claude聊天模型
+     * 通过Provider创建向量模型（核心方法）
      */
-    private ChatLanguageModel createClaudeChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现Claude模型创建
-        // 需要添加langchain4j-claude依赖并实现
-        log.warn("Claude模型支持尚未实现，使用OpenAI兼容模式");
-        return openAiModelAdapter.createChatModel(model, apiKey);
+    private EmbeddingModel createEmbeddingModelByProvider(AiModel model, AiApiKey apiKey) {
+        // 1. 获取Provider配置
+        AiProvider provider = getProvider(model);
+        
+        // 2. 根据Protocol获取适配器
+        ProviderAdapter adapter = getAdapter(provider.getProtocol());
+        
+        // 3. 使用适配器创建模型
+        return adapter.createEmbeddingModel(provider, model, apiKey);
     }
-    
-    /**
-     * 创建Claude流式聊天模型
-     */
-    private StreamingChatLanguageModel createClaudeStreamingChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现Claude流式模型创建
-        log.warn("Claude流式模型支持尚未实现，使用OpenAI兼容模式");
-        return openAiModelAdapter.createStreamingChatModel(model, apiKey);
-    }
-    
-    /**
-     * 创建通义千问聊天模型
-     */
-    private ChatLanguageModel createQwenChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现通义千问模型创建
-        // 需要添加langchain4j-dashscope依赖并实现
-        log.warn("通义千问模型支持尚未实现，使用OpenAI兼容模式");
-        
-        // 通义千问可能使用OpenAI兼容接口
-        String baseUrl = apiKey.getBaseUrl() != null ? apiKey.getBaseUrl() : 
-                        "https://dashscope.aliyuncs.com/compatible-mode/v1";
-        
-        AiApiKey compatibleKey = new AiApiKey();
-        compatibleKey.setApiKey(apiKey.getApiKey());
-        compatibleKey.setBaseUrl(baseUrl);
-        
-        AiModel compatibleModel = new AiModel();
-        compatibleModel.setModelCode(model.getModelCode());
-        compatibleModel.setDefaultTemperature(model.getDefaultTemperature());
-        compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
-        compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
-        
-        return openAiModelAdapter.createChatModel(compatibleModel, compatibleKey);
-    }
-    
-    /**
-     * 创建通义千问流式聊天模型
-     */
-    private StreamingChatLanguageModel createQwenStreamingChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现通义千问流式模型创建
-        log.warn("通义千问流式模型支持尚未实现，使用OpenAI兼容模式");
-        
-        String baseUrl = apiKey.getBaseUrl() != null ? apiKey.getBaseUrl() : 
-                        "https://dashscope.aliyuncs.com/compatible-mode/v1";
-        
-        AiApiKey compatibleKey = new AiApiKey();
-        compatibleKey.setApiKey(apiKey.getApiKey());
-        compatibleKey.setBaseUrl(baseUrl);
-        
-        AiModel compatibleModel = new AiModel();
-        compatibleModel.setModelCode(model.getModelCode());
-        compatibleModel.setDefaultTemperature(model.getDefaultTemperature());
-        compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
-        compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
-        
-        return openAiModelAdapter.createStreamingChatModel(compatibleModel, compatibleKey);
-    }
-    
-    /**
-     * 创建文心一言聊天模型
-     */
-    private ChatLanguageModel createWenxinChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现文心一言模型创建
-        // 需要添加langchain4j-qianfan依赖并实现
-        log.warn("文心一言模型支持尚未实现");
-        throw new BizException(ErrorCodeEnum.FUNCTION_NOT_IMPLEMENTED, "文心一言模型支持尚未实现");
-    }
-    
-    /**
-     * 创建文心一言流式聊天模型
-     */
-    private StreamingChatLanguageModel createWenxinStreamingChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现文心一言流式模型创建
-        log.warn("文心一言流式模型支持尚未实现");
-        throw new BizException(ErrorCodeEnum.FUNCTION_NOT_IMPLEMENTED, "文心一言流式模型支持尚未实现");
-    }
-    
-    /**
-     * 创建智谱AI聊天模型
-     */
-    private ChatLanguageModel createZhipuChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现智谱AI模型创建
-        // 需要添加langchain4j-zhipu依赖并实现
-        log.warn("智谱AI模型支持尚未实现，使用OpenAI兼容模式");
-        
-        // 智谱AI使用OpenAI兼容接口
-        String baseUrl = apiKey.getBaseUrl() != null ? apiKey.getBaseUrl() : 
-                        "https://open.bigmodel.cn/api/paas/v4";
-        
-        AiApiKey compatibleKey = new AiApiKey();
-        compatibleKey.setApiKey(apiKey.getApiKey());
-        compatibleKey.setBaseUrl(baseUrl);
-        
-        AiModel compatibleModel = new AiModel();
-        compatibleModel.setModelCode(model.getModelCode());
-        compatibleModel.setDefaultTemperature(model.getDefaultTemperature());
-        compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
-        compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
-        
-        return openAiModelAdapter.createChatModel(compatibleModel, compatibleKey);
-    }
-    
-    /**
-     * 创建智谱AI流式聊天模型
-     */
-    private StreamingChatLanguageModel createZhipuStreamingChatModel(AiModel model, AiApiKey apiKey) {
-        // TODO: 实现智谱AI流式模型创建
-        log.warn("智谱AI流式模型支持尚未实现，使用OpenAI兼容模式");
-        
-        String baseUrl = apiKey.getBaseUrl() != null ? apiKey.getBaseUrl() : 
-                        "https://open.bigmodel.cn/api/paas/v4";
-        
-        AiApiKey compatibleKey = new AiApiKey();
-        compatibleKey.setApiKey(apiKey.getApiKey());
-        compatibleKey.setBaseUrl(baseUrl);
-        
-        AiModel compatibleModel = new AiModel();
-        compatibleModel.setModelCode(model.getModelCode());
-        compatibleModel.setDefaultTemperature(model.getDefaultTemperature());
-        compatibleModel.setDefaultMaxTokens(model.getDefaultMaxTokens());
-        compatibleModel.setDefaultTimeoutSeconds(model.getDefaultTimeoutSeconds());
-        
-        return openAiModelAdapter.createStreamingChatModel(compatibleModel, compatibleKey);
-    }
-    
-    // 注意：Grok模型的创建已移至 GrokModelAdapter
-    // OpenAI模型的创建已移至 OpenAiModelAdapter
     
     /**
      * 清除所有缓存

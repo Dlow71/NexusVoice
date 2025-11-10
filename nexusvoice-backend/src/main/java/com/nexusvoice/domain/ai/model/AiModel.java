@@ -24,7 +24,13 @@ import java.util.Map;
 public class AiModel extends BaseDomainEntity {
     
     /**
+     * 服务商ID（外键关联ai_providers.id）
+     */
+    private Long providerId;
+    
+    /**
      * 厂商代码：openai/claude/qwen等
+     * 保留用于向后兼容
      */
     private String providerCode;
     
@@ -32,6 +38,16 @@ public class AiModel extends BaseDomainEntity {
      * 模型代码：gpt-4o-mini/claude-3-opus等
      */
     private String modelCode;
+    
+    /**
+     * 是否官方内置模型
+     */
+    private Boolean isOfficial;
+    
+    /**
+     * 用户ID（自定义模型的创建者）
+     */
+    private Long userId;
     
     /**
      * 模型类型：chat/embedding/rerank

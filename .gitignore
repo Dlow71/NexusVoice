@@ -7,6 +7,8 @@
 .windsurf/
 .DS_Store
 
+面试
+
 # 编译输出目录
 target/
 build/

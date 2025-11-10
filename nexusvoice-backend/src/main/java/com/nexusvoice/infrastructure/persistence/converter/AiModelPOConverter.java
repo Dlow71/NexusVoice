@@ -31,8 +31,11 @@ public class AiModelPOConverter {
         po.setDeleted(model.getDeleted());
         
         // 业务字段
+        po.setProviderId(model.getProviderId());
         po.setProviderCode(model.getProviderCode());
         po.setModelCode(model.getModelCode());
+        po.setIsOfficial(model.getIsOfficial());
+        po.setUserId(model.getUserId());
         po.setModelName(model.getModelName());
         po.setModelType(model.getModelType());
         po.setDescription(model.getDescription());
@@ -68,8 +71,11 @@ public class AiModelPOConverter {
         model.setDeleted(po.getDeleted());
         
         // 业务字段
+        model.setProviderId(po.getProviderId());
         model.setProviderCode(po.getProviderCode());
         model.setModelCode(po.getModelCode());
+        model.setIsOfficial(po.getIsOfficial());
+        model.setUserId(po.getUserId());
         model.setModelType(po.getModelType());
         model.setModelName(po.getModelName());
         model.setDescription(po.getDescription());

@@ -20,7 +20,14 @@ import java.math.BigDecimal;
 public class AiModelPO extends BasePO {
 
     /**
+     * 服务商ID（外键关联ai_providers.id）
+     */
+    @TableField("provider_id")
+    private Long providerId;
+    
+    /**
      * 厂商代码：openai/claude/qwen等
+     * 保留用于向后兼容
      */
     @TableField("provider_code")
     private String providerCode;
@@ -30,6 +37,18 @@ public class AiModelPO extends BasePO {
      */
     @TableField("model_code")
     private String modelCode;
+    
+    /**
+     * 是否官方内置模型
+     */
+    @TableField("is_official")
+    private Boolean isOfficial;
+    
+    /**
+     * 用户ID（自定义模型的创建者）
+     */
+    @TableField("user_id")
+    private Long userId;
 
     /**
      * 模型类型：chat/embedding/rerank
