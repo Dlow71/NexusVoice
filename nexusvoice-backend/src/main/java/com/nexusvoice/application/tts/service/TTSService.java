@@ -52,7 +52,7 @@ public class TTSService {
 
         try {
             // 1. 获取默认TTS模型键（从system_config读取）
-            String modelKey = systemConfigService.getString("tts.default.model", "qiniu:zh_female_wwxkjx");
+            String modelKey = systemConfigService.getString("tts.default.model", "qiniu:qiniu-tts");
             log.info("使用TTS模型：{}", modelKey);
             
             // 2. 获取TTS服务
