@@ -17,6 +17,11 @@ public class DocumentUnit extends BaseDomainEntity {
     private Long fileId;
     
     /**
+     * 关联知识库ID
+     */
+    private Long knowledgeBaseId;
+    
+    /**
      * 单元类型：TEXT-文本，TABLE-表格，IMAGE-图片描述
      */
     private String unitType;
@@ -120,6 +125,13 @@ public class DocumentUnit extends BaseDomainEntity {
     }
     
     /**
+     * 是否已向量化
+     */
+    public boolean isVectorized() {
+        return Boolean.TRUE.equals(this.isVector);
+    }
+    
+    /**
      * 是否需要向量化
      */
     public boolean needsVectorization() {
@@ -161,6 +173,14 @@ public class DocumentUnit extends BaseDomainEntity {
     
     public void setFileId(Long fileId) {
         this.fileId = fileId;
+    }
+    
+    public Long getKnowledgeBaseId() {
+        return knowledgeBaseId;
+    }
+    
+    public void setKnowledgeBaseId(Long knowledgeBaseId) {
+        this.knowledgeBaseId = knowledgeBaseId;
     }
     
     public Integer getPage() {
