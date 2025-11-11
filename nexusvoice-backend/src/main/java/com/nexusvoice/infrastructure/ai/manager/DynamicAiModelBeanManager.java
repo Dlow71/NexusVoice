@@ -14,8 +14,14 @@ import com.nexusvoice.infrastructure.ai.factory.LangChain4jModelFactory;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
+import com.nexusvoice.infrastructure.ai.model.EmbeddingRequest;
+import com.nexusvoice.infrastructure.ai.model.EmbeddingResponse;
+import com.nexusvoice.infrastructure.ai.model.RerankRequest;
+import com.nexusvoice.infrastructure.ai.model.RerankResponse;
 import com.nexusvoice.infrastructure.ai.pool.ApiKeyPoolManager;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
+import com.nexusvoice.infrastructure.ai.service.AiEmbeddingService;
+import com.nexusvoice.infrastructure.ai.service.AiRerankService;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -102,7 +108,19 @@ public class DynamicAiModelBeanManager {
     private final Map<String, DynamicAiVideoService> videoServiceMap = new ConcurrentHashMap<>();
     
     /**
-     * 加载对话、图像、ASR、TTS和视频模型服务
+     * Embedding向量化服务映射表
+     * key: provider:model, value: 该模型的Embedding服务实例
+     */
+    private final Map<String, DynamicAiEmbeddingService> embeddingServiceMap = new ConcurrentHashMap<>();
+    
+    /**
+     * Rerank重排序服务映射表
+     * key: provider:model, value: 该模型的Rerank服务实例
+     */
+    private final Map<String, DynamicAiRerankService> rerankServiceMap = new ConcurrentHashMap<>();
+    
+    /**
+     * 加载所有类型的AI模型服务
      * 由AiModelInitializer统一调度，避免重复查询数据库
      * 
      * @param chatModels 对话模型列表
@@ -110,11 +128,14 @@ public class DynamicAiModelBeanManager {
      * @param asrModels ASR模型列表
      * @param ttsModels TTS模型列表
      * @param videoModels 视频模型列表
+     * @param embeddingModels Embedding模型列表
+     * @param rerankModels Rerank模型列表
      */
     public void loadModels(List<AiModel> chatModels, List<AiModel> imageModels, List<AiModel> asrModels, 
-                          List<AiModel> ttsModels, List<AiModel> videoModels) {
+                          List<AiModel> ttsModels, List<AiModel> videoModels,
+                          List<AiModel> embeddingModels, List<AiModel> rerankModels) {
         try {
-            log.info("开始加载对话、图像、ASR、TTS和视频模型服务...");
+            log.info("开始加载所有AI模型服务...");
             
             // 清空现有服务（用于刷新场景）
             modelServiceMap.clear();
@@ -122,6 +143,8 @@ public class DynamicAiModelBeanManager {
             asrServiceMap.clear();
             ttsServiceMap.clear();
             videoServiceMap.clear();
+            embeddingServiceMap.clear();
+            rerankServiceMap.clear();
             
             // 加载对话模型
             for (AiModel model : chatModels) {
@@ -163,13 +186,29 @@ public class DynamicAiModelBeanManager {
                 log.debug("加载视频模型：{}，名称：{}", modelKey, model.getModelName());
             }
             
-            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型，{}个TTS模型，{}个视频模型", 
+            // 加载Embedding模型
+            for (AiModel model : embeddingModels) {
+                String modelKey = model.getModelKey();
+                DynamicAiEmbeddingService embeddingService = new DynamicAiEmbeddingService(model);
+                embeddingServiceMap.put(modelKey, embeddingService);
+                log.debug("加载Embedding模型：{}，名称：{}", modelKey, model.getModelName());
+            }
+            
+            // 加载Rerank模型
+            for (AiModel model : rerankModels) {
+                String modelKey = model.getModelKey();
+                DynamicAiRerankService rerankService = new DynamicAiRerankService(model);
+                rerankServiceMap.put(modelKey, rerankService);
+                log.debug("加载Rerank模型：{}，名称：{}", modelKey, model.getModelName());
+            }
+            
+            log.info("成功加载{}个对话模型，{}个图像模型，{}个ASR模型，{}个TTS模型，{}个视频模型，{}个Embedding模型，{}个Rerank模型", 
                     modelServiceMap.size(), imageServiceMap.size(), asrServiceMap.size(), 
-                    ttsServiceMap.size(), videoServiceMap.size());
+                    ttsServiceMap.size(), videoServiceMap.size(), embeddingServiceMap.size(), rerankServiceMap.size());
             
         } catch (Exception e) {
-            log.error("加载对话、图像、ASR和TTS模型服务失败", e);
-            throw new RuntimeException("加载对话、图像、ASR和TTS模型服务失败", e);
+            log.error("加载AI模型服务失败", e);
+            throw new RuntimeException("加载AI模型服务失败", e);
         }
     }
     
@@ -1268,6 +1307,310 @@ public class DynamicAiModelBeanManager {
          */
         public String getModelName() {
             return model.getModelName();
+        }
+    }
+    
+    // ==================== Embedding服务相关方法 ====================
+    
+    /**
+     * 获取Embedding服务
+     */
+    public AiEmbeddingService getEmbeddingService(String providerCode, String modelCode) {
+        String modelKey = providerCode + ":" + modelCode;
+        DynamicAiEmbeddingService service = embeddingServiceMap.get(modelKey);
+        
+        if (service == null) {
+            // 尝试动态加载
+            Optional<AiModel> modelOpt = modelRepository.findByProviderAndModel(providerCode, modelCode);
+            if (modelOpt.isEmpty()) {
+                throw new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    String.format("Embedding模型%s不存在", modelKey));
+            }
+            
+            AiModel model = modelOpt.get();
+            if (!model.isEnabled()) {
+                throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                    String.format("Embedding模型%s已禁用", modelKey));
+            }
+            
+            service = new DynamicAiEmbeddingService(model);
+            embeddingServiceMap.put(modelKey, service);
+            log.info("动态加载Embedding模型：{}", modelKey);
+        }
+        
+        return service;
+    }
+    
+    /**
+     * 根据模型键获取Embedding服务
+     */
+    public AiEmbeddingService getEmbeddingServiceByModelKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw BizException.of(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        
+        String[] parts = modelKey.split(":", 2);
+        return getEmbeddingService(parts[0], parts[1]);
+    }
+    
+    /**
+     * 获取所有可用的Embedding模型信息
+     */
+    public List<AiModel> getAvailableEmbeddingModels() {
+        return embeddingServiceMap.values().stream()
+                .map(service -> service.model)
+                .collect(Collectors.toList());
+    }
+    
+    // ==================== Rerank服务相关方法 ====================
+    
+    /**
+     * 获取Rerank服务
+     */
+    public AiRerankService getRerankService(String providerCode, String modelCode) {
+        String modelKey = providerCode + ":" + modelCode;
+        DynamicAiRerankService service = rerankServiceMap.get(modelKey);
+        
+        if (service == null) {
+            // 尝试动态加载
+            Optional<AiModel> modelOpt = modelRepository.findByProviderAndModel(providerCode, modelCode);
+            if (modelOpt.isEmpty()) {
+                throw new BizException(ErrorCodeEnum.DATA_NOT_FOUND, 
+                    String.format("Rerank模型%s不存在", modelKey));
+            }
+            
+            AiModel model = modelOpt.get();
+            if (!model.isEnabled()) {
+                throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                    String.format("Rerank模型%s已禁用", modelKey));
+            }
+            
+            service = new DynamicAiRerankService(model);
+            rerankServiceMap.put(modelKey, service);
+            log.info("动态加载Rerank模型：{}", modelKey);
+        }
+        
+        return service;
+    }
+    
+    /**
+     * 根据模型键获取Rerank服务
+     */
+    public AiRerankService getRerankServiceByModelKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw BizException.of(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        
+        String[] parts = modelKey.split(":", 2);
+        return getRerankService(parts[0], parts[1]);
+    }
+    
+    /**
+     * 获取所有可用的Rerank模型信息
+     */
+    public List<AiModel> getAvailableRerankModels() {
+        return rerankServiceMap.values().stream()
+                .map(service -> service.model)
+                .collect(Collectors.toList());
+    }
+    
+    // ==================== 动态服务内部类 ====================
+    
+    /**
+     * 动态AI Embedding服务内部类
+     * 完全复用密钥池、费用统计、调用日志等基础设施
+     */
+    public class DynamicAiEmbeddingService implements AiEmbeddingService {
+        private final AiModel model;
+        
+        public DynamicAiEmbeddingService(AiModel model) {
+            this.model = model;
+        }
+        
+        @Override
+        public EmbeddingResponse embed(EmbeddingRequest request) {
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            String requestId = UUID.randomUUID().toString();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 获取API密钥
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 2. 调用Embedding服务
+                com.nexusvoice.infrastructure.ai.adapter.EmbeddingAdapter adapter = getEmbeddingAdapter();
+                EmbeddingResponse response = adapter.embed(request, model, apiKey);
+                
+                // 3. 计算费用
+                int totalTokens = response.getTokenUsage() != null ? 
+                        response.getTokenUsage().getTotalTokens() : 0;
+                BigDecimal cost = model.calculateCost(totalTokens, 0);
+                
+                // 4. 记录调用日志
+                callLog = AiApiCallLog.success(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        request.getUserId(), request.getBizId(),
+                        requestId, requestTime,
+                        (int)(System.currentTimeMillis() - startTime),
+                        totalTokens, 0, cost
+                );
+                callLogRepository.save(callLog);
+                
+                // 5. 标记密钥成功
+                apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens);
+                
+                return response;
+                
+            } catch (Exception e) {
+                DynamicAiModelBeanManager.log.error("Embedding调用失败，模型：{}，错误：{}", 
+                        model.getModelKey(), e.getMessage(), e);
+                
+                // 标记密钥失败
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            request.getUserId(), request.getBizId(),
+                            requestId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                return EmbeddingResponse.error("Embedding调用失败：" + e.getMessage());
+            }
+        }
+        
+        /**
+         * 获取Embedding适配器
+         */
+        private com.nexusvoice.infrastructure.ai.adapter.EmbeddingAdapter getEmbeddingAdapter() {
+            // 暂时返回null，后续实现适配器后补充
+            // TODO: 实现适配器选择逻辑
+            throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, 
+                    "Embedding适配器尚未实现");
+        }
+        
+        @Override
+        public String getModelName() {
+            return model.getModelName();
+        }
+        
+        @Override
+        public boolean isModelAvailable() {
+            return model.isEnabled() && 
+                   apiKeyPoolManager.getAvailableKeyCount(model.getProviderCode(), model.getModelCode()) > 0;
+        }
+        
+        @Override
+        public int estimateTokenCount(String text) {
+            // 简单估算：1个中文字符≈1.5tokens，1个英文单词≈1.3tokens
+            return (int)(text.length() * 1.5);
+        }
+    }
+    
+    /**
+     * 动态AI Rerank服务内部类
+     * 完全复用密钥池、费用统计、调用日志等基础设施
+     */
+    public class DynamicAiRerankService implements AiRerankService {
+        private final AiModel model;
+        
+        public DynamicAiRerankService(AiModel model) {
+            this.model = model;
+        }
+        
+        @Override
+        public RerankResponse rerank(RerankRequest request) {
+            long startTime = System.currentTimeMillis();
+            LocalDateTime requestTime = LocalDateTime.now();
+            String requestId = UUID.randomUUID().toString();
+            
+            AiApiKey apiKey = null;
+            AiApiCallLog callLog = null;
+            
+            try {
+                // 1. 获取API密钥
+                apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+                
+                // 2. 调用Rerank服务
+                com.nexusvoice.infrastructure.ai.adapter.RerankAdapter adapter = getRerankAdapter();
+                RerankResponse response = adapter.rerank(request, model, apiKey);
+                
+                // 3. 计算费用
+                int totalTokens = response.getTokenUsage() != null ? 
+                        response.getTokenUsage().getTotalTokens() : 0;
+                BigDecimal cost = model.calculateCost(totalTokens, 0);
+                
+                // 4. 记录调用日志
+                callLog = AiApiCallLog.success(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        request.getUserId(), request.getBizId(),
+                        requestId, requestTime,
+                        (int)(System.currentTimeMillis() - startTime),
+                        totalTokens, 0, cost
+                );
+                callLogRepository.save(callLog);
+                
+                // 5. 标记密钥成功
+                apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens);
+                
+                return response;
+                
+            } catch (Exception e) {
+                DynamicAiModelBeanManager.log.error("Rerank调用失败，模型：{}，错误：{}", 
+                        model.getModelKey(), e.getMessage(), e);
+                
+                // 标记密钥失败
+                if (apiKey != null) {
+                    apiKeyPoolManager.markFailed(apiKey.getId());
+                }
+                
+                // 记录失败日志
+                if (apiKey != null) {
+                    callLog = AiApiCallLog.failure(
+                            apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                            request.getUserId(), request.getBizId(),
+                            requestId, requestTime, e.getMessage()
+                    );
+                    callLogRepository.save(callLog);
+                }
+                
+                return RerankResponse.error("Rerank调用失败：" + e.getMessage());
+            }
+        }
+        
+        /**
+         * 获取Rerank适配器
+         */
+        private com.nexusvoice.infrastructure.ai.adapter.RerankAdapter getRerankAdapter() {
+            // 暂时返回null，后续实现适配器后补充
+            // TODO: 实现适配器选择逻辑
+            throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, 
+                    "Rerank适配器尚未实现");
+        }
+        
+        @Override
+        public String getModelName() {
+            return model.getModelName();
+        }
+        
+        @Override
+        public boolean isModelAvailable() {
+            return model.isEnabled() && 
+                   apiKeyPoolManager.getAvailableKeyCount(model.getProviderCode(), model.getModelCode()) > 0;
+        }
+        
+        @Override
+        public int estimateTokenCount(String text) {
+            // 简单估算：1个中文字符≈1.5tokens，1个英文单词≈1.3tokens
+            return (int)(text.length() * 1.5);
         }
     }
 }
