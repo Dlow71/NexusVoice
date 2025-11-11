@@ -15,6 +15,7 @@ public enum FileType {
     DOC("DOC", "application/msword", Arrays.asList(".doc")),
     TXT("TXT", "text/plain", Arrays.asList(".txt")),
     MD("MD", "text/markdown", Arrays.asList(".md", ".markdown")),
+    MARKDOWN("MARKDOWN", "text/markdown", Arrays.asList(".md", ".markdown")),
     PPTX("PPTX", "application/vnd.openxmlformats-officedocument.presentationml.presentation", Arrays.asList(".pptx")),
     PPT("PPT", "application/vnd.ms-powerpoint", Arrays.asList(".ppt")),
     XLSX("XLSX", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", Arrays.asList(".xlsx")),

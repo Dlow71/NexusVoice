@@ -99,6 +99,27 @@ public class MQTopicConstants {
      */
     public static final String TOPIC_NOTIFICATION_PUSH = "notification_push_topic";
     
+    // ==================== RAG文档处理相关主题 ====================
+    /**
+     * RAG文档上传主题
+     */
+    public static final String TOPIC_RAG_DOCUMENT_UPLOAD = "rag_document_upload_topic";
+    
+    /**
+     * RAG文档解析处理主题（阶段1：结构化解析与原文分割）
+     */
+    public static final String TOPIC_RAG_DOCUMENT_PROCESS = "rag_document_process_topic";
+    
+    /**
+     * RAG文档向量化主题（阶段2：翻译增强与智能分割）
+     */
+    public static final String TOPIC_RAG_DOCUMENT_VECTORIZE = "rag_document_vectorize_topic";
+    
+    /**
+     * RAG文档处理失败主题
+     */
+    public static final String TOPIC_RAG_DOCUMENT_FAILED = "rag_document_failed_topic";
+    
     // ==================== 系统相关主题 ====================
     /**
      * 系统配置变更主题
