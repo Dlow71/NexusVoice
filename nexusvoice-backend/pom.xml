@@ -36,6 +36,7 @@
     <tika.version>2.6.0</tika.version>
     <commons-io.version>2.16.1</commons-io.version>
     <pgvector.version>0.1.6</pgvector.version>
+    <flexmark.version>0.64.8</flexmark.version>
     <!-- gRPC/Protobuf版本 - WebRTC实时语音对话 -->
     <grpc.version>1.60.0</grpc.version>
     <protobuf.version>3.25.1</protobuf.version>
@@ -213,6 +214,13 @@
       <groupId>commons-io</groupId>
       <artifactId>commons-io</artifactId>
       <version>${commons-io.version}</version>
+    </dependency>
+
+    <!-- Flexmark Markdown解析器 -->
+    <dependency>
+      <groupId>com.vladsch.flexmark</groupId>
+      <artifactId>flexmark-all</artifactId>
+      <version>${flexmark.version}</version>
     </dependency>
 
     <!-- LangChain4j POI文档解析器集成 -->

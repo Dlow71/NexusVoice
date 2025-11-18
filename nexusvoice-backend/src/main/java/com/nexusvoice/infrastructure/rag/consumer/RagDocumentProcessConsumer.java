@@ -12,6 +12,8 @@ import com.nexusvoice.domain.rag.service.DocumentProcessingStrategy;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.mq.consumer.AbstractMessageListener;
+import com.nexusvoice.domain.mq.repository.MessageRepository;
+import com.nexusvoice.domain.mq.model.Message;
 import com.nexusvoice.infrastructure.rag.factory.DocumentProcessingStrategyFactory;
 import com.nexusvoice.infrastructure.rag.service.DocumentUnitSaveService;
 import com.nexusvoice.infrastructure.rag.service.FileStorageService;
@@ -45,6 +47,7 @@ public class RagDocumentProcessConsumer extends AbstractMessageListener<Map<Stri
     private final DocumentProcessingStrategyFactory strategyFactory;
     private final FileStorageService fileStorageService;
     private final DocumentUnitSaveService documentUnitSaveService;
+    private final MessageRepository messageRepository;
     
     @Override
     protected String getTopic() {
@@ -100,12 +103,21 @@ public class RagDocumentProcessConsumer extends AbstractMessageListener<Map<Stri
         // 7. 保存分割结果到DocumentUnit表
         saveSegments(fileDetail, segments);
         
-        // 8. 更新文件状态为已完成
-        fileDetail.setProcessStatus(ProcessStatus.COMPLETED);
-        fileDetail.setProcessedAt(java.time.LocalDateTime.now());
-        fileDetailRepository.save(fileDetail);
+        // 8. 发送向量化任务，更新状态为向量化中
+        fileDetailRepository.updateStatus(fileId, ProcessStatus.VECTORIZING);
+        try {
+            Message<java.util.Map<String, Object>> vecMsg = Message.createNormalMessage(
+                    MQTopicConstants.TOPIC_RAG_DOCUMENT_VECTORIZE,
+                    java.util.Map.of("fileId", fileId)
+            );
+            messageRepository.send(vecMsg);
+            log.info("已发送向量化任务 - 文件ID: {}", fileId);
+        } catch (Exception e) {
+            log.error("发送向量化任务失败 - 文件ID: {}", fileId, e);
+            throw new BizException(ErrorCodeEnum.MQ_SEND_ERROR, "发送向量化任务失败");
+        }
         
-        log.info("RAG文档处理完成 - 文件ID: {}, 段落数: {}", fileId, segments.size());
+        log.info("RAG文档阶段1完成（解析+分割） - 文件ID: {}, 段落数: {}", fileId, segments.size());
     }
     
     /**
@@ -168,7 +180,12 @@ public class RagDocumentProcessConsumer extends AbstractMessageListener<Map<Stri
         
         log.error("RAG文档处理失败 - 文件ID: {}, 错误信息: {}", fileId, e.getMessage(), e);
         
-        // TODO: 更新FileDetail状态为失败，记录错误信息
+        try {
+            fileDetailRepository.updateStatus(fileId, ProcessStatus.FAILED);
+            fileDetailRepository.updateError(fileId, "PROCESS_FAILED", e.getMessage());
+        } catch (Exception ex) {
+            log.error("更新文件状态为失败时出错 - 文件ID: {}", fileId, ex);
+        }
     }
     
     @Override

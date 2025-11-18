@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -104,7 +105,8 @@ public class DocumentVectorizationServiceImpl {
             EmbeddingRequest request = EmbeddingRequest.builder()
                     .text(unit.getContent())
                     .userId(null) // TODO: 可以通过fileId查询获取userId
-                    .bizId("doc_unit:" + unit.getId())
+                    // 注意：日志系统将 bizId 作为 Long conversationId 记录，这里传入数值避免解析异常
+                    .bizId(String.valueOf(unit.getId()))
                     .build();
             
             // 3. 生成向量
@@ -118,8 +120,19 @@ public class DocumentVectorizationServiceImpl {
             List<Float> embedding = response.getVector();
             
             // 4. 保存向量到vector_store表
-            // TODO: VectorStoreRepository需要实现saveVector方法
-            // vectorStoreRepository.saveVector(unit.getKnowledgeBaseId(), unit.getId(), embedding, embeddingModel);
+            com.nexusvoice.domain.rag.model.entity.VectorStore vectorStore = 
+                    new com.nexusvoice.domain.rag.model.entity.VectorStore();
+            vectorStore.setDocumentUnitId(unit.getId());
+            vectorStore.setEmbeddingModel(embeddingModel);
+            vectorStore.setEmbedding(embedding);
+            vectorStore.setEmbeddingDimension(embedding.size());
+            
+            // 添加metadata用于后续过滤
+            vectorStore.addMetadata("knowledge_base_id", unit.getKnowledgeBaseId());
+            vectorStore.addMetadata("file_id", unit.getFileId());
+            vectorStore.addMetadata("page", unit.getPage());
+            
+            vectorStoreRepository.save(vectorStore);
             
             // 5. 标记为已向量化
             unit.markVectorized();
@@ -173,7 +186,8 @@ public class DocumentVectorizationServiceImpl {
             EmbeddingRequest request = EmbeddingRequest.builder()
                     .texts(texts)
                     .userId(null) // TODO: 可以通过fileId查询获取userId
-                    .bizId("batch_vectorize")
+                    // 批量场景无需写bizId，避免被当作Long解析
+                    .bizId(null)
                     .build();
             
             // 3. 批量生成向量
@@ -187,15 +201,30 @@ public class DocumentVectorizationServiceImpl {
             List<List<Float>> embeddings = response.getVectors();
             
             // 4. 批量保存向量
+            List<com.nexusvoice.domain.rag.model.entity.VectorStore> vectorStores = new ArrayList<>();
             for (int i = 0; i < validUnits.size(); i++) {
                 DocumentUnit unit = validUnits.get(i);
                 List<Float> embedding = embeddings.get(i);
                 
-                // TODO: VectorStoreRepository需要实现saveVector方法
-                // vectorStoreRepository.saveVector(unit.getKnowledgeBaseId(), unit.getId(), embedding, embeddingModel);
+                // 创建VectorStore实体
+                com.nexusvoice.domain.rag.model.entity.VectorStore vectorStore = 
+                        new com.nexusvoice.domain.rag.model.entity.VectorStore();
+                vectorStore.setDocumentUnitId(unit.getId());
+                vectorStore.setEmbeddingModel(embeddingModel);
+                vectorStore.setEmbedding(embedding);
+                vectorStore.setEmbeddingDimension(embedding.size());
                 
+                // 添加metadata
+                vectorStore.addMetadata("knowledge_base_id", unit.getKnowledgeBaseId());
+                vectorStore.addMetadata("file_id", unit.getFileId());
+                vectorStore.addMetadata("page", unit.getPage());
+                
+                vectorStores.add(vectorStore);
                 unit.markVectorized();
             }
+            
+            // 批量保存向量
+            vectorStoreRepository.saveAll(vectorStores);
             
             // 5. 批量更新状态
             documentUnitRepository.saveAll(validUnits);

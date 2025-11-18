@@ -72,6 +72,12 @@ public class DynamicAiModelBeanManager {
     private com.nexusvoice.infrastructure.ai.model.SiliconFlowAsrAdapter siliconFlowAsrAdapter;
     
     @Autowired(required = false)
+    private com.nexusvoice.infrastructure.ai.model.SiliconFlowEmbeddingAdapter siliconFlowEmbeddingAdapter;
+    
+    @Autowired(required = false)
+    private com.nexusvoice.infrastructure.ai.model.SiliconFlowRerankAdapter siliconFlowRerankAdapter;
+    
+    @Autowired(required = false)
     private com.nexusvoice.infrastructure.tts.adapter.QiniuTtsAdapter qiniuTtsAdapter;
     
     @Autowired(required = false)
@@ -1450,9 +1456,11 @@ public class DynamicAiModelBeanManager {
                 BigDecimal cost = model.calculateCost(totalTokens, 0);
                 
                 // 4. 记录调用日志
+                Long userId = request.getUserId() != null ? Long.parseLong(request.getUserId().toString()) : null;
+                Long bizId = request.getBizId() != null ? Long.parseLong(request.getBizId().toString()) : null;
                 callLog = AiApiCallLog.success(
                         apiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                        request.getUserId(), request.getBizId(),
+                        userId, bizId,
                         requestId, requestTime,
                         (int)(System.currentTimeMillis() - startTime),
                         totalTokens, 0, cost
@@ -1460,7 +1468,7 @@ public class DynamicAiModelBeanManager {
                 callLogRepository.save(callLog);
                 
                 // 5. 标记密钥成功
-                apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens);
+                apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens, cost);
                 
                 return response;
                 
@@ -1475,9 +1483,11 @@ public class DynamicAiModelBeanManager {
                 
                 // 记录失败日志
                 if (apiKey != null) {
+                    Long userId = request.getUserId() != null ? Long.parseLong(request.getUserId().toString()) : null;
+                    Long bizId = request.getBizId() != null ? Long.parseLong(request.getBizId().toString()) : null;
                     callLog = AiApiCallLog.failure(
                             apiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                            request.getUserId(), request.getBizId(),
+                            userId, bizId,
                             requestId, requestTime, e.getMessage()
                     );
                     callLogRepository.save(callLog);
@@ -1491,10 +1501,20 @@ public class DynamicAiModelBeanManager {
          * 获取Embedding适配器
          */
         private com.nexusvoice.infrastructure.ai.adapter.EmbeddingAdapter getEmbeddingAdapter() {
-            // 暂时返回null，后续实现适配器后补充
-            // TODO: 实现适配器选择逻辑
+            String providerCode = model.getProviderCode();
+            
+            // 根据提供商代码选择适配器
+            if ("siliconflow".equalsIgnoreCase(providerCode)) {
+                if (siliconFlowEmbeddingAdapter == null) {
+                    throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, 
+                            "SiliconFlow Embedding适配器未初始化");
+                }
+                return siliconFlowEmbeddingAdapter;
+            }
+            
+            // 未来扩展其他厂商：openai, azure等
             throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, 
-                    "Embedding适配器尚未实现");
+                    "不支持的Embedding提供商：" + providerCode);
         }
         
         @Override
@@ -1549,9 +1569,11 @@ public class DynamicAiModelBeanManager {
                 BigDecimal cost = model.calculateCost(totalTokens, 0);
                 
                 // 4. 记录调用日志
+                Long userId = request.getUserId() != null ? Long.parseLong(request.getUserId().toString()) : null;
+                Long bizId = request.getBizId() != null ? Long.parseLong(request.getBizId().toString()) : null;
                 callLog = AiApiCallLog.success(
                         apiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                        request.getUserId(), request.getBizId(),
+                        userId, bizId,
                         requestId, requestTime,
                         (int)(System.currentTimeMillis() - startTime),
                         totalTokens, 0, cost
@@ -1559,7 +1581,7 @@ public class DynamicAiModelBeanManager {
                 callLogRepository.save(callLog);
                 
                 // 5. 标记密钥成功
-                apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens);
+                apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens, cost);
                 
                 return response;
                 
@@ -1574,9 +1596,11 @@ public class DynamicAiModelBeanManager {
                 
                 // 记录失败日志
                 if (apiKey != null) {
+                    Long userId = request.getUserId() != null ? Long.parseLong(request.getUserId().toString()) : null;
+                    Long bizId = request.getBizId() != null ? Long.parseLong(request.getBizId().toString()) : null;
                     callLog = AiApiCallLog.failure(
                             apiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                            request.getUserId(), request.getBizId(),
+                            userId, bizId,
                             requestId, requestTime, e.getMessage()
                     );
                     callLogRepository.save(callLog);
@@ -1590,10 +1614,20 @@ public class DynamicAiModelBeanManager {
          * 获取Rerank适配器
          */
         private com.nexusvoice.infrastructure.ai.adapter.RerankAdapter getRerankAdapter() {
-            // 暂时返回null，后续实现适配器后补充
-            // TODO: 实现适配器选择逻辑
+            String providerCode = model.getProviderCode();
+            
+            // 根据提供商代码选择适配器
+            if ("siliconflow".equalsIgnoreCase(providerCode)) {
+                if (siliconFlowRerankAdapter == null) {
+                    throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, 
+                            "SiliconFlow Rerank适配器未初始化");
+                }
+                return siliconFlowRerankAdapter;
+            }
+            
+            // 未来扩展其他厂商：openai, cohere等
             throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, 
-                    "Rerank适配器尚未实现");
+                    "不支持的Rerank提供商：" + providerCode);
         }
         
         @Override

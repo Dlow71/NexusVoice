@@ -71,14 +71,8 @@ public class AiModelInitializer {
                     modelsByType.getOrDefault("image", List.of()),
                     modelsByType.getOrDefault("asr", List.of()),
                     modelsByType.getOrDefault("tts", List.of()),
-                    modelsByType.getOrDefault("video", List.of())
-            );
-            
-            embeddingBeanManager.loadModels(
-                    modelsByType.getOrDefault("embedding", List.of())
-            );
-            
-            rerankBeanManager.loadModels(
+                    modelsByType.getOrDefault("video", List.of()),
+                    modelsByType.getOrDefault("embedding", List.of()),
                     modelsByType.getOrDefault("rerank", List.of())
             );
             
@@ -115,14 +109,8 @@ public class AiModelInitializer {
                     modelsByType.getOrDefault("image", List.of()),
                     modelsByType.getOrDefault("asr", List.of()),
                     modelsByType.getOrDefault("tts", List.of()),
-                    modelsByType.getOrDefault("video", List.of())
-            );
-            
-            embeddingBeanManager.loadModels(
-                    modelsByType.getOrDefault("embedding", List.of())
-            );
-            
-            rerankBeanManager.loadModels(
+                    modelsByType.getOrDefault("video", List.of()),
+                    modelsByType.getOrDefault("embedding", List.of()),
                     modelsByType.getOrDefault("rerank", List.of())
             );
             

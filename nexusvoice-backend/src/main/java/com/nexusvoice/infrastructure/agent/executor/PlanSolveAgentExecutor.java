@@ -3,6 +3,7 @@ package com.nexusvoice.infrastructure.agent.executor;
 import com.nexusvoice.domain.agent.model.*;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -35,9 +36,12 @@ public class PlanSolveAgentExecutor extends BaseAgentExecutor {
     private SummaryAgent summaryAgent;
     
     /**
-     * 线程池（用于并行执行任务）
+     * 虚拟线程池（用于并行执行任务）
+     * 使用虚拟线程池替代传统线程池，适合I/O密集型的Agent任务并行执行
      */
-    private final ExecutorService executorService = Executors.newFixedThreadPool(5);
+    @Autowired
+    @Qualifier("commonVirtualThreadExecutor")
+    private ExecutorService executorService;
     
     @Override
     protected String executeStep(Agent agent, AgentContext context) {
@@ -293,18 +297,11 @@ public class PlanSolveAgentExecutor extends BaseAgentExecutor {
     
     /**
      * 清理资源
+     * 注意：虚拟线程池由Spring容器管理，这里不需要手动关闭
      */
     public void shutdown() {
-        log.info("关闭PlanSolve执行器线程池");
-        executorService.shutdown();
-        try {
-            if (!executorService.awaitTermination(60, TimeUnit.SECONDS)) {
-                executorService.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            executorService.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
+        log.info("PlanSolve执行器虚拟线程池由Spring容器管理，无需手动关闭");
+        // 虚拟线程池由Spring容器统一管理，这里不需要手动关闭
     }
 }
 

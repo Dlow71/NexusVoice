@@ -184,25 +184,25 @@ public class DynamicAiRerankBeanManager {
                 // 1. 获取API密钥
                 apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
                 
-                // 2. 调用重排序API
-                RerankResponse.RerankResult[] results = rerankAdapter.rerank(
-                        model, apiKey, 
-                        request.getQuery(), 
-                        request.getDocuments(), 
-                        request.getActualTopN()
-                );
+                // 2. 调用重排序API（使用新的接口签名）
+                RerankResponse response = rerankAdapter.rerank(request, model, apiKey);
                 
-                // 3. 计算token和费用
-                int totalTokens = estimateTokenCount(request.getQuery());
-                for (String doc : request.getDocuments()) {
-                    totalTokens += estimateTokenCount(doc);
+                // 3. 检查响应
+                if (!Boolean.TRUE.equals(response.getSuccess())) {
+                    throw new BizException(ErrorCodeEnum.AI_SERVICE_ERROR, 
+                            "重排序失败：" + response.getErrorMessage());
                 }
+                
+                // 4. 计算token和费用
+                int totalTokens = response.getTokenUsage() != null ? 
+                        response.getTokenUsage().getTotalTokens() : 
+                        rerankAdapter.estimateTokenCount(request.getQuery(), request.getDocuments());
                 BigDecimal cost = model.calculateCost(totalTokens, 0);
                 
-                // 4. 更新密钥使用统计
+                // 5. 更新密钥使用统计
                 apiKeyPoolManager.markSuccess(apiKey.getId(), totalTokens, cost);
                 
-                // 5. 记录调用日志（Rerank模型没有conversationId，传null）
+                // 6. 记录调用日志（Rerank模型没有conversationId，传null）
                 AiApiCallLog callLog = AiApiCallLog.success(
                         apiKey.getId(), model.getProviderCode(), model.getModelCode(),
                         request.getUserId(), null,
@@ -213,9 +213,8 @@ public class DynamicAiRerankBeanManager {
                 com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
                 callLogRepository.save(callLog);
                 
-                // 6. 构建响应
-                long duration = System.currentTimeMillis() - startTime;
-                return RerankResponse.success(Arrays.asList(results), model.getModelKey(), totalTokens, duration);
+                // 7. 返回响应
+                return response;
                 
             } catch (Exception e) {
                 log.error("重排序请求失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
@@ -251,7 +250,8 @@ public class DynamicAiRerankBeanManager {
         
         @Override
         public int estimateTokenCount(String text) {
-            return rerankAdapter.estimateTokenCount(text);
+            // 使用接口的默认实现
+            return rerankAdapter.estimateTextTokenCount(text);
         }
     }
 }

@@ -23,8 +23,9 @@ public class VectorStorePO {
 
     /**
      * 主键ID（UUID）
+     * 注意：历史表结构使用列名 embedding_id，这里与之对齐
      */
-    @TableId(value = "id", type = IdType.ASSIGN_UUID)
+    @TableId(value = "embedding_id", type = IdType.ASSIGN_UUID)
     private String id;
 
     /**
@@ -46,9 +47,9 @@ public class VectorStorePO {
     private Integer embeddingDimension;
 
     /**
-     * 向量数据（PostgreSQL的vector类型在Java中用List<Float>表示）
+     * 向量数据（PostgreSQL pgvector），使用自定义TypeHandler
      */
-    @TableField("embedding")
+    @TableField(value = "embedding", typeHandler = com.nexusvoice.infrastructure.persistence.typehandler.PGVectorTypeHandler.class)
     private List<Float> embedding;
 
     /**

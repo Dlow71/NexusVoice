@@ -101,9 +101,9 @@ public class VectorStoreRepositoryImpl implements VectorStoreRepository {
 
     @Override
     public List<VectorStore> findSimilarInFile(Long fileId, List<Float> queryEmbedding, int limit) {
-        // 需要自定义SQL查询，这里简化处理
-        // 实际应该通过JOIN查询document_units表来过滤fileId
-        return findSimilar(queryEmbedding, limit);
+        String embeddingStr = vectorToString(queryEmbedding);
+        List<VectorStorePO> poList = mapper.searchSimilarInFile(embeddingStr, fileId, limit);
+        return poList.stream().map(converter::toDomain).collect(Collectors.toList());
     }
 
     @Override
@@ -146,10 +146,8 @@ public class VectorStoreRepositoryImpl implements VectorStoreRepository {
 
     @Override
     public boolean deleteById(Long id) {
-        // VectorStore使用String(UUID)作为ID，这里参数不对
-        // 需要先通过其他方式查找对应的UUID
-        // 简化处理：假设传入的是documentUnitId
-        return deleteByDocumentUnitId(id);
+        // 该仓储实体主键为UUID字符串，避免误删，这里不支持通过Long删除
+        return false;
     }
 
     @Override
