@@ -162,7 +162,6 @@
       <groupId>org.postgresql</groupId>
       <artifactId>postgresql</artifactId>
       <version>42.7.3</version>
-      <scope>runtime</scope>
     </dependency>
     
     <!-- PGVector扩展已移至上方RAG文档处理依赖区域 -->
