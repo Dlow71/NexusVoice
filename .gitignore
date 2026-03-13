@@ -73,3 +73,8 @@ yarn-error.log*
 Thumbs.db
 ehthumbs.db
 Desktop.ini
+
+# 文档类 MD 文件（保留 README.md）
+*.md
+!README.md
+!CHANGELOG.md
