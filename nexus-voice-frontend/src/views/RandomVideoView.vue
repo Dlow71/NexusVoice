@@ -27,21 +27,24 @@
 
     <!-- 滑动模式容器 -->
     <div v-if="viewMode === 'swipe'" :class="['swipe-container', { 'no-snap': isRotatingSwipe }]" ref="swipeContainer" @scroll="handleSwipeScroll">
-      <div 
-        v-for="(item, index) in videoCache" 
-        :key="item.url || index"
-        class="swipe-item">
+        <div 
+          v-for="(item, index) in videoCache" 
+          :key="item.id"
+          class="swipe-item">
         <!-- 视频容器 -->
         <div class="swipe-video-wrapper">
           <video
-            :ref="el => setVideoRef(el, index)"
+            :ref="el => setSwipeVideoRef(el, item.id)"
+            :src="item.url"
             playsinline
-            muted
+            :muted="isMuted"
             webkit-playsinline
             x5-playsinline
-            preload="auto"
+            :preload="getSwipePreload(index)"
             :data-index="index"
             class="swipe-video"
+            @loadeddata="handleSwipeLoaded(index)"
+            @error="handleSwipeError(index)"
             @click="handleSwipeVideoClick"
           ></video>
           
@@ -90,7 +93,7 @@
             @ended="onEnded"
             @error="onError"
             playsinline
-            preload="auto"
+            preload="metadata"
           ></video>
         </div>
       </div>
@@ -117,11 +120,11 @@
         <div class="preview-scroll">
           <div 
             v-for="(item, index) in displayedVideos" 
-            :key="index"
+            :key="item.id"
             @click="switchToVideo(index)"
             :class="['preview-item', { 
               active: currentVideoIndex === index,
-              loading: !item.loaded 
+              loading: currentVideoIndex === index && isLoading
             }]">
             <!-- 缩略图或占位符 -->
             <div class="preview-thumbnail">
@@ -135,8 +138,7 @@
               <span class="pulse-dot"></span>
               <span>播放中</span>
             </div>
-            <!-- 加载中指示 -->
-            <div v-else-if="!item.loaded" class="loading-indicator">
+            <div v-else-if="index === 0 && isLoading" class="loading-indicator">
               <div class="mini-spinner"></div>
             </div>
             <!-- 序号 -->
@@ -158,7 +160,7 @@ const router = useRouter();
 // DOM引用
 const videoPlayer = ref(null);
 const swipeContainer = ref(null);
-const videoRefs = ref([]);
+const swipeVideoRefMap = new Map();
 
 // 计算属性：列表模式显示的视频（当前+下一条）
 const displayedVideos = computed(() => {
@@ -182,30 +184,23 @@ const swipeCurrentIndex = ref(0);
 const swipeVideoPaused = ref(true);
 const isRotatingSwipe = ref(false);
 let scrollTimeout = null;
-
-// 检测设备类型
-const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+let itemSequence = 0;
 
 // 配置常量（按需加载策略）
 const config = {
   MAX_RETRIES: 3,
-  MAX_CACHE_SIZE: 2,  // 滑动模式：仅缓存2条（当前+下一条），单视频/列表模式：缓存3条
-  PRELOAD_COUNT: 1,   // 仅预加载1条下一个视频
+  MAX_CACHE_SIZE: 3,
+  PRELOAD_COUNT: 1,
   VIDEO_LOAD_TIMEOUT: 10000,  // 视频加载超时10秒
   API_RATE_LIMIT: 1200,  // API调用最小间隔（毫秒），防止被限流
   BASE_API_URLS: [
-    'https://v2.xxapi.cn/api/meinv?return=302',
-    'https://api.jkyai.top/API/jxhssp.php',
-    'https://api.jkyai.top/API/jxbssp.php',
-    'https://api.jkyai.top/API/rmtmsp/api.php',
-    'https://api.jkyai.top/API/qcndxl.php',
     'https://www.hhlqilongzhu.cn/api/MP4_xiaojiejie.php',
     'https://api.yujn.cn/api/zzxjj.php?type=video'
   ],
   API_317AK_BASE: 'https://api.317ak.cn/api/',
   API_317AK_PARAMS: '?ckey=1LJFEBWBK52F50SZK82S',
   API_317AK_PATHS: [
-    'sp/jmxl', 'jhsp', 'sp/xtmx', 'sp/gzhy', 'sp/ttbm',
+    'sp/jmxl', 'sp/xtmx', 'sp/gzhy', 'sp/ttbm',
     'sp/xqhh', 'sp/xxmm', 'sp/hljj', 'sp/lbjj', 'sp/xlmn',
     'sp/ttmn', 'sp/lbll', 'sp/duilian', 'sp/qmtj', 'sp/didjj',
     'sp/lbxg', 'sp/ldxl', 'sp/qfhy', 'sp/zycx', 'sp/hzxl',
@@ -223,103 +218,76 @@ const config = {
 };
 
 // 缓存管理（简单队列）
-const videoCache = ref([]);  // 视频队列，最多3条
+const videoCache = ref([]);
 const isCaching = ref(false);
 let currentApiIndex = -1;
 let current317akIndex = -1;
 let retryAttempts = 0;
-// 移除黑屏定时重置逻辑，改为最小缓存策略降低卡顿
 let lastApiCallTime = 0;  // 上次API调用时间，用于频率限制
+const createVideoItem = (url) => ({
+  id: `random-video-${Date.now()}-${itemSequence++}`,
+  url,
+  loaded: false,
+  thumbnail: null,
+  loadError: false
+});
 
-// 生成视频缩略图
-const generateThumbnail = (videoElement) => {
-  try {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 120;
-    canvas.height = 213;
-    ctx.drawImage(videoElement, 0, 0, 120, 213);
-    return canvas.toDataURL('image/jpeg', 0.7);
-  } catch (error) {
-    // CORS跨域导致canvas污染，静默处理，使用占位符
-    if (error.name === 'SecurityError') {
-      return null;
-    }
-    console.error('生成缩略图失败:', error);
+const setSwipeVideoRef = (el, id) => {
+  if (el) {
+    swipeVideoRefMap.set(id, el);
+    el.loop = true;
+    el.muted = isMuted.value;
+  } else {
+    swipeVideoRefMap.delete(id);
+  }
+};
+
+const getSwipeVideoElement = (index) => {
+  const item = videoCache.value[index];
+  if (!item) {
     return null;
   }
+  return swipeVideoRefMap.get(item.id) || null;
 };
 
-// 切换到指定视频（列表模式使用，保持两条缓存语义）
-const switchToVideo = (index) => {
+const getSwipePreload = (index) => {
+  if (index === swipeCurrentIndex.value) {
+    return 'auto';
+  }
+  if (index === swipeCurrentIndex.value + 1) {
+    return 'metadata';
+  }
+  return 'none';
+};
+
+const clearPlayerSource = () => {
+  if (!videoPlayer.value) {
+    return;
+  }
+  videoPlayer.value.pause();
+  videoPlayer.value.removeAttribute('src');
+  videoPlayer.value.load();
+};
+
+const switchToVideo = async (index) => {
   if (index < 0 || index >= videoCache.value.length) return;
-  const item = videoCache.value[index];
-  if (!item || !item.loaded) return;
 
-  if (index === currentVideoIndex.value) {
-    // 点击当前，直接按缓存播放
-    loadVideoFromCache();
+  if (index === 0) {
+    await loadVideoFromCache();
     return;
   }
-  if (index === currentVideoIndex.value + 1) {
-    // 点击下一条，后续进行预取+轮转
-    currentVideoIndex.value = index;
-    loadVideoFromCache();
-    return;
-  }
-};
 
-// 设置视频引用（简单的ref管理）
-const setVideoRef = (el, index) => {
-  if (el) {
-    videoRefs.value[index] = el;
-    
-    // 加载/更新视频源（确保旋转后能正确切换）
-    const cached = videoCache.value[index];
-    if (cached?.loaded && el.src !== cached.url) {
-      el.src = cached.url;
-    }
-    
-    // 设置基本属性
-    el.muted = isMuted.value;
-    el.loop = true;
-    
-    // 监听播放状态（仅在滑动模式下，避免重复绑定 & 索引错位）
-    if (viewMode.value === 'swipe') {
-      if (el._onPlayListener) {
-        el.removeEventListener('play', el._onPlayListener);
-      }
-      if (el._onPauseListener) {
-        el.removeEventListener('pause', el._onPauseListener);
-      }
-
-      el._onPlayListener = () => {
-        const i = Number(el.dataset.index ?? index);
-        if (i === swipeCurrentIndex.value) {
-          swipeVideoPaused.value = false;
-        }
-      };
-      el._onPauseListener = () => {
-        const i = Number(el.dataset.index ?? index);
-        if (i === swipeCurrentIndex.value) {
-          swipeVideoPaused.value = true;
-        }
-      };
-
-      el.addEventListener('play', el._onPlayListener);
-      el.addEventListener('pause', el._onPauseListener);
-    }
-  } else {
-    // 元素移除，清理引用
-    if (videoRefs.value[index]) {
-      videoRefs.value[index].pause();
-      videoRefs.value[index] = null;
-    }
+  if (index === 1) {
+    await loadNextVideo();
   }
 };
 
 // 模式切换
 const switchMode = async (mode) => {
+  if (viewMode.value === mode) {
+    return;
+  }
+
   // 暂停当前播放
   if (viewMode.value === 'swipe') {
     pauseAllSwipeVideos();
@@ -333,87 +301,72 @@ const switchMode = async (mode) => {
   // 切换到滑动模式时，初始化视频
   if (mode === 'swipe') {
     await nextTick();
-    initSwipeMode();
+    await initSwipeMode();
   } else if (mode === 'single' || mode === 'list') {
-    // 切回其他模式时，恢复播放
+    swipeVideoRefMap.clear();
     await nextTick();
     if (videoPlayer.value) {
-      loadVideoFromCache();
+      await loadCurrentVideo();
     }
+  }
+};
+
+const createAndAppendVideo = async () => {
+  const videoUrl = await getRandomAPI();
+  videoCache.value.push(createVideoItem(videoUrl));
+};
+
+const ensureCache = async (targetSize) => {
+  if (isCaching.value) {
+    return;
+  }
+
+  isCaching.value = true;
+  try {
+    while (videoCache.value.length < targetSize) {
+      await createAndAppendVideo();
+    }
+  } finally {
+    isCaching.value = false;
   }
 };
 
 // 初始化滑动模式（仅加载2条：当前+下一条）
 const initSwipeMode = async () => {
   swipeCurrentIndex.value = 0;
-  
-  // 清空旧缓存
+  swipeVideoPaused.value = true;
   pauseAllSwipeVideos();
   videoCache.value = [];
-  videoRefs.value = [];
-  
-  // 加载2条视频（当前+下一条）
-  console.log('🎬 滑动模式：加载2条视频...');
-  for (let i = 0; i < 2; i++) {
-    try {
-      const videoUrl = await getRandomAPI();
-      const videoData = {
-        url: videoUrl,
-        loaded: false,
-        thumbnail: null,
-        loadError: false
-      };
-      videoCache.value.push(videoData);
-      await loadVideo(i);
-    } catch (error) {
-      console.error(`初始化视频${i}失败:`, error);
-    }
-  }
-  
-  // 等待DOM渲染
-  await nextTick();
-  
-  setTimeout(() => {
-    // 为所有视频设置源和属性
-    videoCache.value.forEach((item, index) => {
-      if (item.loaded && videoRefs.value[index]) {
-        const video = videoRefs.value[index];
-        if (!video.src) {
-          video.src = item.url;
-        }
-        video.muted = isMuted.value;
-        video.loop = true;
-      }
-    });
+  swipeVideoRefMap.clear();
 
-    // 播放第一个视频
-    if (videoRefs.value[0]) {
-      playSwipeVideo(0, false);
-    }
-  }, 100);
+  console.log('🎬 滑动模式：初始化稳定窗口...');
+  await ensureCache(2);
+  await nextTick();
+  if (swipeContainer.value) {
+    swipeContainer.value.scrollTop = 0;
+  }
 };
 
 // 播放指定滑动视频（保证尽量自动播放，必要时强制静音以通过策略）
 const playSwipeVideo = async (index, userInitiated = false) => {
-  const video = videoRefs.value[index];
+  const video = getSwipeVideoElement(index);
   if (!video) {
     console.log(`⚠️ 视频元素不存在 索引${index}`);
     return;
   }
-  if (!videoCache.value[index]?.loaded) {
-    console.log(`⏳ 视频还未加载完成 索引${index}，等待加载后自动播放`);
+  if (!video.paused && index === swipeCurrentIndex.value) {
+    swipeVideoPaused.value = false;
     return;
   }
-  
+
   // 先暂停所有其他视频（确保只有一个播放源）
-  videoRefs.value.forEach((v, i) => {
-    if (v && i !== index && !v.paused) {
-      v.pause();
-      console.log(`⏸️ 暂停视频索引${i}`);
+  swipeVideoRefMap.forEach((element, id) => {
+    if (element && id !== videoCache.value[index]?.id && !element.paused) {
+      element.pause();
     }
   });
-  
-  // 自动播放时优先静音以提高成功率；用户点击则遵循用户偏好
+
+  // 自动切换时强制静音以提高成功率；用户点击时遵循用户当前偏好
   video.muted = userInitiated ? isMuted.value : true;
 
   let retryCount = 0;
@@ -421,23 +374,29 @@ const playSwipeVideo = async (index, userInitiated = false) => {
 
   const attemptPlay = async () => {
     try {
-      // 确保视频已加载
       if (video.readyState < 2) {
-        await new Promise(resolve => {
-          video.addEventListener('loadeddata', resolve, { once: true });
-          video.load();
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('视频加载超时')), config.VIDEO_LOAD_TIMEOUT);
+          const onLoaded = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+          const onError = () => {
+            clearTimeout(timer);
+            reject(new Error('视频加载失败'));
+          };
+          video.addEventListener('loadeddata', onLoaded, { once: true });
+          video.addEventListener('error', onError, { once: true });
         });
       }
 
       await video.play();
-      // 播放成功，状态会由play事件监听器自动更新
+      swipeVideoPaused.value = false;
       console.log(`滑动视频 ${index} 播放成功`);
-      // 若是用户未触发且用户偏好为非静音，不强制修改全局；必要时可在用户交互后再恢复
     } catch (error) {
       console.error(`滑动视频播放失败 (尝试 ${retryCount + 1}/${maxRetries}):`, error);
-      
+
       if (error.name === 'NotAllowedError' || error.name === 'NotSupportedError') {
-        // 浏览器阻止自动播放：开启静音并同步全局静音偏好，重试
         if (!video.muted) video.muted = true;
         if (!isMuted.value) isMuted.value = true;
         try { localStorage.setItem(MUTE_KEY, JSON.stringify(true)); } catch (e) {}
@@ -447,14 +406,14 @@ const playSwipeVideo = async (index, userInitiated = false) => {
           return;
         }
         console.log('视频需要用户交互才能播放，等待用户点击');
-        // 播放失败，状态会由pause事件监听器自动更新（或手动设置）
         if (index === swipeCurrentIndex.value) {
           swipeVideoPaused.value = true;
         }
-      } else if (error.name === 'AbortError' && retryCount < maxRetries) {
-        // 播放被中断，重试
+      } else if ((error.name === 'AbortError' || error.message === '视频加载超时') && retryCount < maxRetries) {
         retryCount++;
         setTimeout(attemptPlay, 300);
+      } else if (index === swipeCurrentIndex.value) {
+        swipeVideoPaused.value = true;
       }
     }
   };
@@ -464,8 +423,8 @@ const playSwipeVideo = async (index, userInitiated = false) => {
 
 // 暂停所有滑动视频
 const pauseAllSwipeVideos = () => {
-  videoRefs.value.forEach(video => {
-    if (video && !video.paused) {
+  swipeVideoRefMap.forEach(video => {
+    if (video) {
       video.pause();
     }
   });
@@ -483,79 +442,57 @@ const handleSwipeScroll = () => {
     const newIndex = Math.round(scrollTop / itemHeight);
 
     if (newIndex !== swipeCurrentIndex.value && newIndex >= 0 && newIndex < videoCache.value.length) {
-      // 暂停当前视频
-      const currentVideo = videoRefs.value[swipeCurrentIndex.value];
+      const currentVideo = getSwipeVideoElement(swipeCurrentIndex.value);
       if (currentVideo && !currentVideo.paused) {
         currentVideo.pause();
       }
 
-      // 更新索引
       const oldIndex = swipeCurrentIndex.value;
       swipeCurrentIndex.value = newIndex;
+      swipeVideoPaused.value = true;
       console.log(`📍 滑动: 索引${oldIndex} → ${newIndex}`);
 
-      // 播放新视频
-      playSwipeVideo(newIndex, false);
+      await playSwipeVideo(newIndex, false);
 
-      // 1) 到达索引1：确保存在下一条（第三条），不删除上一条，允许上滑回看
-      if (newIndex === 1 && !isCaching.value) {
-        if (videoCache.value.length < 3) {
-          console.log('➕ 索引1：预取下一条，保留上一条');
-          isCaching.value = true;
-          try {
-            const videoUrl = await getRandomAPI();
-            const videoData = {
-              url: videoUrl,
-              loaded: false,
-              thumbnail: null,
-              loadError: false
-            };
-            videoCache.value.push(videoData);
-            await loadVideo(videoCache.value.length - 1);
-          } catch (error) {
-            console.error('预加载失败:', error);
-          } finally {
-            isCaching.value = false;
-          }
+      if (newIndex === 1 && videoCache.value.length < 3) {
+        console.log('➕ 索引1：补充下一条视频');
+        try {
+          await ensureCache(3);
+        } catch (error) {
+          console.error('预加载失败:', error);
         }
       }
 
-      // 2) 到达索引>=2：向前滑动，执行窗口轮转，维持最多3条（上一条、当前、下一条）
-      if (newIndex >= 2 && !isCaching.value) {
+      if (newIndex >= 2) {
         console.log('🔄 索引>=2：执行轮转，维持3条窗口');
-        isCaching.value = true;
         isRotatingSwipe.value = true;
         try {
-          // 预取一条作为新的“下一条”
-          const videoUrl = await getRandomAPI();
-          const videoData = {
-            url: videoUrl,
-            loaded: false,
-            thumbnail: null,
-            loadError: false
-          };
-          videoCache.value.push(videoData);
-          await loadVideo(videoCache.value.length - 1);
+          if (videoCache.value.length < 3) {
+            await ensureCache(3);
+          }
 
-          // 移除最旧一条
-          videoCache.value.shift();
-          videoRefs.value.shift();
+          const removed = videoCache.value.shift();
+          if (removed) {
+            const removedVideo = swipeVideoRefMap.get(removed.id);
+            if (removedVideo) {
+              removedVideo.pause();
+              swipeVideoRefMap.delete(removed.id);
+            }
+          }
 
-          // 新的当前索引回退1
           swipeCurrentIndex.value = newIndex - 1;
 
-          // 调整滚动位置对齐
           await nextTick();
           if (swipeContainer.value) {
             const h = swipeContainer.value.clientHeight;
             swipeContainer.value.scrollTop = h * swipeCurrentIndex.value;
           }
 
+          await ensureCache(3);
           console.log(`✅ 轮转完成，当前索引: ${swipeCurrentIndex.value}，缓存数: ${videoCache.value.length}`);
         } catch (error) {
           console.error('轮转失败:', error);
         } finally {
-          isCaching.value = false;
           requestAnimationFrame(() => { isRotatingSwipe.value = false; });
         }
       }
@@ -591,7 +528,6 @@ const waitForApiRateLimit = async () => {
 
 // 获取随机API（带频率控制）
 const getRandomAPI = async () => {
-  // 频率控制
   await waitForApiRateLimit();
   
   const use317ak = Math.random() > 0.5;
@@ -615,7 +551,6 @@ const getRandomAPI = async () => {
     return getTimestampUrl(config.BASE_API_URLS[newIndex]);
   }
 };
-
 
 // 安全播放视频
 const safePlay = async () => {
@@ -662,7 +597,7 @@ const safePause = () => {
 
 // 滑动视频点击处理
 const handleSwipeVideoClick = async () => {
-  const video = videoRefs.value[swipeCurrentIndex.value];
+  const video = getSwipeVideoElement(swipeCurrentIndex.value);
   if (!video) return;
 
   if (video.paused) {
@@ -705,7 +640,6 @@ const loadCurrentVideo = async () => {
 
 // 从缓存加载视频（单视频/列表模式）
 const loadVideoFromCache = async () => {
-  // 确保当前+下一条缓存
   await ensureMinimumCache();
 
   if (videoCache.value.length === 0) return;
@@ -714,12 +648,16 @@ const loadVideoFromCache = async () => {
   }
 
   const cachedVideo = videoCache.value[currentVideoIndex.value];
-  if (cachedVideo && cachedVideo.loaded && videoPlayer.value) {
+  if (cachedVideo && videoPlayer.value) {
     isLoading.value = true;
-    videoPlayer.value.src = cachedVideo.url;
+    cachedVideo.loaded = false;
+    cachedVideo.loadError = false;
+    if (videoPlayer.value.dataset.videoId !== cachedVideo.id) {
+      videoPlayer.value.dataset.videoId = cachedVideo.id;
+      videoPlayer.value.src = cachedVideo.url;
+    }
     videoPlayer.value.loop = !autoPlayEnabled.value;
 
-    // 如果切至下一条（索引1），预取新视频并轮转，始终保持2条缓存
     if (currentVideoIndex.value === 1) {
       await prefetchAndRotate();
     }
@@ -730,25 +668,11 @@ const loadVideoFromCache = async () => {
 // 确保仅保留“当前+下一条”两个缓存项
 const ensureMinimumCache = async () => {
   const minSize = 2;
-  while (videoCache.value.length < minSize && !isCaching.value) {
-    isCaching.value = true;
-    try {
-      const videoUrl = await getRandomAPI();  // 带频率限制
-      const videoData = {
-        url: videoUrl,
-        loaded: false,
-        thumbnail: null,
-        loadError: false
-      };
-      videoCache.value.push(videoData);
-      await loadVideo(videoCache.value.length - 1);
-    } catch (error) {
-      console.error('补充缓存失败:', error);
-    } finally {
-      isCaching.value = false;
-    }
+  try {
+    await ensureCache(minSize);
+  } catch (error) {
+    console.error('补充缓存失败:', error);
   }
-  // 超出容量时裁剪
   if (videoCache.value.length > minSize) {
     videoCache.value.splice(minSize);
   }
@@ -757,94 +681,45 @@ const ensureMinimumCache = async () => {
 // 预取一条并轮转（用于单视频/列表模式“下一条”播放后）
 const prefetchAndRotate = async () => {
   if (isCaching.value) return;
-  isCaching.value = true;
   try {
-    const videoUrl = await getRandomAPI();
-    const videoData = {
-      url: videoUrl,
-      loaded: false,
-      thumbnail: null,
-      loadError: false
-    };
-    videoCache.value.push(videoData);
-    const newIdx = videoCache.value.length - 1;
-    await loadVideo(newIdx);
+    await createAndAppendVideo();
 
-    // 轮转：删除已播的第一条，当前索引回到0
     videoCache.value.shift();
     currentVideoIndex.value = 0;
   } catch (e) {
     console.error('预取/轮转失败:', e);
-  } finally {
-    isCaching.value = false;
   }
 };
 
-// 加载指定索引的视频（带超时且正确清理）
-const loadVideo = async (index) => {
+const handleSwipeLoaded = async (index) => {
   const item = videoCache.value[index];
-  if (!item || item.loaded) return;
+  if (!item) {
+    return;
+  }
+  item.loaded = true;
+  item.loadError = false;
+  if (index === swipeCurrentIndex.value && viewMode.value === 'swipe') {
+    console.log(`🎬 当前视频加载完成，自动播放 索引${index}`);
+    await playSwipeVideo(index, false);
+  }
+};
 
+const handleSwipeError = async (index) => {
+  const item = videoCache.value[index];
+  if (!item) {
+    return;
+  }
+  item.loaded = false;
+  item.loadError = true;
+  console.error(`滑动视频索引[${index}]加载失败，尝试替换源`);
   try {
-    // 创建临时video元素预加载
-    const tempVideo = document.createElement('video');
-    tempVideo.src = item.url;
-    tempVideo.preload = 'metadata';  // 仅加载元数据，减轻带宽压力
-    tempVideo.muted = true;
-
-    const loadWithTimeout = () => new Promise((resolve, reject) => {
-      let settled = false;
-      const cleanup = () => {
-        tempVideo.onloadeddata = null;
-        tempVideo.onerror = null;
-      };
-      const timer = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        reject(new Error('视频加载超时'));
-      }, config.VIDEO_LOAD_TIMEOUT);
-
-      tempVideo.onloadeddata = () => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        cleanup();
-        item.loaded = true;
-        item.loadError = false;
-        item.thumbnail = generateThumbnail(tempVideo);
-        console.log(`✅ 视频索引[${index}]加载成功`);
-        resolve();
-      };
-      tempVideo.onerror = (e) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        cleanup();
-        console.error(`❌ 视频索引[${index}]加载失败:`, e);
-        reject(new Error('视频加载失败'));
-      };
-      tempVideo.load();
-    });
-
-    await loadWithTimeout();
-
-    // 滑动模式：若当前项正是刚加载的视频，自动尝试播放
-    try {
-      await nextTick();
-      if (viewMode.value === 'swipe') {
-        const current = videoCache.value[swipeCurrentIndex.value];
-        if (current && current.url === item.url) {
-          const idx = swipeCurrentIndex.value;
-          console.log(`🎬 当前视频加载完成，自动播放 索引${idx}`);
-          playSwipeVideo(idx, false);
-        }
-      }
-    } catch (e) {}
+    videoCache.value[index] = createVideoItem(await getRandomAPI());
+    await nextTick();
+    if (index === swipeCurrentIndex.value) {
+      await playSwipeVideo(index, false);
+    }
   } catch (error) {
-    console.error(`视频索引[${index}]加载失败:`, error.message);
-    item.loaded = false;
-    item.loadError = true;
+    console.error('替换滑动视频失败:', error);
   }
 };
 
@@ -867,7 +742,7 @@ const toggleMute = () => {
   
   // 滑动模式：更新所有视频的静音状态
   if (viewMode.value === 'swipe') {
-    videoRefs.value.forEach(video => {
+    swipeVideoRefMap.forEach(video => {
       if (video) {
         video.muted = isMuted.value;
       }
@@ -891,6 +766,10 @@ const toggleAutoPlay = () => {
 const onVideoLoaded = () => {
   isLoading.value = false;
   retryAttempts = 0;
+  if (videoCache.value[0]) {
+    videoCache.value[0].loaded = true;
+    videoCache.value[0].loadError = false;
+  }
   safePlay();
 };
 
@@ -915,15 +794,26 @@ const onEnded = () => {
 // 视频加载错误
 const onError = () => {
   retryAttempts++;
-  
-  if (retryAttempts <= config.MAX_RETRIES) {
-    setTimeout(() => {
-      loadVideoFromCache();
-    }, 1000);
-  } else {
-    retryAttempts = 0;
-    loadVideoFromCache();
+
+  if (videoCache.value[0]) {
+    videoCache.value[0].loaded = false;
+    videoCache.value[0].loadError = true;
   }
+
+  if (retryAttempts <= config.MAX_RETRIES) {
+    setTimeout(async () => {
+      try {
+        videoCache.value[0] = createVideoItem(await getRandomAPI());
+        await loadVideoFromCache();
+      } catch (error) {
+        console.error('替换当前视频失败:', error);
+      }
+    }, 800);
+    return;
+  }
+
+  retryAttempts = 0;
+  loadNextVideo();
 };
 
 // 组件挂载
@@ -954,8 +844,9 @@ onMounted(async () => {
   if (videoPlayer.value) {
     videoPlayer.value.controls = true;
     videoPlayer.value.muted = isMuted.value;
+    videoPlayer.value.preload = 'metadata';
     videoPlayer.value.loop = !autoPlayEnabled.value;
-    await loadVideoFromCache();
+    await loadCurrentVideo();
   }
 });
 
@@ -968,10 +859,9 @@ onBeforeUnmount(() => {
   if (videoPlayer.value && !videoPlayer.value.paused) {
     videoPlayer.value.pause();
   }
-  
-  // 清理缓存
+  clearPlayerSource();
   videoCache.value = [];
-  videoRefs.value = [];
+  swipeVideoRefMap.clear();
   console.log('🧹 组件卸载，缓存已清理');
 });
 </script>

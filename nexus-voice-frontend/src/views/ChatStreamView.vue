@@ -31,6 +31,14 @@
             <span class="assistant-icon">✨</span>
             <span class="assistant-text">角色生成</span>
           </button>
+          <button
+              @click="goToRagPage"
+              class="knowledge-base-btn"
+              title="管理知识库"
+          >
+            <span class="assistant-icon">📚</span>
+            <span class="assistant-text">知识库</span>
+          </button>
           <!-- 协议选择器 -->
           <div class="protocol-selector">
             <label class="protocol-label">
@@ -139,8 +147,55 @@
                   <span class="cursor-blink">│</span>
                 </div>
                 <!-- 完成后显示渲染的Markdown -->
-                <div v-else class="rendered-content" 
+                <div v-else class="rendered-content"
+                     @click="handleCitationReferenceClick"
                      v-html="message.renderedContent || message.content"></div>
+
+                <div v-if="!message.isStreaming && message.citations && message.citations.length > 0"
+                     class="citation-panel">
+                  <div class="citation-panel-title">来源依据</div>
+                  <div v-for="citation in message.citations"
+                       :key="citation.id || citation.label"
+                       :id="getCitationDomId(message, citation)"
+                       class="citation-card">
+                    <div class="citation-card-header">
+                      <span class="citation-label">{{ citation.label }}</span>
+                      <span class="citation-file">{{ citation.fileName || '未命名文件' }}</span>
+                    </div>
+                    <div class="citation-card-meta">
+                      <span v-if="shouldShowKnowledgeBaseName(message.citations)">
+                        知识库：{{ citation.knowledgeBaseName || '未命名知识库' }}
+                      </span>
+                      <span v-if="citation.location">
+                        片段：{{ citation.location }}
+                      </span>
+                      <span v-if="citation.matchedQueries && citation.matchedQueries.length > 0">
+                        命中：{{ citation.matchedQueries.join(' / ') }}
+                      </span>
+                    </div>
+                    <div v-if="citation.snippetIsHtml"
+                         class="citation-snippet citation-snippet-html"
+                         :class="{ 'citation-snippet-collapsed': isCitationCollapsible(citation) && !isCitationExpanded(message, citation) }"
+                         v-html="citation.renderedSnippet"></div>
+                    <div v-else-if="citation.snippet"
+                         class="citation-snippet"
+                         :class="{ 'citation-snippet-collapsed': isCitationCollapsible(citation) && !isCitationExpanded(message, citation) }">
+                      {{ citation.snippet }}
+                    </div>
+                    <div class="citation-actions">
+                      <button v-if="isCitationCollapsible(citation)"
+                              class="citation-action-btn"
+                              @click="toggleCitationExpanded(message, citation)">
+                        {{ isCitationExpanded(message, citation) ? '收起' : '展开更多' }}
+                      </button>
+                      <button v-if="citation.knowledgeBaseId && citation.fileId && citation.location"
+                              class="citation-action-btn secondary"
+                              @click="openCitationPreview(citation)">
+                        查看原文上下文
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 
                 <!-- 音频播放控制 -->
                 <div v-if="message.audioSegments && message.audioSegments.length > 0" 
@@ -229,6 +284,44 @@
               <span class="slider round"></span>
             </label>
             <span>音频回复</span>
+          </div>
+          <div class="search-toggle-container">
+            <label class="switch">
+              <input type="checkbox" v-model="enableRag" :disabled="knowledgeBases.length === 0" />
+              <span class="slider round"></span>
+            </label>
+            <span>知识库RAG</span>
+          </div>
+          <div class="rag-selector">
+            <el-select
+              v-model="selectedKnowledgeBaseIds"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="选择知识库"
+              class="rag-select"
+              size="small"
+              :disabled="knowledgeBases.length === 0 || isSending"
+            >
+              <el-option
+                v-for="kb in knowledgeBases"
+                :key="kb.id"
+                :label="`${kb.name} (${kb.documentCount || 0})`"
+                :value="String(kb.id)"
+              />
+            </el-select>
+          </div>
+          <div class="rag-selector">
+            <el-select
+              v-model="ragGroundingMode"
+              placeholder="RAG回答模式"
+              class="rag-select"
+              size="small"
+              :disabled="!enableRag || isSending"
+            >
+              <el-option label="精确回答" value="STRICT" />
+              <el-option label="扩展回答" value="FLEXIBLE" />
+            </el-select>
           </div>
         </div>
         
@@ -501,6 +594,41 @@
         </button>
       </div>
     </div>
+
+    <div v-if="citationPreviewVisible"
+         class="image-preview-overlay citation-preview-overlay"
+         @click="closeCitationPreview">
+      <div class="citation-preview-modal" @click.stop>
+        <div class="citation-preview-header">
+          <div>
+            <h3 class="citation-preview-title">{{ citationPreviewData?.fileName || '原文上下文' }}</h3>
+            <p class="citation-preview-meta">
+              <span v-if="citationPreviewData?.knowledgeBaseName">知识库：{{ citationPreviewData.knowledgeBaseName }}</span>
+              <span v-if="citationPreviewData?.resolvedLocation">命中片段：{{ citationPreviewData.resolvedLocation }}</span>
+            </p>
+          </div>
+          <button class="preview-close-btn" @click="closeCitationPreview" title="关闭预览">×</button>
+        </div>
+
+        <div v-if="citationPreviewLoading" class="citation-preview-loading">正在加载原文上下文...</div>
+        <div v-else-if="citationPreviewError" class="citation-preview-error">{{ citationPreviewError }}</div>
+        <div v-else class="citation-preview-body">
+          <div v-for="segment in citationPreviewData?.segments || []"
+               :key="segment.page"
+               class="citation-context-segment"
+               :class="{ 'citation-context-hit': segment.hit }">
+            <div class="citation-context-label">
+              <span>片段 {{ segment.page }}</span>
+              <span v-if="segment.hit" class="citation-context-hit-tag">命中</span>
+            </div>
+            <div v-if="segment.renderedContent"
+                 class="citation-context-content citation-snippet-html"
+                 v-html="segment.renderedContent"></div>
+            <div v-else class="citation-context-content">{{ segment.content }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -511,6 +639,7 @@ import { useAuthStore } from '../stores/auth';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import ConversationSidebar from '../components/ConversationSidebar.vue';
 import characterApi from '../services/character';
+import ragApi from '../services/rag';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { createTransport } from '../services/streamTransport';
@@ -563,6 +692,17 @@ const isAIThinking = ref(false);
 // 开关选项
 const enableWebSearch = ref(false);
 const enableAudio = ref(false);  // 默认关闭音频，避免后端TTS问题导致卡死
+const enableRag = ref(false);
+const ragGroundingMode = ref('STRICT');
+const knowledgeBases = ref([]);
+const selectedKnowledgeBaseIds = ref([]);
+const citationExpandedState = ref({});
+const citationPreviewVisible = ref(false);
+const citationPreviewLoading = ref(false);
+const citationPreviewError = ref('');
+const citationPreviewData = ref(null);
+const RAG_STORAGE_KEY = 'selected-rag-knowledge-bases';
+const RAG_GROUNDING_MODE_KEY = 'rag-grounding-mode';
 
 // 加载可用模型列表
 const fetchAvailableModels = async () => {
@@ -578,6 +718,54 @@ const fetchAvailableModels = async () => {
     ElMessage.error('加载模型列表失败');
   }
 };
+
+const fetchKnowledgeBases = async () => {
+  try {
+    const response = await ragApi.listKnowledgeBases();
+    if (response.data.success && response.data.data) {
+      knowledgeBases.value = response.data.data;
+      const availableIdSet = new Set(knowledgeBases.value.map(item => String(item.id)));
+      const savedIds = JSON.parse(localStorage.getItem(RAG_STORAGE_KEY) || '[]');
+      if (Array.isArray(savedIds)) {
+        selectedKnowledgeBaseIds.value = savedIds
+          .map(item => String(item))
+          .filter(item => availableIdSet.has(item));
+      }
+      const savedGroundingMode = localStorage.getItem(RAG_GROUNDING_MODE_KEY);
+      if (savedGroundingMode === 'STRICT' || savedGroundingMode === 'FLEXIBLE') {
+        ragGroundingMode.value = savedGroundingMode;
+      }
+      if (selectedKnowledgeBaseIds.value.length === 0 && knowledgeBases.value.length > 0) {
+        selectedKnowledgeBaseIds.value = knowledgeBases.value.map(item => String(item.id));
+      }
+    }
+  } catch (error) {
+    console.error('加载知识库失败:', error);
+  }
+};
+
+const goToRagPage = () => {
+  router.push('/rag');
+};
+
+watch(selectedKnowledgeBaseIds, (value) => {
+  localStorage.setItem(RAG_STORAGE_KEY, JSON.stringify(value));
+}, { deep: true });
+
+watch(ragGroundingMode, (value) => {
+  const normalizedMode = value === 'FLEXIBLE' ? 'FLEXIBLE' : 'STRICT';
+  if (normalizedMode !== value) {
+    ragGroundingMode.value = normalizedMode;
+    return;
+  }
+  localStorage.setItem(RAG_GROUNDING_MODE_KEY, normalizedMode);
+});
+
+watch(enableRag, (enabled) => {
+  if (enabled && selectedKnowledgeBaseIds.value.length === 0 && knowledgeBases.value.length > 0) {
+    selectedKnowledgeBaseIds.value = knowledgeBases.value.map(item => String(item.id));
+  }
+});
 
 // 图片上传相关方法
 const triggerImageSelect = () => {
@@ -700,6 +888,18 @@ const removeImage = (index) => {
   selectedImages.value.splice(index, 1);
 };
 
+const getMessageTimeoutMs = () => (
+  enableRag.value && ragGroundingMode.value === 'STRICT'
+    ? STRICT_RAG_MESSAGE_TIMEOUT
+    : MESSAGE_TIMEOUT
+);
+
+const getStreamIdleTimeoutMs = () => (
+  enableRag.value && ragGroundingMode.value === 'STRICT'
+    ? STRICT_RAG_STREAM_IDLE_TIMEOUT
+    : STREAM_IDLE_TIMEOUT
+);
+
 // 音频播放相关
 const audioQueue = ref([]);
 const currentAudio = ref(null);
@@ -710,12 +910,14 @@ const isPlaying = ref(false);
 // 消息超时处理
 let messageTimeoutTimer = null;
 const MESSAGE_TIMEOUT = 30000; // 30秒超时
+const STRICT_RAG_MESSAGE_TIMEOUT = 45000;
 
 // 消息流状态检测
 let lastContentTime = null; // 最后收到CONTENT消息的时间
 let streamCheckTimer = null; // 检查消息流是否停止的定时器
 const STREAM_IDLE_TIMEOUT = 5000; // 5秒没有新内容认为流结束
 const QUICK_END_TIMEOUT = 2000; // 如果有完整句子，2秒就结束
+const STRICT_RAG_STREAM_IDLE_TIMEOUT = 15000;
 let hasCompleteSentence = false; // 是否检测到完整句子
 
 // 自动滚动控制
@@ -943,6 +1145,14 @@ const handleWebSocketMessage = (data) => {
 
 // 处理START消息
 const handleStartMessage = (data) => {
+  if (!data?.id && !data?.model) {
+    console.log('[忽略伪START] 该消息缺少流标识，视为连接态通知', data);
+    if (data?.delta) {
+      systemMessage.value = '连接成功，可以开始对话了';
+    }
+    return;
+  }
+
   console.log('[开始流式输出] 🚀', data);
   isAIThinking.value = false;
   systemMessage.value = `${currentCharacter.value?.name || 'AI'} 正在回复...`;
@@ -952,6 +1162,7 @@ const handleStartMessage = (data) => {
     type: 'assistant',
     content: '',
     isStreaming: true,
+    citations: [],
     audioSegments: [],
     timestamp: new Date(),
     model: data.model
@@ -987,6 +1198,7 @@ const handleContentMessage = (data) => {
       type: 'assistant',
       content: '',
       isStreaming: true,
+      citations: [],
       audioSegments: [],
       timestamp: new Date(),
       model: data.model
@@ -1062,9 +1274,13 @@ const handleEndMessage = (data) => {
   
   const lastMessage = messages.value[messages.value.length - 1];
   if (lastMessage && lastMessage.type === 'assistant') {
+    if (data.content) {
+      lastMessage.content = data.content;
+    }
     console.log('[最终消息内容]', lastMessage.content);
     console.log('[消息长度]', lastMessage.content.length);
     lastMessage.isStreaming = false;
+    lastMessage.citations = normalizeCitations(data.citations);
     
     // 保存conversationId
     if (data.conversationId) {
@@ -1079,9 +1295,7 @@ const handleEndMessage = (data) => {
     }
     
     // 渲染Markdown
-    if (lastMessage.content) {
-      lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-    }
+    applyAssistantPresentation(lastMessage);
     
     // 更新消息元数据
     if (data.messageId) {
@@ -1132,9 +1346,7 @@ const handleErrorMessage = (data) => {
     messages.value.forEach(msg => {
       if (msg.type === 'assistant' && msg.isStreaming) {
         msg.isStreaming = false;
-        if (msg.content) {
-          msg.renderedContent = renderMarkdown(msg.content);
-        }
+        applyAssistantPresentation(msg);
       }
     });
     
@@ -1228,6 +1440,11 @@ const sendMessage = async () => {
     ElMessage.warning('请等待图片上传完成');
     return;
   }
+
+  if (enableRag.value && selectedKnowledgeBaseIds.value.length === 0) {
+    ElMessage.warning('已开启知识库RAG，但还没有选择知识库');
+    return;
+  }
   
   inputMessage.value = '';
   selectedImages.value = []; // 清空图片列表
@@ -1263,7 +1480,10 @@ const sendMessage = async () => {
     conversationId: conversationId.value,
     message: messageText || '请看图片', // 如果没有文本，提供默认文本
     enableWebSearch: enableWebSearch.value,
-    enableAudio: enableAudio.value
+    enableAudio: enableAudio.value,
+    enableRag: enableRag.value && selectedKnowledgeBaseIds.value.length > 0,
+    knowledgeBaseIds: selectedKnowledgeBaseIds.value,
+    ragGroundingMode: ragGroundingMode.value
   };
   
   // 添加附件URL（JSON字符串数组格式）
@@ -1407,10 +1627,11 @@ const showCharacterGreeting = () => {
       type: 'assistant',
       content: greeting,
       isStreaming: false,
-      renderedContent: renderMarkdown(greeting),
+      citations: [],
       audioSegments: [],
       timestamp: new Date()
     };
+    applyAssistantPresentation(greetingMessage);
     
     // 如果有开场白音频，添加到消息中
     if (greetingAudioUrl) {
@@ -1543,14 +1764,17 @@ const handleSwitchConversation = async (convId) => {
           return {
             id: msg.id || `msg-${Date.now()}-${Math.random()}`,
             content: msg.content,
-            type: msg.role === 'USER' ? 'user' : 'assistant',
+            type: msg.role === 'USER' ? 'user' : (msg.role === 'SYSTEM' ? 'system' : 'assistant'),
             timestamp: new Date(msg.createdAt || msg.created_at || Date.now()),
             audioSegments: msg.audioSegments || [],
-            renderedContent: msg.role === 'ASSISTANT' ? renderMarkdown(msg.content) : null,
+            citations: normalizeCitations(msg.citations),
             // 添加附件字段支持
             attachments: msg.attachments || [],
             attachmentCount: msg.attachmentCount || 0
           };
+        }).map((message) => {
+          applyAssistantPresentation(message);
+          return message;
         });
         
         console.log('=== 转换后的messages:', messages.value);
@@ -1606,8 +1830,148 @@ const formatFileSize = (bytes) => {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 };
 
+const normalizeCitations = (citations) => (
+  Array.isArray(citations)
+    ? citations
+      .filter(item => item && (item.label || item.fileName || item.snippet))
+      .map((citation) => {
+        const snippet = normalizeCitationSnippetForDisplay(citation.snippet || '');
+        const snippetIsHtml = shouldRenderCitationAsMarkdown(citation);
+        return {
+          ...citation,
+          snippet,
+          snippetIsHtml,
+          renderedSnippet: snippetIsHtml ? renderMarkdown(snippet, { preserveEmphasis: true }) : ''
+        };
+      })
+    : []
+);
+
+const normalizeCitationSnippetForDisplay = (snippet) => {
+  if (!snippet) {
+    return '';
+  }
+  return snippet
+    .replace(/^"+|"+$/g, '')
+    .replace(/^(#+)([^\s#])/gm, '$1 $2')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+};
+
+const shouldRenderFileAsMarkdown = (fileName) => {
+  const normalizedName = String(fileName || '').toLowerCase();
+  return ['.md', '.markdown', '.mdx'].some(ext => normalizedName.endsWith(ext));
+};
+
+const getCitationStateKey = (message, citation) => `${sanitizeDomId(message?.id || message?.messageId)}:${sanitizeDomId(citation?.id || citation?.label)}`;
+
+const isCitationCollapsible = (citation) => {
+  const snippet = citation?.snippet || '';
+  return snippet.length > 180 || snippet.split('\n').length > 4;
+};
+
+const isCitationExpanded = (message, citation) => Boolean(citationExpandedState.value[getCitationStateKey(message, citation)]);
+
+const toggleCitationExpanded = (message, citation) => {
+  const key = getCitationStateKey(message, citation);
+  citationExpandedState.value = {
+    ...citationExpandedState.value,
+    [key]: !citationExpandedState.value[key]
+  };
+};
+
+const sanitizeDomId = (value) => String(value ?? 'unknown').replace(/[^a-zA-Z0-9_-]/g, '-');
+
+const getCitationDomId = (message, citation) => {
+  const messageId = sanitizeDomId(message?.id || message?.messageId || 'message');
+  const citationId = sanitizeDomId(citation?.id || citation?.label || 'source');
+  return `citation-${messageId}-${citationId}`;
+};
+
+const shouldShowKnowledgeBaseName = (citations) => {
+  const keys = normalizeCitations(citations)
+    .map(citation => citation.knowledgeBaseName || citation.knowledgeBaseId)
+    .filter(Boolean);
+  return new Set(keys).size > 1;
+};
+
+const decorateCitationReferences = (content, citations, messageId) => {
+  if (!content) {
+    return '';
+  }
+  const citationMap = new Map(
+    normalizeCitations(citations)
+      .filter(citation => citation.label)
+      .map(citation => [citation.label, getCitationDomId({ id: messageId }, citation)])
+  );
+
+  return content.replace(/\[(来源\d+)]/g, (match, label) => {
+    const targetId = citationMap.get(label);
+    if (!targetId) {
+      return match;
+    }
+    return `<a href="#${targetId}" class="citation-ref" data-citation-target="${targetId}">${label}</a>`;
+  });
+};
+
+const normalizeMarkdownForDisplay = (content, options = {}) => {
+  if (!content) {
+    return '';
+  }
+  const preserveEmphasis = options.preserveEmphasis !== false;
+  let normalized = content.replace(/\r\n/g, '\n');
+
+  normalized = trimUnbalancedMarker(normalized, '```', '\n```');
+  if (preserveEmphasis) {
+    normalized = trimUnbalancedMarker(normalized, '**', '');
+    normalized = trimUnbalancedMarker(normalized, '__', '');
+    normalized = trimUnbalancedMarker(normalized, '`', '');
+
+    normalized = normalized
+      .replace(/\*\*\s+(?=\S)/g, '')
+      .replace(/(?<=\S)\s+\*\*/g, '')
+      .replace(/__(?=\s+\S)/g, '')
+      .replace(/(?<=\S)\s+__/g, '');
+  } else {
+    normalized = normalized
+      .replace(/\*\*/g, '')
+      .replace(/__/g, '')
+      .replace(/`/g, '');
+  }
+
+  return normalized;
+};
+
+const trimUnbalancedMarker = (content, marker, completion) => {
+  const count = countOccurrences(content, marker);
+  if (count % 2 === 0) {
+    return content;
+  }
+  if (completion) {
+    return `${content}${completion}`;
+  }
+  const lastIndex = content.lastIndexOf(marker);
+  if (lastIndex < 0) {
+    return content;
+  }
+  return `${content.slice(0, lastIndex)}${content.slice(lastIndex + marker.length)}`;
+};
+
+const countOccurrences = (content, marker) => {
+  let count = 0;
+  let index = 0;
+  while (index !== -1) {
+    index = content.indexOf(marker, index);
+    if (index !== -1) {
+      count += 1;
+      index += marker.length;
+    }
+  }
+  return count;
+};
+
 // 渲染Markdown
-const renderMarkdown = (content) => {
+const renderMarkdown = (content, options = {}) => {
   if (!content) return '';
   try {
     // 配置marked选项，禁用部分GFM语法
@@ -1619,12 +1983,108 @@ const renderMarkdown = (content) => {
       sanitize: false         // 不使用内置sanitizer（我们用DOMPurify）
     });
     
-    const html = marked(content);
+    const normalizedContent = normalizeMarkdownForDisplay(content, options);
+    const html = marked(normalizedContent);
     return DOMPurify.sanitize(html);
   } catch (error) {
     console.error('Markdown渲染失败:', error);
     return content;
   }
+};
+
+const renderAssistantMessage = (message) => {
+  if (!message) {
+    return '';
+  }
+  const decoratedContent = decorateCitationReferences(
+    message.content,
+    message.citations,
+    message.id || message.messageId
+  );
+  return renderMarkdown(decoratedContent, { preserveEmphasis: false });
+};
+
+const shouldRenderCitationAsMarkdown = (citation) => shouldRenderFileAsMarkdown(citation?.fileName);
+
+const normalizeCitationPreview = (data) => {
+  if (!data) {
+    return null;
+  }
+  const markdownFile = shouldRenderFileAsMarkdown(data.fileName);
+  return {
+    ...data,
+    segments: Array.isArray(data.segments)
+      ? data.segments.map(segment => ({
+        ...segment,
+        renderedContent: markdownFile ? renderMarkdown(normalizeCitationSnippetForDisplay(segment.content || ''), { preserveEmphasis: true }) : ''
+      }))
+      : []
+  };
+};
+
+const openCitationPreview = async (citation) => {
+  citationPreviewVisible.value = true;
+  citationPreviewLoading.value = true;
+  citationPreviewError.value = '';
+  citationPreviewData.value = null;
+
+  try {
+    const response = await ragApi.getCitationContext(
+      citation.knowledgeBaseId,
+      citation.fileId,
+      citation.location,
+      1
+    );
+    if (!response.data?.success) {
+      throw new Error(response.data?.message || '加载原文上下文失败');
+    }
+    citationPreviewData.value = normalizeCitationPreview(response.data.data);
+  } catch (error) {
+    console.error('加载引用上下文失败:', error);
+    citationPreviewError.value = error.response?.data?.message || error.message || '加载原文上下文失败';
+  } finally {
+    citationPreviewLoading.value = false;
+  }
+};
+
+const closeCitationPreview = () => {
+  citationPreviewVisible.value = false;
+  citationPreviewLoading.value = false;
+  citationPreviewError.value = '';
+  citationPreviewData.value = null;
+};
+
+const applyAssistantPresentation = (message) => {
+  if (!message || message.type !== 'assistant') {
+    return;
+  }
+  message.citations = normalizeCitations(message.citations);
+  if (!message.isStreaming) {
+    message.renderedContent = renderAssistantMessage(message);
+  }
+};
+
+const handleCitationReferenceClick = (event) => {
+  const sourceElement = event.target instanceof Element
+    ? event.target
+    : event.target?.parentElement;
+  const target = sourceElement?.closest?.('[data-citation-target]');
+  if (!target) {
+    return;
+  }
+  event.preventDefault();
+  const citationElement = document.getElementById(target.dataset.citationTarget);
+  if (!citationElement) {
+    return;
+  }
+  window.location.hash = target.dataset.citationTarget;
+  citationElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  citationElement.classList.remove('citation-card-active');
+  void citationElement.offsetWidth;
+  citationElement.classList.add('citation-card-active');
+  setTimeout(() => {
+    citationElement.classList.remove('citation-card-active');
+  }, 1600);
 };
 
 // 滚动到底部
@@ -1757,9 +2217,7 @@ const startMessageTimeout = () => {
       console.warn('消息接收超时，强制结束流式输出');
       lastMessage.isStreaming = false;
       
-      if (lastMessage.content) {
-        lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-      }
+      applyAssistantPresentation(lastMessage);
       
       messages.value.push({
         id: `msg-${Date.now()}`,
@@ -1774,7 +2232,7 @@ const startMessageTimeout = () => {
     systemMessage.value = '准备就绪';
     
     ElMessage.warning('消息接收超时，请重试');
-  }, MESSAGE_TIMEOUT);
+  }, getMessageTimeoutMs());
 };
 
 // 清除消息超时定时器
@@ -1810,9 +2268,7 @@ const startStreamCheck = () => {
       const lastMessage = messages.value[messages.value.length - 1];
       if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
         lastMessage.isStreaming = false;
-        if (lastMessage.content) {
-          lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-        }
+        applyAssistantPresentation(lastMessage);
       }
       isSending.value = false;
       isAIThinking.value = false;
@@ -1828,17 +2284,14 @@ const startStreamCheck = () => {
       const now = Date.now();
       const timeSinceLastContent = now - lastContentTime;
       
-      const timeout = hasCompleteSentence ? QUICK_END_TIMEOUT : STREAM_IDLE_TIMEOUT;
+      const timeout = hasCompleteSentence ? QUICK_END_TIMEOUT : getStreamIdleTimeoutMs();
       
       if (timeSinceLastContent > timeout) {
         const reason = hasCompleteSentence ? '检测到完整句子' : '长时间无新内容';
         console.warn(`[流结束检测] ${reason}，${timeout}ms没有新内容，强制结束流`);
         
         lastMessage.isStreaming = false;
-        
-        if (lastMessage.content) {
-          lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-        }
+        applyAssistantPresentation(lastMessage);
         
         isSending.value = false;
         isAIThinking.value = false;
@@ -1861,9 +2314,7 @@ const forceEndStream = () => {
   if (lastMessage && lastMessage.type === 'assistant' && lastMessage.isStreaming) {
     lastMessage.isStreaming = false;
     
-    if (lastMessage.content) {
-      lastMessage.renderedContent = renderMarkdown(lastMessage.content);
-    }
+    applyAssistantPresentation(lastMessage);
   }
   
   isSending.value = false;
@@ -2134,6 +2585,7 @@ onMounted(async () => {
   try {
     // 1. 加载可用模型列表
     await fetchAvailableModels();
+    await fetchKnowledgeBases();
     
     // 2. 加载角色信息（必须先有角色信息才能显示开场白）
     await loadCharacterInfo();
@@ -2478,6 +2930,25 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
+.rendered-content :deep(.citation-ref) {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 0.15rem;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.35);
+  background: rgba(14, 116, 144, 0.22);
+  color: #bae6fd;
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.rendered-content :deep(.citation-ref:hover) {
+  background: rgba(14, 116, 144, 0.35);
+  border-color: rgba(125, 211, 252, 0.6);
+}
+
 .rendered-content :deep(pre) {
   background-color: #1f2937;
   padding: 1rem;
@@ -2502,6 +2973,258 @@ onUnmounted(() => {
   border-left: 3px solid #4b5563;
   padding-left: 1rem;
   color: #9ca3af;
+}
+
+.citation-panel {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.citation-panel-title {
+  margin-bottom: 8px;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.citation-card {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.34);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.citation-card-active {
+  border-color: rgba(125, 211, 252, 0.72);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  transform: translateY(-1px);
+}
+
+.citation-card:target {
+  border-color: rgba(125, 211, 252, 0.72);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+  transform: translateY(-1px);
+}
+
+.citation-card-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.citation-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.citation-file {
+  color: #e2e8f0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.citation-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.citation-snippet {
+  margin-top: 8px;
+  color: #dbe4ee;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.citation-snippet-collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.citation-snippet-html {
+  white-space: normal;
+}
+
+.citation-snippet-html :deep(p),
+.citation-snippet-html :deep(h1),
+.citation-snippet-html :deep(h2),
+.citation-snippet-html :deep(h3),
+.citation-snippet-html :deep(h4),
+.citation-snippet-html :deep(ul),
+.citation-snippet-html :deep(ol),
+.citation-snippet-html :deep(blockquote) {
+  margin: 0.35rem 0;
+}
+
+.citation-snippet-html :deep(h1),
+.citation-snippet-html :deep(h2),
+.citation-snippet-html :deep(h3),
+.citation-snippet-html :deep(h4) {
+  color: #f8fafc;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.citation-snippet-html :deep(strong) {
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.citation-snippet-html :deep(code) {
+  padding: 0.08rem 0.35rem;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  color: #cbd5e1;
+}
+
+.citation-snippet-html :deep(blockquote) {
+  padding-left: 0.7rem;
+  border-left: 2px solid rgba(125, 211, 252, 0.35);
+  color: #cbd5e1;
+}
+
+.citation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.citation-action-btn {
+  border: 1px solid rgba(125, 211, 252, 0.32);
+  background: rgba(8, 47, 73, 0.35);
+  color: #bae6fd;
+  padding: 0.32rem 0.68rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.citation-action-btn:hover {
+  background: rgba(14, 116, 144, 0.35);
+  border-color: rgba(125, 211, 252, 0.52);
+}
+
+.citation-action-btn.secondary {
+  color: #e2e8f0;
+  border-color: rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.36);
+}
+
+.citation-preview-overlay {
+  background: rgba(2, 6, 23, 0.78);
+  z-index: 1200;
+}
+
+.citation-preview-modal {
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: hidden;
+  border-radius: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(180deg, #111827 0%, #0f172a 100%);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.citation-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 20px 22px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.citation-preview-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 1.05rem;
+}
+
+.citation-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 8px 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
+.citation-preview-loading,
+.citation-preview-error {
+  padding: 28px 22px;
+  color: #cbd5e1;
+}
+
+.citation-preview-error {
+  color: #fda4af;
+}
+
+.citation-preview-body {
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding: 18px 22px 22px;
+}
+
+.citation-context-segment {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.citation-context-segment + .citation-context-segment {
+  margin-top: 12px;
+}
+
+.citation-context-hit {
+  border-color: rgba(125, 211, 252, 0.48);
+  background: rgba(12, 74, 110, 0.22);
+}
+
+.citation-context-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.citation-context-hit-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.48rem;
+  border-radius: 999px;
+  background: rgba(56, 189, 248, 0.18);
+  color: #bae6fd;
+  font-size: 0.74rem;
+}
+
+.citation-context-content {
+  color: #e2e8f0;
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 /* 音频控制 */
@@ -3688,6 +4411,39 @@ input:checked + .slider:before {
   background-color: rgba(255, 255, 255, 0.2);
   border-color: white;
   transform: scale(1.1);
+}
+
+.knowledge-base-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: rgba(234, 179, 8, 0.12);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #f8e7a0;
+  cursor: pointer;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  transition: all 0.2s;
+  font-size: 0.9rem;
+}
+
+.knowledge-base-btn:hover {
+  background-color: rgba(234, 179, 8, 0.2);
+  border-color: rgba(234, 179, 8, 0.55);
+}
+
+.rag-selector {
+  min-width: 220px;
+}
+
+.rag-select {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .rag-selector {
+    min-width: 100%;
+  }
 }
 </style>
 

@@ -58,6 +58,12 @@ const routes = [
         meta: { requiresAuth: true }
     },
     {
+        path: '/rag',
+        name: 'RagKnowledgeBase',
+        component: () => import('../views/RagKnowledgeBaseView.vue'),
+        meta: { requiresAuth: true }
+    },
+    {
         path: '/rtc-voice',
         name: 'RtcVoice',
         component: () => import('../views/RtcVoiceView.vue'),
@@ -87,4 +93,3 @@ router.beforeEach((to, from, next) => {
 })
 // 导出路由实例，以便在 main.js 中使用
 export default router
-

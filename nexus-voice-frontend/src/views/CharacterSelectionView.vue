@@ -4,6 +4,7 @@
       <span class="welcome-text">欢迎, {{ user.nickname || '用户' }}</span>
       <button @click="goToLab" class="lab-button">🧪 实验室</button>
       <button @click="goToRandomVideo" class="video-button">🎬 随机视频</button>
+      <button @click="goToRag" class="apikey-button">📚 知识库</button>
       <button @click="goToApiKeys" class="apikey-button">🔑 API密钥</button>
       <button @click="handleLogout" class="logout-button">退出登录</button>
     </div>
@@ -195,6 +196,10 @@ const goToRandomVideo = () => {
 
 const goToApiKeys = () => {
   router.push('/developer/api-keys');
+};
+
+const goToRag = () => {
+  router.push('/rag');
 };
 
 const selectTab = (tab) => {

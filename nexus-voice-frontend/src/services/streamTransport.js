@@ -116,6 +116,7 @@ export class WebSocketTransport extends StreamTransport {
     this.maxReconnectAttempts = 3;
     this.reconnectTimeouts = [1000, 2000, 4000]; // 指数退避
     this.token = null;
+    this.manualClose = false;
   }
   
   getProtocolType() {
@@ -131,6 +132,7 @@ export class WebSocketTransport extends StreamTransport {
     }
     
     this.token = token;
+    this.manualClose = false;
     this._emitStatusChange('connecting');
     
     try {
@@ -161,6 +163,9 @@ export class WebSocketTransport extends StreamTransport {
       
       // 连接错误
       this.ws.onerror = (error) => {
+        if (this.manualClose) {
+          return;
+        }
         console.error('[WebSocket] ❌ 连接错误:', error);
         this._emitError(new Error('WebSocket连接错误'));
       };
@@ -169,6 +174,10 @@ export class WebSocketTransport extends StreamTransport {
       this.ws.onclose = (event) => {
         console.log(`[WebSocket] 🔌 连接已关闭, code: ${event.code}`);
         this._emitStatusChange('disconnected');
+
+        if (this.manualClose) {
+          return;
+        }
         
         // 认证失败，不重连
         if (event.code === 1008 || event.code === 1003) {
@@ -215,8 +224,7 @@ export class WebSocketTransport extends StreamTransport {
     console.log('[WebSocket] 🔌 关闭连接');
     
     if (this.ws) {
-      // 停止自动重连
-      this.maxReconnectAttempts = 0;
+      this.manualClose = true;
       
       if (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING) {
         this.ws.close();
