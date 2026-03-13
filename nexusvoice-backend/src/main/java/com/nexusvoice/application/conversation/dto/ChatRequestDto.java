@@ -56,6 +56,9 @@ public class ChatRequestDto {
     
     @Schema(description = "知识库ID列表，启用RAG时使用", example = "[1, 2, 3]")
     private java.util.List<Long> knowledgeBaseIds;
+
+    @Schema(description = "RAG回答约束模式：STRICT=严格基于知识库资料，FLEXIBLE=允许在资料基础上适度发挥", example = "STRICT")
+    private String ragGroundingMode = "STRICT";
     
     @Schema(description = "图像URL列表，支持多图输入（仅OCR/视觉模型支持）", example = "[\"https://example.com/image1.jpg\", \"https://example.com/image2.jpg\"]")
     private java.util.List<String> imageUrls;

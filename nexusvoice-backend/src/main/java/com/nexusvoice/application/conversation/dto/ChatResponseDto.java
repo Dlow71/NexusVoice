@@ -1,18 +1,18 @@
 package com.nexusvoice.application.conversation.dto;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
-import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
+import com.nexusvoice.domain.rag.model.vo.RagCitation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.Builder;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 聊天响应DTO
@@ -35,6 +35,9 @@ public class ChatResponseDto {
 
     @Schema(description = "AI回复内容")
     private String content;
+
+    @Schema(description = "结构化来源引用")
+    private List<RagCitation> citations;
 
     @Schema(description = "响应时间（毫秒）")
     private Long responseTimeMs;
@@ -88,12 +91,14 @@ public class ChatResponseDto {
     /**
      * 创建成功响应
      */
-    public static ChatResponseDto success(Long conversationId, Long messageId, String content, 
+    public static ChatResponseDto success(Long conversationId, Long messageId, String content,
+                                        List<RagCitation> citations,
                                         String model, TokenUsageDto usage, Long responseTime) {
         return ChatResponseDto.builder()
                 .conversationId(conversationId)
                 .messageId(messageId)
                 .content(content)
+                .citations(citations)
                 .model(model)
                 .usage(usage)
                 .responseTimeMs(responseTime)
@@ -107,11 +112,13 @@ public class ChatResponseDto {
      * 创建成功响应（包含音频URL）
      */
     public static ChatResponseDto success(Long conversationId, Long messageId, String content,
+                                        List<RagCitation> citations,
                                         String model, TokenUsageDto usage, Long responseTime, String audioUrl) {
         return ChatResponseDto.builder()
                 .conversationId(conversationId)
                 .messageId(messageId)
                 .content(content)
+                .citations(citations)
                 .model(model)
                 .usage(usage)
                 .responseTimeMs(responseTime)
@@ -126,12 +133,14 @@ public class ChatResponseDto {
      * 创建成功响应（包含TTS分段信息）
      */
     public static ChatResponseDto successWithTts(Long conversationId, Long messageId, String content,
+                                                List<RagCitation> citations,
                                                 String model, TokenUsageDto usage, Long responseTime,
                                                 TTSResponseDTO tts) {
         return ChatResponseDto.builder()
                 .conversationId(conversationId)
                 .messageId(messageId)
                 .content(content)
+                .citations(citations)
                 .model(model)
                 .usage(usage)
                 .responseTimeMs(responseTime)

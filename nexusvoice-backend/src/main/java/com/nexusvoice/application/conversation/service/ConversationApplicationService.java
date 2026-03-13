@@ -25,6 +25,7 @@ import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
+import com.nexusvoice.infrastructure.rag.service.RagCitationService;
 import com.nexusvoice.utils.MarkdownTextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,6 +55,7 @@ public class ConversationApplicationService {
     private final SystemConfigService systemConfigService;
     private final ConversationResourceCleanupService resourceCleanupService;
     private final com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator;
+    private final RagCitationService ragCitationService;
 
     public ConversationApplicationService(ConversationRepository conversationRepository,
                                         ConversationMessageRepository messageRepository,
@@ -63,7 +65,8 @@ public class ConversationApplicationService {
                                         RoleApplicationService roleApplicationService,
                                         SystemConfigService systemConfigService,
                                         ConversationResourceCleanupService resourceCleanupService,
-                                        com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator) {
+                                        com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator,
+                                        RagCitationService ragCitationService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
@@ -73,6 +76,7 @@ public class ConversationApplicationService {
         this.systemConfigService = systemConfigService;
         this.resourceCleanupService = resourceCleanupService;
         this.titleGenerator = titleGenerator;
+        this.ragCitationService = ragCitationService;
     }
 
     /**
@@ -178,6 +182,7 @@ public class ConversationApplicationService {
                         null,
                         audioUrl
                 );
+                aiMessage.setMetadata(ragCitationService.writeMetadata(aiResponse.getCitations()));
                 aiMessage.setTokenCount(aiResponse.getUsage() != null ? aiResponse.getUsage().getCompletionTokens() : 0);
                 aiMessage = conversationDomainService.addMessageToConversation(conversation.getId(), aiMessage);
 
@@ -215,6 +220,7 @@ public class ConversationApplicationService {
                             conversation.getId(),
                             aiMessage.getId(),
                             aiResponse.getContent(),
+                            aiResponse.getCitations(),
                             aiResponse.getModel(),
                             usageDto,
                             aiResponse.getResponseTimeMs(),
@@ -225,6 +231,7 @@ public class ConversationApplicationService {
                             conversation.getId(),
                             aiMessage.getId(),
                             aiResponse.getContent(),
+                            aiResponse.getCitations(),
                             aiResponse.getModel(),
                             usageDto,
                             aiResponse.getResponseTimeMs(),
@@ -309,7 +316,9 @@ public class ConversationApplicationService {
         List<ConversationMessage> messages = conversationDomainService.getConversationHistory(conversationId);
         
         // 转换为包含角色信息的DTO
-        return ConversationAssembler.toConversationMessageWithRoleDtoList(messages, role);
+        return ConversationAssembler.toConversationMessageWithRoleDtoList(messages, role).stream()
+                .peek(message -> message.setCitations(ragCitationService.readMetadata(message.getMetadata())))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -503,18 +512,32 @@ public class ConversationApplicationService {
         if (modelName != null && !modelName.contains(":")) {
             modelName = "openai:" + modelName;
         }
+
+        Double temperature = requestDto.getTemperature() != null
+                ? requestDto.getTemperature()
+                : resolveDefaultTemperature(requestDto);
         
         return ChatRequest.builder()
                 .messages(messages)
                 .model(modelName)
-                .temperature(requestDto.getTemperature() != null ? requestDto.getTemperature() : 0.7)
+                .temperature(temperature)
                 .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
                 .userId(conversation.getUserId())
                 .conversationId(conversation.getId())
                 .enableWebSearch(requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : false)
                 .enableRag(requestDto.getEnableRag() != null ? requestDto.getEnableRag() : false)
                 .knowledgeBaseIds(requestDto.getKnowledgeBaseIds())
+                .ragGroundingMode(requestDto.getRagGroundingMode())
                 .build();
+    }
+
+    private Double resolveDefaultTemperature(ChatRequestDto requestDto) {
+        boolean enableRag = requestDto.getEnableRag() != null && requestDto.getEnableRag();
+        boolean strictMode = "STRICT".equalsIgnoreCase(requestDto.getRagGroundingMode());
+        if (enableRag && strictMode) {
+            return 0.2;
+        }
+        return 0.7;
     }
     
     /**

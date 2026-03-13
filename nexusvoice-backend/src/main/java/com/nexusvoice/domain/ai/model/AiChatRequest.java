@@ -86,6 +86,11 @@ public class AiChatRequest {
      * RAG知识库ID列表
      */
     private List<Long> knowledgeBaseIds;
+
+    /**
+     * RAG回答约束模式：STRICT / FLEXIBLE
+     */
+    private String ragGroundingMode;
     
     /**
      * 图像URL列表（支持多图输入）
@@ -120,6 +125,7 @@ public class AiChatRequest {
         request.enableWebSearch = false;
         request.enableRag = false;
         request.enableMultiModal = false;
+        request.ragGroundingMode = "STRICT";
         return request;
     }
 
@@ -212,6 +218,11 @@ public class AiChatRequest {
             request.knowledgeBaseIds = knowledgeBaseIds;
             return this;
         }
+
+        public Builder ragGroundingMode(String ragGroundingMode) {
+            request.ragGroundingMode = ragGroundingMode;
+            return this;
+        }
         
         public Builder imageUrls(List<String> imageUrls) {
             request.imageUrls = imageUrls;
@@ -288,6 +299,10 @@ public class AiChatRequest {
     public List<Long> getKnowledgeBaseIds() {
         return knowledgeBaseIds;
     }
+
+    public String getRagGroundingMode() {
+        return ragGroundingMode;
+    }
     
     public List<String> getImageUrls() {
         return imageUrls;
@@ -356,6 +371,10 @@ public class AiChatRequest {
 
     public void setKnowledgeBaseIds(List<Long> knowledgeBaseIds) {
         this.knowledgeBaseIds = knowledgeBaseIds;
+    }
+
+    public void setRagGroundingMode(String ragGroundingMode) {
+        this.ragGroundingMode = ragGroundingMode;
     }
     
     public void setImageUrls(List<String> imageUrls) {

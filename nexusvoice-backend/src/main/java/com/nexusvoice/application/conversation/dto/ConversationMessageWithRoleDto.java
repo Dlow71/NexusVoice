@@ -7,6 +7,7 @@ import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
 import com.nexusvoice.domain.conversation.constant.MessageRole;
 import com.nexusvoice.domain.conversation.model.MessageAttachment;
+import com.nexusvoice.domain.rag.model.vo.RagCitation;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import lombok.Builder;
@@ -57,6 +58,9 @@ public class ConversationMessageWithRoleDto {
 
     @Schema(description = "消息元数据")
     private String metadata;
+
+    @Schema(description = "结构化来源引用")
+    private List<RagCitation> citations;
 
     @Schema(description = "消息发送时间")
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)
