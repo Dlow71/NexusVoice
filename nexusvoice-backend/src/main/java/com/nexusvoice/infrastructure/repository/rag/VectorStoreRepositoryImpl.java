@@ -155,10 +155,7 @@ public class VectorStoreRepositoryImpl implements VectorStoreRepository {
         LambdaQueryWrapper<VectorStorePO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(VectorStorePO::getDocumentUnitId, documentUnitId)
                .eq(VectorStorePO::getDeleted, 0);
-        
-        VectorStorePO updatePo = new VectorStorePO();
-        updatePo.setDeleted(1);
-        return mapper.update(updatePo, wrapper) > 0;
+        return mapper.delete(wrapper) > 0;
     }
 
     @Override
@@ -166,14 +163,10 @@ public class VectorStoreRepositoryImpl implements VectorStoreRepository {
         if (ids == null || ids.isEmpty()) {
             return 0;
         }
-        // 假设ids是documentUnitIds
         LambdaQueryWrapper<VectorStorePO> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(VectorStorePO::getDocumentUnitId, ids)
                .eq(VectorStorePO::getDeleted, 0);
-        
-        VectorStorePO updatePo = new VectorStorePO();
-        updatePo.setDeleted(1);
-        return mapper.update(updatePo, wrapper);
+        return mapper.delete(wrapper);
     }
 
     @Override

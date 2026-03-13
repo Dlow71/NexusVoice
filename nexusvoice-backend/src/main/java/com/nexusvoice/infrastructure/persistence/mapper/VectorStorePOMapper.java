@@ -68,8 +68,8 @@ public interface VectorStorePOMapper extends BaseMapper<VectorStorePO> {
      * 返回Map包含：document_unit_id, content, page, file_name, file_id, similarity_score
      */
     @Select("SELECT du.id as document_unit_id, du.content, " +
-            "       du.page_number as page, du.file_id, " +
-            "       COALESCE(fd.file_name, fd.original_name, fd.filename) as file_name, " +
+            "       du.page as page, du.file_id, " +
+            "       COALESCE(fd.original_name, fd.filename) as file_name, " +
             "       (1 - (vs.embedding <=> #{embedding}::vector)) AS similarity_score " +
             "FROM vector_store vs " +
             "JOIN document_units du ON vs.document_unit_id = du.id " +
@@ -91,16 +91,19 @@ public interface VectorStorePOMapper extends BaseMapper<VectorStorePO> {
      * 关键词全文检索（PostgreSQL全文搜索）
      */
     @Select("SELECT du.id as document_unit_id, du.content, " +
-            "       du.page_number as page, " +
-            "       COALESCE(fd.file_name, fd.original_name, fd.filename) as file_name, " +
-            "       ts_rank(to_tsvector('chinese_cfg', du.content), plainto_tsquery('chinese_cfg', #{query})) AS similarity_score " +
+            "       du.page as page, du.file_id, " +
+            "       COALESCE(fd.original_name, fd.filename) as file_name, " +
+            "       CASE " +
+            "           WHEN du.content ILIKE '%' || #{query} || '%' THEN 1.0 " +
+            "           ELSE 0.1 " +
+            "       END AS similarity_score " +
             "FROM document_units du " +
             "JOIN file_details fd ON du.file_id = fd.id " +
             "WHERE fd.knowledge_base_id = #{knowledgeBaseId} " +
             "AND du.deleted = 0 " +
             "AND fd.deleted = 0 " +
-            "AND to_tsvector('chinese_cfg', du.content) @@ plainto_tsquery('chinese_cfg', #{query}) " +
-            "ORDER BY similarity_score DESC " +
+            "AND du.content ILIKE '%' || #{query} || '%' " +
+            "ORDER BY position(lower(#{query}) in lower(du.content)) ASC " +
             "LIMIT #{limit}")
     List<Map<String, Object>> keywordSearch(
             @Param("query") String query,

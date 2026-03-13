@@ -34,18 +34,8 @@ public class DocumentUnitPOConverter {
         po.setFileId(entity.getFileId());
         po.setContent(entity.getContent());
         po.setPage(entity.getPage());
-        po.setUnitType(entity.getUnitType());
-        po.setParagraphIndex(entity.getParagraphIndex());
-        po.setChunkIndex(entity.getChunkIndex());
-        po.setStartPosition(entity.getStartPosition());
-        po.setEndPosition(entity.getEndPosition());
-        po.setCharCount(entity.getCharCount());
-        po.setTokenCount(entity.getTokenCount());
         po.setIsOcr(entity.getIsOcr());
-        po.setOcrConfidence(entity.getOcrConfidence());
         po.setIsVector(entity.getIsVector());
-        po.setLanguage(entity.getLanguage());
-        po.setMetadata(entity.getMetadata());
         
         return po;
     }
@@ -70,18 +60,8 @@ public class DocumentUnitPOConverter {
         entity.setFileId(po.getFileId());
         entity.setContent(po.getContent());
         entity.setPage(po.getPage());
-        entity.setUnitType(po.getUnitType());
-        entity.setParagraphIndex(po.getParagraphIndex());
-        entity.setChunkIndex(po.getChunkIndex());
-        entity.setStartPosition(po.getStartPosition());
-        entity.setEndPosition(po.getEndPosition());
-        entity.setCharCount(po.getCharCount());
-        entity.setTokenCount(po.getTokenCount());
         entity.setIsOcr(po.getIsOcr());
-        entity.setOcrConfidence(po.getOcrConfidence());
         entity.setIsVector(po.getIsVector());
-        entity.setLanguage(po.getLanguage());
-        entity.setMetadata(po.getMetadata());
         
         return entity;
     }

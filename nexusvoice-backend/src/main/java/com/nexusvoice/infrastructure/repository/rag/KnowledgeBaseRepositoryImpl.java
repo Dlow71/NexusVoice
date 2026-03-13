@@ -95,11 +95,7 @@ public class KnowledgeBaseRepositoryImpl implements KnowledgeBaseRepository {
 
     @Override
     public boolean deleteById(Long id) {
-        // 逻辑删除
-        KnowledgeBasePO po = new KnowledgeBasePO();
-        po.setId(id);
-        po.setDeleted(1);
-        return mapper.updateById(po) > 0;
+        return mapper.deleteById(id) > 0;
     }
 
     @Override

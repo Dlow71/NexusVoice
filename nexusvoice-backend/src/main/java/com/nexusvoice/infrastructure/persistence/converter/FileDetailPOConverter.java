@@ -34,17 +34,25 @@ public class FileDetailPOConverter {
         po.setDeleted(entity.getDeleted());
         
         // 业务字段
+        po.setUserId(entity.getUserId());
         po.setKnowledgeBaseId(entity.getKnowledgeBaseId());
-        po.setFileName(entity.getFileName());
+        po.setFilename(entity.getFileName());
+        po.setOriginalName(entity.getOriginalName());
         po.setFileSize(entity.getFileSize());
-        po.setFilePageSize(entity.getFilePageSize());
+        po.setFilePageCount(entity.getFilePageSize());
         po.setFileType(entity.getFileType() != null ? entity.getFileType().name() : null);
-        po.setFilePath(entity.getFilePath());
+        po.setMimeType(entity.getMimeType());
+        po.setStorageProvider(entity.getStorageProvider());
+        po.setStorageKey(entity.getStorageKey() != null ? entity.getStorageKey() : entity.getFilePath());
+        po.setStorageUrl(entity.getFilePath());
         po.setFileHash(entity.getFileHash());
         po.setParseStrategy(entity.getParseStrategy() != null ? entity.getParseStrategy().name() : null);
-        po.setProcessStatus(entity.getProcessStatus() != null ? entity.getProcessStatus().getValue() : null);
+        po.setStatus(entity.getProcessStatus() != null ? entity.getProcessStatus().name() : null);
+        po.setCurrentProcessPage(entity.getCurrentProcessPage());
+        po.setProcessProgress(entity.getProcessProgress());
+        po.setErrorCode(entity.getErrorCode());
         po.setErrorMessage(entity.getErrorMessage());
-        po.setMetadata(null); // FileDetail没有metadata字段
+        po.setProcessedAt(entity.getProcessedAt());
         
         return po;
     }
@@ -66,17 +74,25 @@ public class FileDetailPOConverter {
         entity.setDeleted(po.getDeleted());
         
         // 业务字段
+        entity.setUserId(po.getUserId());
         entity.setKnowledgeBaseId(po.getKnowledgeBaseId());
-        entity.setFileName(po.getFileName());
+        entity.setFileName(po.getFilename());
+        entity.setOriginalName(po.getOriginalName());
         entity.setFileSize(po.getFileSize());
-        entity.setFilePageSize(po.getFilePageSize());
+        entity.setFilePageSize(po.getFilePageCount());
         entity.setFileType(po.getFileType() != null ? FileType.valueOf(po.getFileType()) : null);
-        entity.setFilePath(po.getFilePath());
+        entity.setMimeType(po.getMimeType());
+        entity.setStorageProvider(po.getStorageProvider());
+        entity.setStorageKey(po.getStorageKey());
+        entity.setFilePath(po.getStorageKey() != null ? po.getStorageKey() : po.getStorageUrl());
         entity.setFileHash(po.getFileHash());
         entity.setParseStrategy(po.getParseStrategy() != null ? ParseStrategy.valueOf(po.getParseStrategy()) : null);
-        entity.setProcessStatus(po.getProcessStatus() != null ? ProcessStatus.fromValue(po.getProcessStatus()) : null);
+        entity.setProcessStatus(po.getStatus() != null ? ProcessStatus.valueOf(po.getStatus()) : null);
+        entity.setCurrentProcessPage(po.getCurrentProcessPage());
+        entity.setProcessProgress(po.getProcessProgress());
+        entity.setErrorCode(po.getErrorCode());
         entity.setErrorMessage(po.getErrorMessage());
-        // metadata字段忽略，FileDetail没有此字段
+        entity.setProcessedAt(po.getProcessedAt());
         
         return entity;
     }

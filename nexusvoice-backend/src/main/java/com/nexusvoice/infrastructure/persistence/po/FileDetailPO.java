@@ -30,10 +30,16 @@ public class FileDetailPO extends BasePO {
     private Long knowledgeBaseId;
 
     /**
-     * 文件名
+     * 存储文件名
      */
-    @TableField("file_name")
-    private String fileName;
+    @TableField("filename")
+    private String filename;
+
+    /**
+     * 原始文件名
+     */
+    @TableField("original_name")
+    private String originalName;
 
     /**
      * 文件大小（字节）
@@ -44,8 +50,8 @@ public class FileDetailPO extends BasePO {
     /**
      * 文件页数
      */
-    @TableField("file_page_size")
-    private Integer filePageSize;
+    @TableField("file_page_count")
+    private Integer filePageCount;
 
     /**
      * 文件类型：PDF,WORD,TXT,EXCEL,PPT,HTML,MARKDOWN,CSV,JSON,XML
@@ -54,10 +60,28 @@ public class FileDetailPO extends BasePO {
     private String fileType;
 
     /**
-     * 文件存储路径
+     * MIME类型
      */
-    @TableField("file_path")
-    private String filePath;
+    @TableField("mime_type")
+    private String mimeType;
+
+    /**
+     * 存储提供商
+     */
+    @TableField("storage_provider")
+    private String storageProvider;
+
+    /**
+     * 存储Key
+     */
+    @TableField("storage_key")
+    private String storageKey;
+
+    /**
+     * 存储URL
+     */
+    @TableField("storage_url")
+    private String storageUrl;
 
     /**
      * 文件哈希值
@@ -72,10 +96,10 @@ public class FileDetailPO extends BasePO {
     private String parseStrategy;
 
     /**
-     * 处理状态：0-上传中，1-解析中，2-向量化中，3-完成，4-失败
+     * 处理状态：PENDING/UPLOADING/PARSING/SPLITTING/VECTORIZING/COMPLETED/FAILED
      */
-    @TableField("process_status")
-    private Integer processStatus;
+    @TableField("status")
+    private String status;
 
     /**
      * 当前处理页数
@@ -104,6 +128,12 @@ public class FileDetailPO extends BasePO {
     /**
      * 元数据（JSON格式）
      */
-    @TableField("metadata")
+    @TableField(exist = false)
     private String metadata;
+
+    /**
+     * 处理完成时间
+     */
+    @TableField("processed_at")
+    private java.time.LocalDateTime processedAt;
 }

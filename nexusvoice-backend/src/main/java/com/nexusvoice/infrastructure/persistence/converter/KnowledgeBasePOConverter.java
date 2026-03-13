@@ -40,7 +40,6 @@ public class KnowledgeBasePOConverter {
         po.setStatus(entity.getStatus() != null ? entity.getStatus().name() : null);
         po.setFileCount(entity.getFileCount());
         po.setTotalSize(entity.getTotalSize());
-        po.setDocumentCount(entity.getDocumentCount());
         
         return po;
     }
@@ -70,7 +69,7 @@ public class KnowledgeBasePOConverter {
         entity.setStatus(po.getStatus() != null ? KnowledgeBaseStatus.valueOf(po.getStatus()) : null);
         entity.setFileCount(po.getFileCount());
         entity.setTotalSize(po.getTotalSize());
-        entity.setDocumentCount(po.getDocumentCount());
+        entity.setDocumentCount(po.getDocumentCount() != null ? po.getDocumentCount() : 0);
         
         return entity;
     }

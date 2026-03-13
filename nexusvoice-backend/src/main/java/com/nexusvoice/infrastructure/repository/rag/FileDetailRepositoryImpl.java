@@ -80,7 +80,7 @@ public class FileDetailRepositoryImpl implements FileDetailRepository {
     @Override
     public List<FileDetail> findByStatus(ProcessStatus status) {
         LambdaQueryWrapper<FileDetailPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(FileDetailPO::getProcessStatus, status.getValue())
+        wrapper.eq(FileDetailPO::getStatus, status.name())
                .eq(FileDetailPO::getDeleted, 0)
                .orderByDesc(FileDetailPO::getCreatedAt);
         
@@ -109,10 +109,7 @@ public class FileDetailRepositoryImpl implements FileDetailRepository {
 
     @Override
     public boolean deleteById(Long id) {
-        FileDetailPO po = new FileDetailPO();
-        po.setId(id);
-        po.setDeleted(1);
-        return mapper.updateById(po) > 0;
+        return mapper.deleteById(id) > 0;
     }
 
     @Override
@@ -123,17 +120,14 @@ public class FileDetailRepositoryImpl implements FileDetailRepository {
         LambdaQueryWrapper<FileDetailPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(FileDetailPO::getId, ids)
                .eq(FileDetailPO::getDeleted, 0);
-        
-        FileDetailPO updatePo = new FileDetailPO();
-        updatePo.setDeleted(1);
-        return mapper.update(updatePo, wrapper);
+        return mapper.delete(wrapper);
     }
 
     @Override
     public void updateStatus(Long id, ProcessStatus status) {
         FileDetailPO po = new FileDetailPO();
         po.setId(id);
-        po.setProcessStatus(status.getValue());
+        po.setStatus(status.name());
         mapper.updateById(po);
     }
 
@@ -198,7 +192,7 @@ public class FileDetailRepositoryImpl implements FileDetailRepository {
     @Override
     public List<FileDetail> findPendingFiles(int limit) {
         LambdaQueryWrapper<FileDetailPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(FileDetailPO::getProcessStatus, ProcessStatus.PENDING.getValue())
+        wrapper.eq(FileDetailPO::getStatus, ProcessStatus.PENDING.name())
                .eq(FileDetailPO::getDeleted, 0)
                .orderByAsc(FileDetailPO::getCreatedAt)
                .last("LIMIT " + limit);
@@ -213,7 +207,7 @@ public class FileDetailRepositoryImpl implements FileDetailRepository {
     public List<FileDetail> findFailedFilesByUserId(Long userId) {
         LambdaQueryWrapper<FileDetailPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(FileDetailPO::getUserId, userId)
-               .eq(FileDetailPO::getProcessStatus, ProcessStatus.FAILED.getValue())
+               .eq(FileDetailPO::getStatus, ProcessStatus.FAILED.name())
                .eq(FileDetailPO::getDeleted, 0)
                .orderByDesc(FileDetailPO::getCreatedAt);
         

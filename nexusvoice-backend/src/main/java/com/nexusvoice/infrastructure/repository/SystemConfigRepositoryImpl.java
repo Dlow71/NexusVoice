@@ -66,8 +66,12 @@ public class SystemConfigRepositoryImpl implements SystemConfigRepository {
         // 2. 缓存未命中，从数据库查询
         LambdaQueryWrapper<SystemConfigPO> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(SystemConfigPO::getConfigKey, configKey)
-                    .eq(SystemConfigPO::getDeleted, 0);
-        SystemConfigPO po = mapper.selectOne(queryWrapper);
+                    .eq(SystemConfigPO::getDeleted, 0)
+                    .orderByDesc(SystemConfigPO::getUpdatedAt)
+                    .orderByDesc(SystemConfigPO::getCreatedAt)
+                    .orderByDesc(SystemConfigPO::getId)
+                    .last("LIMIT 1");
+        SystemConfigPO po = mapper.selectList(queryWrapper).stream().findFirst().orElse(null);
         SystemConfig config = converter.toDomain(po);
         
         // 3. 写入缓存

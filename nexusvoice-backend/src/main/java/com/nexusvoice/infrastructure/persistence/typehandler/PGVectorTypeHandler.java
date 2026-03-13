@@ -77,4 +77,3 @@ public class PGVectorTypeHandler extends BaseTypeHandler<List<Float>> {
         return list;
     }
 }
-

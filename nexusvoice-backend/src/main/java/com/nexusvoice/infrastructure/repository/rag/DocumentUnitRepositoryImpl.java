@@ -75,7 +75,7 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
         wrapper.eq(DocumentUnitPO::getFileId, fileId)
                .eq(DocumentUnitPO::getPage, pageNumber)
                .eq(DocumentUnitPO::getDeleted, 0)
-               .orderByAsc(DocumentUnitPO::getChunkIndex);
+               .orderByAsc(DocumentUnitPO::getPage);
         
         List<DocumentUnitPO> poList = mapper.selectList(wrapper);
         return poList.stream()
@@ -87,7 +87,7 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
     public Optional<DocumentUnit> findByFileIdAndChunkIndex(Long fileId, Integer chunkIndex) {
         LambdaQueryWrapper<DocumentUnitPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DocumentUnitPO::getFileId, fileId)
-               .eq(DocumentUnitPO::getChunkIndex, chunkIndex)
+               .eq(DocumentUnitPO::getPage, chunkIndex)
                .eq(DocumentUnitPO::getDeleted, 0)
                .last("LIMIT 1");
         
@@ -116,8 +116,7 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
         wrapper.eq(DocumentUnitPO::getFileId, fileId)
                .eq(DocumentUnitPO::getIsVector, false)
                .eq(DocumentUnitPO::getDeleted, 0)
-               .orderByAsc(DocumentUnitPO::getPage)
-               .orderByAsc(DocumentUnitPO::getChunkIndex);
+               .orderByAsc(DocumentUnitPO::getPage);
         
         List<DocumentUnitPO> poList = mapper.selectList(wrapper);
         return poList.stream()
@@ -158,29 +157,19 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
 
     @Override
     public Long sumCharCountByFileId(Long fileId) {
-        LambdaQueryWrapper<DocumentUnitPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DocumentUnitPO::getFileId, fileId)
-               .eq(DocumentUnitPO::getDeleted, 0);
-        
-        List<DocumentUnitPO> poList = mapper.selectList(wrapper);
-        return poList.stream()
-                .map(DocumentUnitPO::getCharCount)
-                .filter(count -> count != null)
-                .mapToLong(Integer::longValue)
+        return findByFileId(fileId).stream()
+                .map(DocumentUnit::getContent)
+                .filter(content -> content != null)
+                .mapToLong(String::length)
                 .sum();
     }
 
     @Override
     public Long sumTokenCountByFileId(Long fileId) {
-        LambdaQueryWrapper<DocumentUnitPO> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(DocumentUnitPO::getFileId, fileId)
-               .eq(DocumentUnitPO::getDeleted, 0);
-        
-        List<DocumentUnitPO> poList = mapper.selectList(wrapper);
-        return poList.stream()
-                .map(DocumentUnitPO::getTokenCount)
-                .filter(count -> count != null)
-                .mapToLong(Integer::longValue)
+        return findByFileId(fileId).stream()
+                .map(DocumentUnit::getContent)
+                .filter(content -> content != null)
+                .mapToLong(content -> (long) Math.ceil(content.length() / 3.0))
                 .sum();
     }
 
@@ -199,8 +188,7 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
         wrapper.eq(DocumentUnitPO::getFileId, fileId)
                .eq(DocumentUnitPO::getIsOcr, true)
                .eq(DocumentUnitPO::getDeleted, 0)
-               .orderByAsc(DocumentUnitPO::getPage)
-               .orderByAsc(DocumentUnitPO::getChunkIndex);
+               .orderByAsc(DocumentUnitPO::getPage);
         
         List<DocumentUnitPO> poList = mapper.selectList(wrapper);
         return poList.stream()
@@ -212,10 +200,8 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
     public List<DocumentUnit> findByFileIdAndLanguage(Long fileId, String language) {
         LambdaQueryWrapper<DocumentUnitPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DocumentUnitPO::getFileId, fileId)
-               .eq(DocumentUnitPO::getLanguage, language)
                .eq(DocumentUnitPO::getDeleted, 0)
-               .orderByAsc(DocumentUnitPO::getPage)
-               .orderByAsc(DocumentUnitPO::getChunkIndex);
+               .orderByAsc(DocumentUnitPO::getPage);
         
         List<DocumentUnitPO> poList = mapper.selectList(wrapper);
         return poList.stream()
@@ -228,16 +214,12 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
         DocumentUnitPO po = new DocumentUnitPO();
         po.setId(id);
         po.setIsOcr(true);
-        po.setOcrConfidence(confidence);
         mapper.updateById(po);
     }
 
     @Override
     public boolean deleteById(Long id) {
-        DocumentUnitPO po = new DocumentUnitPO();
-        po.setId(id);
-        po.setDeleted(1);
-        return mapper.updateById(po) > 0;
+        return mapper.deleteById(id) > 0;
     }
 
     @Override
@@ -245,9 +227,6 @@ public class DocumentUnitRepositoryImpl implements DocumentUnitRepository {
         LambdaQueryWrapper<DocumentUnitPO> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(DocumentUnitPO::getFileId, fileId)
                .eq(DocumentUnitPO::getDeleted, 0);
-        
-        DocumentUnitPO updatePo = new DocumentUnitPO();
-        updatePo.setDeleted(1);
-        return mapper.update(updatePo, wrapper);
+        return mapper.delete(wrapper);
     }
 }

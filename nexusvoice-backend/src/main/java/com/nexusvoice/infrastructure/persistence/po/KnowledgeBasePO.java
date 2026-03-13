@@ -68,6 +68,6 @@ public class KnowledgeBasePO extends BasePO {
     /**
      * 文档单元数量
      */
-    @TableField("document_count")
+    @TableField(exist = false)
     private Integer documentCount;
 }
