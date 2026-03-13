@@ -1,10 +1,12 @@
 package com.nexusvoice.infrastructure.ai.model;
 
+import com.nexusvoice.domain.rag.model.vo.RagCitation;
 import lombok.Data;
 import lombok.Builder;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
 
@@ -67,6 +69,11 @@ public class ChatResponse {
      * 额外的元数据
      */
     private Map<String, Object> metadata;
+
+    /**
+     * 结构化RAG引用。
+     */
+    private List<RagCitation> citations;
 
     /**
      * 令牌使用统计

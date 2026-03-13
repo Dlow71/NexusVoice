@@ -2,10 +2,13 @@ package com.nexusvoice.infrastructure.ai.model;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.nexusvoice.domain.rag.model.vo.RagCitation;
 import lombok.Data;
 import lombok.Builder;
 import lombok.AllArgsConstructor;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
 
 /**
  * 流式聊天响应模型
@@ -28,6 +31,11 @@ public class StreamChatResponse {
      * 增量内容
      */
     private String delta;
+
+    /**
+     * 最终完整内容，仅在END消息中回填。
+     */
+    private String content;
 
     /**
      * 模型名称
@@ -90,6 +98,11 @@ public class StreamChatResponse {
      * 响应时间（毫秒，仅在END时可选返回）
      */
     private Long responseTimeMs;
+
+    /**
+     * 结构化RAG引用，仅在END时返回。
+     */
+    private List<RagCitation> citations;
 
     /**
      * 流消息类型

@@ -21,6 +21,7 @@ import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
+import com.nexusvoice.infrastructure.rag.service.RagCitationService;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.domain.config.service.SystemConfigService;
@@ -46,6 +47,7 @@ import java.util.concurrent.Semaphore;
 import org.springframework.beans.factory.annotation.Qualifier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -66,6 +68,7 @@ public class ChatStreamHandler implements WebSocketHandler {
     private final SystemConfigService systemConfigService;
     private final TempFileCleanupService tempFileCleanupService;
     private final DynamicAiModelBeanManager modelBeanManager;
+    private final RagCitationService ragCitationService;
     private final ObjectMapper objectMapper;
     
     // 存储会话信息
@@ -88,6 +91,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                            SystemConfigService systemConfigService,
                            TempFileCleanupService tempFileCleanupService,
                            DynamicAiModelBeanManager modelBeanManager,
+                           RagCitationService ragCitationService,
                            ObjectMapper objectMapper,
                            @Qualifier("ttsVirtualThreadExecutor") ExecutorService ttsVirtualThreadExecutor,
                            @Qualifier("heartbeatVirtualThreadExecutor") ExecutorService heartbeatVirtualThreadExecutor) {
@@ -100,6 +104,7 @@ public class ChatStreamHandler implements WebSocketHandler {
         this.systemConfigService = systemConfigService;
         this.tempFileCleanupService = tempFileCleanupService;
         this.modelBeanManager = modelBeanManager;
+        this.ragCitationService = ragCitationService;
         this.objectMapper = objectMapper;
         this.ttsVirtualThreadExecutor = ttsVirtualThreadExecutor;
         this.heartbeatVirtualThreadExecutor = heartbeatVirtualThreadExecutor;
@@ -118,11 +123,8 @@ public class ChatStreamHandler implements WebSocketHandler {
         log.info("WebSocket连接建立，会话ID：{}，用户ID：{}，用户名：{}，角色：{}", 
                 sessionId, userId, username, roles);
         
-        // 发送连接成功消息
-        sendMessage(session, StreamChatResponse.builder()
-                .type(StreamChatResponse.StreamMessageType.START)
-                .delta("连接成功，欢迎 " + username + "！")
-                .build());
+        // WebSocket连接状态由前端连接事件自行管理，这里不再伪造流式START消息，
+        // 避免污染前端的流式消息状态机。
     }
 
     @Override
@@ -363,7 +365,9 @@ public class ChatStreamHandler implements WebSocketHandler {
             // 6. 开始流式响应
             // 使用StringBuffer保证线程安全（多个TTS线程会并发append）
             StringBuffer responseContent = new StringBuffer();
-
+            final AtomicReference<String> finalizedContent = new AtomicReference<>();
+            final AtomicReference<List<com.nexusvoice.domain.rag.model.vo.RagCitation>> finalizedCitations =
+                    new AtomicReference<>(List.of());
             // 是否启用“分段同步TTS”模式（当 enableAudio=true 时启用）
             final boolean segmentedTtsEnabled = requestDto.getEnableAudio() != null && requestDto.getEnableAudio();
             final String ttsGroupId = segmentedTtsEnabled ? UUID.randomUUID().toString() : null;
@@ -395,7 +399,10 @@ public class ChatStreamHandler implements WebSocketHandler {
                     (streamResponse) -> {
                         try {
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.END) {
-                                // END信号由onComplete处理，这里只记录日志
+                                finalizedContent.set(streamResponse.getContent());
+                                finalizedCitations.set(streamResponse.getCitations() != null
+                                        ? streamResponse.getCitations()
+                                        : List.of());
                                 log.debug("收到AI模型的END信号，对话ID：{}", conversation.getId());
                                 return;
                             }
@@ -407,7 +414,6 @@ public class ChatStreamHandler implements WebSocketHandler {
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.CONTENT && streamResponse.getDelta() != null) {
                                 String delta = streamResponse.getDelta();
                                 responseContent.append(delta);
-                                // 始终发送CONTENT消息，让前端显示流式文字
                                 channel.sendMessage(streamResponse);
                                 // 如果启用了分段TTS，也传递给aggregator处理
                                 if (segmentedTtsEnabled && aggregator != null) {
@@ -462,7 +468,10 @@ public class ChatStreamHandler implements WebSocketHandler {
                                         log.warn("分段TTS完成阶段出现异常：{}", ex.getMessage());
                                     }
                                     if (responseContent.length() > 0) {
-                                        String finalContent = responseContent.toString();
+                                        String finalContent = finalizedContent.get();
+                                        if (finalContent == null || finalContent.isBlank()) {
+                                            finalContent = responseContent.toString();
+                                        }
                                         
                                         ConversationMessage aiMessage = ConversationMessage.createAssistantMessage(
                                                 conversation.getId(),
@@ -470,6 +479,7 @@ public class ChatStreamHandler implements WebSocketHandler {
                                                 null,
                                                 null // 分段TTS场景不设置整段audioUrl
                                         );
+                                        aiMessage.setMetadata(ragCitationService.writeMetadata(finalizedCitations.get()));
                                         conversationDomainService.addMessageToConversation(conversation.getId(), aiMessage);
 
                                         log.info("流式聊天完成（{}），对话ID：{}，文本长度：{}",
@@ -491,6 +501,8 @@ public class ChatStreamHandler implements WebSocketHandler {
                                         endResp.setConversationId(conversation.getId());
                                         endResp.setMessageId(aiMessage.getId());
                                         endResp.setModel(aiRequest.getModel());
+                                        endResp.setContent(finalContent);
+                                        endResp.setCitations(finalizedCitations.get());
                                         endResp.setResponseTimeMs(System.currentTimeMillis() - startTime);
                                         if (segmentedTtsEnabled) {
                                             endResp.setTtsGroupId(ttsGroupId);
@@ -1052,11 +1064,15 @@ public class ChatStreamHandler implements WebSocketHandler {
             modelName = "openai:" + modelName;
         }
 
+        Double temperature = requestDto.getTemperature() != null
+                ? requestDto.getTemperature()
+                : resolveDefaultTemperature(requestDto);
+
         // 完全对标HTTP实现，添加RAG和知识库支持，以及图像输入支持
         return ChatRequest.builder()
                 .messages(messages)
                 .model(modelName)
-                .temperature(requestDto.getTemperature() != null ? requestDto.getTemperature() : 0.7)
+                .temperature(temperature)
                 .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
                 .stream(true)
                 .userId(conversation.getUserId())
@@ -1064,9 +1080,19 @@ public class ChatStreamHandler implements WebSocketHandler {
                 .enableWebSearch(enableWebSearch)
                 .enableRag(requestDto.getEnableRag() != null ? requestDto.getEnableRag() : false)
                 .knowledgeBaseIds(requestDto.getKnowledgeBaseIds())
+                .ragGroundingMode(requestDto.getRagGroundingMode())
                 .imageUrls(requestDto.getImageUrls())
                 .imageBase64(requestDto.getImageBase64())
                 .build();
+    }
+
+    private Double resolveDefaultTemperature(ChatRequestDto requestDto) {
+        boolean enableRag = requestDto.getEnableRag() != null && requestDto.getEnableRag();
+        boolean strictMode = "STRICT".equalsIgnoreCase(requestDto.getRagGroundingMode());
+        if (enableRag && strictMode) {
+            return 0.2;
+        }
+        return 0.7;
     }
 
     /**

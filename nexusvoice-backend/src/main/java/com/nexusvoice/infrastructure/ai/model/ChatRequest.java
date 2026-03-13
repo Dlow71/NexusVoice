@@ -94,6 +94,11 @@ public class ChatRequest {
      * RAG知识库ID列表
      */
     private List<Long> knowledgeBaseIds;
+
+    /**
+     * RAG回答约束模式：STRICT / FLEXIBLE
+     */
+    private String ragGroundingMode;
     
     /**
      * 图像URL列表（支持多图输入）

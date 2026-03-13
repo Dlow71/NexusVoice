@@ -22,6 +22,8 @@ import com.nexusvoice.infrastructure.ai.pool.ApiKeyPoolManager;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.service.AiEmbeddingService;
 import com.nexusvoice.infrastructure.ai.service.AiRerankService;
+import com.nexusvoice.infrastructure.rag.service.RagCitationService;
+import com.nexusvoice.infrastructure.rag.service.StrictRagAnswerPostProcessor;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.model.StreamingResponseHandler;
 import dev.langchain4j.model.chat.ChatLanguageModel;
@@ -82,6 +84,12 @@ public class DynamicAiModelBeanManager {
     
     @Autowired(required = false)
     private com.nexusvoice.infrastructure.video.adapter.ZhipuVideoAdapter zhipuVideoAdapter;
+
+    @Autowired(required = false)
+    private StrictRagAnswerPostProcessor strictRagAnswerPostProcessor;
+
+    @Autowired(required = false)
+    private RagCitationService ragCitationService;
     
     /**
      * 模型服务映射表
@@ -349,6 +357,8 @@ public class DynamicAiModelBeanManager {
             AiApiCallLog callLog = null;
             
             try {
+                ChatRequest finalRequest = enhanceRequestIfNeeded(request);
+
                 // 1. 获取API密钥
                 apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
                 
@@ -356,16 +366,19 @@ public class DynamicAiModelBeanManager {
                 ChatLanguageModel chatModel = modelFactory.createChatModel(model, apiKey);
                 
                 // 3. 转换消息格式
-                List<ChatMessage> langchainMessages = convertMessages(request);
+                List<ChatMessage> langchainMessages = convertMessages(finalRequest);
                 
                 // 4. 调用模型
                 Response<AiMessage> response = chatModel.generate(langchainMessages);
+                String finalContent = postProcessIfNeeded(finalRequest, response.content().text());
+                RagCitationService.RagAnswerPackage answerPackage = buildAnswerPackage(finalRequest, finalContent);
+                finalContent = answerPackage.content();
                 
                 // 5. 计算token和费用
-                int promptTokens = estimateTokenCount(request.getMessages().stream()
+                int promptTokens = estimateTokenCount(finalRequest.getMessages().stream()
                         .map(m -> m.getContent())
                         .collect(Collectors.joining("\n")));
-                int completionTokens = estimateTokenCount(response.content().text());
+                int completionTokens = estimateTokenCount(finalContent);
                 BigDecimal cost = model.calculateCost(promptTokens, completionTokens);
                 
                 // 6. 更新密钥使用统计
@@ -374,7 +387,7 @@ public class DynamicAiModelBeanManager {
                 // 7. 记录调用日志
                 callLog = AiApiCallLog.success(
                         apiKey.getId(), model.getProviderCode(), model.getModelCode(),
-                        request.getUserId(), request.getConversationId(),
+                        finalRequest.getUserId(), finalRequest.getConversationId(),
                         requestId, requestTime,
                         (int)(System.currentTimeMillis() - startTime),
                         promptTokens, completionTokens, cost
@@ -383,8 +396,8 @@ public class DynamicAiModelBeanManager {
                 callLogRepository.save(callLog);
                 
                 // 8. 构建响应
-                return ChatResponse.success(
-                        response.content().text(),
+                ChatResponse chatResponse = ChatResponse.success(
+                        finalContent,
                         model.getModelKey(),
                         ChatResponse.TokenUsage.builder()
                                 .promptTokens(promptTokens)
@@ -393,6 +406,8 @@ public class DynamicAiModelBeanManager {
                                 .build(),
                         System.currentTimeMillis() - startTime
                 );
+                chatResponse.setCitations(answerPackage.citations());
+                return chatResponse;
                 
             } catch (Exception e) {
                 log.error("AI聊天请求失败，模型：{}，错误：{}", model.getModelKey(), e.getMessage(), e);
@@ -434,32 +449,8 @@ public class DynamicAiModelBeanManager {
             AiApiKey apiKey = null;
             
             try {
-                // 1. 执行请求增强链（联网搜索、RAG等）
-                // 将基础设施请求转换为领域请求
-                com.nexusvoice.domain.ai.model.AiChatRequest domainRequest = AiModelConverter.toDomainRequest(request);
-                com.nexusvoice.domain.ai.model.AiChatRequest enhancedDomainRequest = domainRequest;
-                
-                if (enhancementChain != null) {
-                    EnhancementContext context = EnhancementContext.builder()
-                            .originalRequest(domainRequest)
-                            .enhancedRequest(domainRequest)
-                            .enableWebSearch(domainRequest.getEnableWebSearch())
-                            .enableRag(domainRequest.getEnableRag())
-                            .enableMultiModal(domainRequest.getEnableMultiModal())
-                            .build();
-                    
-                    if (context.hasEnhancements()) {
-                        log.info("开始执行流式聊天增强链，模型：{}，联网搜索：{}", 
-                                model.getModelKey(), domainRequest.getEnableWebSearch());
-                        context = enhancementChain.enhance(context);
-                        enhancedDomainRequest = context.getEnhancedRequest();
-                        log.info("流式聊天增强链执行完成，模型：{}", model.getModelKey());
-                    }
-                }
-                
-                // 将增强后的领域请求转换回基础设施请求
-                ChatRequest enhancedRequest = AiModelConverter.toInfrastructureRequest(enhancedDomainRequest);
-                final ChatRequest finalRequest = enhancedRequest;
+                final ChatRequest finalRequest = enhanceRequestIfNeeded(request);
+                final boolean strictBufferedMode = isStrictBufferedMode(finalRequest);
                 
                 // 2. 获取API密钥
                 apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
@@ -480,19 +471,30 @@ public class DynamicAiModelBeanManager {
                     @Override
                     public void onNext(String token) {
                         fullResponse.append(token);
-                        StreamChatResponse response = StreamChatResponse.content(token, index.getAndIncrement());
-                        response.setId(responseId.get());
-                        response.setModel(model.getModelKey());
-                        onNext.accept(response);
+                        if (!strictBufferedMode) {
+                            StreamChatResponse response = StreamChatResponse.content(token, index.getAndIncrement());
+                            response.setId(responseId.get());
+                            response.setModel(model.getModelKey());
+                            onNext.accept(response);
+                        }
                     }
                     
                     @Override
                     public void onComplete(Response<AiMessage> response) {
+                        String finalContent = strictBufferedMode
+                                ? postProcessIfNeeded(finalRequest, fullResponse.toString())
+                                : fullResponse.toString();
+                        RagCitationService.RagAnswerPackage answerPackage = buildAnswerPackage(finalRequest, finalContent);
+                        finalContent = answerPackage.content();
+                        if (strictBufferedMode) {
+                            emitBufferedContent(finalContent, model.getModelKey(), responseId.get(), onNext);
+                        }
+
                         // 计算费用并记录
                         int promptTokens = estimateTokenCount(finalRequest.getMessages().stream()
                                 .map(m -> m.getContent())
                                 .collect(Collectors.joining("\n")));
-                        int completionTokens = estimateTokenCount(fullResponse.toString());
+                        int completionTokens = estimateTokenCount(finalContent);
                         BigDecimal cost = model.calculateCost(promptTokens, completionTokens);
                         
                         // 更新密钥统计
@@ -514,6 +516,8 @@ public class DynamicAiModelBeanManager {
                         StreamChatResponse endResponse = StreamChatResponse.end(
                                 response.finishReason() != null ? response.finishReason().toString() : "stop"
                         );
+                        endResponse.setContent(finalContent);
+                        endResponse.setCitations(answerPackage.citations());
                         onNext.accept(endResponse);
                         onComplete.run();
                     }
@@ -574,6 +578,85 @@ public class DynamicAiModelBeanManager {
             }
             // 简单的估算：平均3-4个字符一个token
             return (int) Math.ceil(text.length() / 3.5);
+        }
+
+        private ChatRequest enhanceRequestIfNeeded(ChatRequest request) {
+            com.nexusvoice.domain.ai.model.AiChatRequest domainRequest = AiModelConverter.toDomainRequest(request);
+            com.nexusvoice.domain.ai.model.AiChatRequest enhancedDomainRequest = domainRequest;
+
+            if (enhancementChain != null) {
+                EnhancementContext context = EnhancementContext.builder()
+                        .originalRequest(domainRequest)
+                        .enhancedRequest(domainRequest)
+                        .enableWebSearch(domainRequest.getEnableWebSearch())
+                        .enableRag(domainRequest.getEnableRag())
+                        .enableMultiModal(domainRequest.getEnableMultiModal())
+                        .build();
+
+                if (context.hasEnhancements()) {
+                    log.info("开始执行聊天增强链，模型：{}，联网搜索：{}，RAG：{}",
+                            model.getModelKey(), domainRequest.getEnableWebSearch(), domainRequest.getEnableRag());
+                    context = enhancementChain.enhance(context);
+                    enhancedDomainRequest = context.getEnhancedRequest();
+                    log.info("聊天增强链执行完成，模型：{}", model.getModelKey());
+                }
+            }
+
+            return AiModelConverter.toInfrastructureRequest(enhancedDomainRequest);
+        }
+
+        private String postProcessIfNeeded(ChatRequest request, String content) {
+            if (strictRagAnswerPostProcessor == null) {
+                return content;
+            }
+            return strictRagAnswerPostProcessor.postProcess(request, content);
+        }
+
+        private boolean isStrictBufferedMode(ChatRequest request) {
+            return request != null
+                    && Boolean.TRUE.equals(request.getEnableRag())
+                    && "STRICT".equalsIgnoreCase(request.getRagGroundingMode());
+        }
+
+        private RagCitationService.RagAnswerPackage buildAnswerPackage(ChatRequest request, String content) {
+            if (ragCitationService == null) {
+                return new RagCitationService.RagAnswerPackage(content, List.of());
+            }
+            return ragCitationService.buildAnswerPackage(request, content);
+        }
+
+        private void emitBufferedContent(String content,
+                                         String modelKey,
+                                         String responseId,
+                                         Consumer<StreamChatResponse> onNext) {
+            if (content == null || content.isBlank()) {
+                return;
+            }
+            List<String> chunks = splitForStreaming(content);
+            for (int i = 0; i < chunks.size(); i++) {
+                StreamChatResponse response = StreamChatResponse.content(chunks.get(i), i);
+                response.setId(responseId);
+                response.setModel(modelKey);
+                onNext.accept(response);
+            }
+        }
+
+        private List<String> splitForStreaming(String content) {
+            List<String> chunks = new ArrayList<>();
+            StringBuilder buffer = new StringBuilder();
+            for (int i = 0; i < content.length(); i++) {
+                char current = content.charAt(i);
+                buffer.append(current);
+                boolean sentenceEnd = "。！？!?；;\n".indexOf(current) >= 0;
+                if (buffer.length() >= 48 || (sentenceEnd && buffer.length() >= 16)) {
+                    chunks.add(buffer.toString());
+                    buffer.setLength(0);
+                }
+            }
+            if (buffer.length() > 0) {
+                chunks.add(buffer.toString());
+            }
+            return chunks;
         }
         
         /**
