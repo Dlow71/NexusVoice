@@ -1,6 +1,8 @@
 package com.nexusvoice.infrastructure.rag.service;
 
+import com.nexusvoice.domain.rag.model.entity.DocumentUnit;
 import com.nexusvoice.domain.rag.model.entity.VectorStore;
+import com.nexusvoice.domain.rag.repository.DocumentUnitRepository;
 import com.nexusvoice.domain.rag.repository.VectorStoreRepository;
 import com.nexusvoice.domain.config.repository.SystemConfigRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
@@ -18,9 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -39,6 +45,7 @@ public class DocumentRetrievalService {
     private final VectorStorePOMapper vectorStorePOMapper;
     private final DynamicAiModelBeanManager modelBeanManager;
     private final SystemConfigRepository systemConfigRepository;
+    private final DocumentUnitRepository documentUnitRepository;
     
     // 配置键
     private static final String CONFIG_KEY_EMBEDDING_MODEL = "rag.embedding.model";
@@ -53,6 +60,8 @@ public class DocumentRetrievalService {
     private static final int DEFAULT_TOPK = 15;
     private static final double DEFAULT_MIN_SIMILARITY = 0.7;
     private static final int DEFAULT_RRF_K = 60;
+    private static final int DEFAULT_NEIGHBOR_WINDOW = 1;
+    private static final int DEFAULT_MAX_EXPANDED_CHARS = 1600;
     
     /**
      * 混合检索：向量检索 + 关键词检索
@@ -63,33 +72,83 @@ public class DocumentRetrievalService {
      * @return 检索结果列表
      */
     public List<RetrievalResult> hybridSearch(String query, Long knowledgeBaseId, int topK) {
-        if (query == null || query.isEmpty()) {
+        return hybridSearch(query, List.of(query), knowledgeBaseId, topK);
+    }
+
+    /**
+     * 多查询混合检索。
+     * 将查询规划器生成的多个检索变体并行视为候选召回，再统一重排。
+     */
+    public List<RetrievalResult> hybridSearch(String originalQuery, List<String> retrievalQueries, Long knowledgeBaseId, int topK) {
+        if (originalQuery == null || originalQuery.isBlank()) {
             throw new BizException(ErrorCodeEnum.PARAM_ERROR, "查询文本不能为空");
         }
-        
-        log.info("开始混合检索 - 知识库ID: {}, 查询: {}, topK: {}", knowledgeBaseId, query, topK);
+
+        List<String> effectiveQueries = sanitizeQueries(originalQuery, retrievalQueries);
+        String primaryQuery = effectiveQueries.get(0);
+
+        log.info("开始混合检索 - 知识库ID: {}, 原始查询: {}, 检索变体: {}, topK: {}",
+                knowledgeBaseId, originalQuery, effectiveQueries, topK);
         
         try {
-            // 1. 向量检索
-            List<RetrievalResult> vectorResults = vectorSearch(query, knowledgeBaseId, topK * 2);
-            
-            // 2. 关键词检索
-            List<RetrievalResult> keywordResults = keywordSearch(query, knowledgeBaseId, topK * 2);
-            
-            // 3. 融合结果（RRF - Reciprocal Rank Fusion）
-            List<RetrievalResult> fusedResults = fuseResults(vectorResults, keywordResults);
-            
-            // 4. Rerank重排序
-            List<RetrievalResult> rerankedResults = rerank(query, fusedResults, topK);
-            
-            log.info("混合检索完成 - 返回结果数: {}", rerankedResults.size());
-            
-            return rerankedResults;
+            int candidateLimit = Math.max(topK * 3, 8);
+            List<RetrievalResult> mergedCandidates = mergeCandidates(effectiveQueries, knowledgeBaseId, candidateLimit);
+            List<RetrievalResult> rerankedResults = rerank(primaryQuery, mergedCandidates, topK);
+            List<RetrievalResult> expandedResults = expandNeighborContext(rerankedResults);
+
+            log.info("混合检索完成 - 原始候选: {}, 重排后: {}, 扩展后: {}",
+                    mergedCandidates.size(), rerankedResults.size(), expandedResults.size());
+
+            return expandedResults;
             
         } catch (Exception e) {
             log.error("混合检索失败", e);
             throw new BizException(ErrorCodeEnum.SYSTEM_ERROR, "检索失败: " + e.getMessage());
         }
+    }
+
+    private List<String> sanitizeQueries(String originalQuery, List<String> retrievalQueries) {
+        LinkedHashSet<String> queries = new LinkedHashSet<>();
+        if (retrievalQueries != null) {
+            retrievalQueries.stream()
+                    .filter(query -> query != null && !query.isBlank())
+                    .map(String::trim)
+                    .forEach(queries::add);
+        }
+        if (queries.isEmpty() && originalQuery != null && !originalQuery.isBlank()) {
+            queries.add(originalQuery.trim());
+        }
+        if (queries.isEmpty()) {
+            throw new BizException(ErrorCodeEnum.PARAM_ERROR, "查询文本不能为空");
+        }
+        return new ArrayList<>(queries);
+    }
+
+    private List<RetrievalResult> mergeCandidates(List<String> retrievalQueries, Long knowledgeBaseId, int candidateLimit) {
+        Map<Long, CandidateAggregate> candidateMap = new LinkedHashMap<>();
+
+        for (String retrievalQuery : retrievalQueries) {
+            List<RetrievalResult> rawResults = rawHybridSearch(retrievalQuery, knowledgeBaseId, candidateLimit);
+            for (RetrievalResult result : rawResults) {
+                if (result.getDocumentUnitId() == null) {
+                    continue;
+                }
+                candidateMap.computeIfAbsent(result.getDocumentUnitId(), id -> new CandidateAggregate(copyResult(result)))
+                        .merge(result, retrievalQuery);
+            }
+        }
+
+        return candidateMap.values().stream()
+                .map(CandidateAggregate::toResult)
+                .sorted(Comparator.comparing(DocumentRetrievalService.RetrievalResult::getScore, Comparator.nullsLast(Double::compareTo)).reversed())
+                .limit(candidateLimit)
+                .collect(Collectors.toList());
+    }
+
+    private List<RetrievalResult> rawHybridSearch(String query, Long knowledgeBaseId, int topK) {
+        List<RetrievalResult> vectorResults = vectorSearch(query, knowledgeBaseId, topK * 2);
+        List<RetrievalResult> keywordResults = keywordSearch(query, knowledgeBaseId, topK * 2);
+        return fuseResults(vectorResults, keywordResults);
     }
     
     /**
@@ -260,6 +319,10 @@ public class DocumentRetrievalService {
         private Double score;
         private String title;
         private Long fileId;
+        private Integer page;
+        private Integer startPage;
+        private Integer endPage;
+        private List<String> matchedQueries = new ArrayList<>();
         
         // Getters and Setters
         public Long getDocumentUnitId() { return documentUnitId; }
@@ -276,6 +339,18 @@ public class DocumentRetrievalService {
         
         public Long getFileId() { return fileId; }
         public void setFileId(Long fileId) { this.fileId = fileId; }
+
+        public Integer getPage() { return page; }
+        public void setPage(Integer page) { this.page = page; }
+
+        public Integer getStartPage() { return startPage; }
+        public void setStartPage(Integer startPage) { this.startPage = startPage; }
+
+        public Integer getEndPage() { return endPage; }
+        public void setEndPage(Integer endPage) { this.endPage = endPage; }
+
+        public List<String> getMatchedQueries() { return matchedQueries; }
+        public void setMatchedQueries(List<String> matchedQueries) { this.matchedQueries = matchedQueries; }
     }
     
     // ==================== 配置读取方法 ====================
@@ -397,7 +472,135 @@ public class DocumentRetrievalService {
         if (fileId != null) {
             result.setFileId(Long.valueOf(fileId.toString()));
         }
+
+        Object page = map.get("page");
+        if (page == null) {
+            page = map.get("chunk_index");
+        }
+        if (page != null) {
+            result.setPage(Integer.valueOf(page.toString()));
+            result.setStartPage(result.getPage());
+            result.setEndPage(result.getPage());
+        }
         
         return result;
+    }
+
+    private RetrievalResult copyResult(RetrievalResult source) {
+        RetrievalResult copy = new RetrievalResult();
+        copy.setDocumentUnitId(source.getDocumentUnitId());
+        copy.setContent(source.getContent());
+        copy.setScore(source.getScore());
+        copy.setTitle(source.getTitle());
+        copy.setFileId(source.getFileId());
+        copy.setPage(source.getPage());
+        copy.setStartPage(source.getStartPage());
+        copy.setEndPage(source.getEndPage());
+        copy.setMatchedQueries(new ArrayList<>(source.getMatchedQueries()));
+        return copy;
+    }
+
+    private List<RetrievalResult> expandNeighborContext(List<RetrievalResult> results) {
+        if (results.isEmpty()) {
+            return results;
+        }
+
+        Map<Long, List<DocumentUnit>> fileUnitCache = new HashMap<>();
+        List<RetrievalResult> expandedResults = new ArrayList<>(results.size());
+        for (RetrievalResult result : results) {
+            if (result.getFileId() == null || result.getPage() == null) {
+                expandedResults.add(result);
+                continue;
+            }
+
+            List<DocumentUnit> units = fileUnitCache.computeIfAbsent(result.getFileId(), documentUnitRepository::findByFileId);
+            List<DocumentUnit> neighbors = units.stream()
+                    .filter(unit -> unit.getPage() != null)
+                    .filter(unit -> unit.getPage() >= result.getPage() - DEFAULT_NEIGHBOR_WINDOW
+                            && unit.getPage() <= result.getPage() + DEFAULT_NEIGHBOR_WINDOW)
+                    .sorted(Comparator.comparing(DocumentUnit::getPage))
+                    .toList();
+
+            if (neighbors.isEmpty()) {
+                expandedResults.add(result);
+                continue;
+            }
+
+            RetrievalResult expanded = copyResult(result);
+            expanded.setContent(mergeNeighborContents(neighbors, result.getPage()));
+            expanded.setStartPage(neighbors.get(0).getPage());
+            expanded.setEndPage(neighbors.get(neighbors.size() - 1).getPage());
+            expandedResults.add(expanded);
+        }
+
+        return expandedResults;
+    }
+
+    private String mergeNeighborContents(List<DocumentUnit> neighbors, Integer hitPage) {
+        StringBuilder builder = new StringBuilder();
+        for (DocumentUnit neighbor : neighbors) {
+            String content = neighbor.getContent();
+            if (content == null || content.isBlank()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            if (neighbor.getPage() != null && neighbors.size() > 1) {
+                builder.append("[片段").append(neighbor.getPage());
+                if (neighbor.getPage().equals(hitPage)) {
+                    builder.append("·命中");
+                }
+                builder.append("] ");
+            }
+            builder.append(content.trim());
+            if (builder.length() >= DEFAULT_MAX_EXPANDED_CHARS) {
+                builder.setLength(Math.min(builder.length(), DEFAULT_MAX_EXPANDED_CHARS));
+                break;
+            }
+        }
+        return builder.toString();
+    }
+
+    private static class CandidateAggregate {
+        private final RetrievalResult base;
+        private final Set<String> matchedQueries = new LinkedHashSet<>();
+        private double maxScore;
+        private double scoreSum;
+        private int hitCount;
+
+        private CandidateAggregate(RetrievalResult base) {
+            this.base = base;
+            this.maxScore = 0D;
+            this.scoreSum = 0D;
+            this.hitCount = 0;
+        }
+
+        private void merge(RetrievalResult result, String retrievalQuery) {
+            double score = result.getScore() != null ? result.getScore() : 0D;
+            if (score > maxScore) {
+                maxScore = score;
+                base.setContent(result.getContent());
+                base.setTitle(result.getTitle());
+                base.setFileId(result.getFileId());
+                base.setPage(result.getPage());
+                base.setStartPage(result.getStartPage());
+                base.setEndPage(result.getEndPage());
+            }
+            scoreSum += score;
+            hitCount++;
+            if (retrievalQuery != null && !retrievalQuery.isBlank()) {
+                matchedQueries.add(retrievalQuery);
+            }
+        }
+
+        private RetrievalResult toResult() {
+            base.setMatchedQueries(new ArrayList<>(matchedQueries));
+            double mergedScore = maxScore
+                    + (Math.max(0, matchedQueries.size() - 1) * 0.12)
+                    + ((scoreSum / Math.max(1, hitCount)) * 0.08);
+            base.setScore(mergedScore);
+            return base;
+        }
     }
 }
