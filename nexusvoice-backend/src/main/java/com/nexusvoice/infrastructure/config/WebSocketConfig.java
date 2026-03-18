@@ -2,6 +2,7 @@ package com.nexusvoice.infrastructure.config;
 
 import com.nexusvoice.interfaces.websocket.ChatStreamHandler;
 import com.nexusvoice.interfaces.websocket.RtcSignalHandler;
+import com.nexusvoice.interfaces.websocket.VoiceStreamHandler;
 import com.nexusvoice.infrastructure.websocket.WebSocketJwtInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,14 +29,17 @@ public class WebSocketConfig implements WebSocketConfigurer {
     private final ChatStreamHandler chatStreamHandler;
     private final WebSocketJwtInterceptor webSocketJwtInterceptor;
     private final RtcSignalHandler rtcSignalHandler;
+    private final VoiceStreamHandler voiceStreamHandler;
 
     @Autowired
     public WebSocketConfig(ChatStreamHandler chatStreamHandler, 
                           WebSocketJwtInterceptor webSocketJwtInterceptor,
-                          @Autowired(required = false) RtcSignalHandler rtcSignalHandler) {
+                          @Autowired(required = false) RtcSignalHandler rtcSignalHandler,
+                          @Autowired(required = false) VoiceStreamHandler voiceStreamHandler) {
         this.chatStreamHandler = chatStreamHandler;
         this.webSocketJwtInterceptor = webSocketJwtInterceptor;
         this.rtcSignalHandler = rtcSignalHandler;
+        this.voiceStreamHandler = voiceStreamHandler;
     }
 
     @Override
@@ -55,6 +59,14 @@ public class WebSocketConfig implements WebSocketConfigurer {
                     .addInterceptors(webSocketJwtInterceptor)
                     .setAllowedOrigins("*");
             log.info("RTC信令WebSocket端点已注册: /ws/rtc/signal");
+        }
+
+        if (voiceStreamHandler != null) {
+            registry.addHandler(voiceStreamHandler, "/ws/voice/stream")
+                    .setAllowedOriginPatterns("*")
+                    .addInterceptors(webSocketJwtInterceptor)
+                    .setAllowedOrigins("*");
+            log.info("Voice实时WebSocket端点已注册: /ws/voice/stream");
         }
     }
     

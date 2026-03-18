@@ -7,6 +7,8 @@ import com.nexusvoice.application.conversation.dto.ConversationListDto;
 import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
 import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
 import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
+import com.nexusvoice.application.conversation.dto.ConversationRuntimeConfigDto;
+import com.nexusvoice.application.conversation.dto.ConversationRuntimePolicyDto;
 import com.nexusvoice.application.conversation.service.ConversationApplicationService;
 import com.nexusvoice.common.Result;
 import com.nexusvoice.enums.ErrorCodeEnum;
@@ -111,6 +113,27 @@ public class ConversationController {
         List<ConversationMessageWithRoleDto> history = conversationApplicationService.getConversationHistory(conversationId, userId);
         
         return Result.success(history);
+    }
+
+    @GetMapping("/{conversationId}/runtime-config")
+    @RequireAuth
+    @Operation(summary = "获取会话运行配置", description = "获取指定对话的高级运行设置与当前上下文快照")
+    public Result<ConversationRuntimeConfigDto> getConversationRuntimeConfig(
+            @Parameter(description = "对话ID", example = "1")
+            @PathVariable Long conversationId) {
+        Long userId = SecurityUtils.getCurrentUserId().get();
+        return Result.success(conversationApplicationService.getConversationRuntimeConfig(conversationId, userId));
+    }
+
+    @PutMapping("/{conversationId}/runtime-config")
+    @RequireAuth
+    @Operation(summary = "更新会话运行配置", description = "更新指定对话的高级运行设置，如温度、上下文策略、compact阈值等")
+    public Result<ConversationRuntimeConfigDto> updateConversationRuntimeConfig(
+            @Parameter(description = "对话ID", example = "1")
+            @PathVariable Long conversationId,
+            @Valid @RequestBody ConversationRuntimePolicyDto request) {
+        Long userId = SecurityUtils.getCurrentUserId().get();
+        return Result.success(conversationApplicationService.updateConversationRuntimeConfig(conversationId, request, userId));
     }
 
     @DeleteMapping("/{conversationId}")

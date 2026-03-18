@@ -21,6 +21,9 @@ import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.StreamChatResponse;
 import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
+import com.nexusvoice.infrastructure.conversation.service.ConversationContextService;
+import com.nexusvoice.infrastructure.conversation.service.ConversationMessageMetadataService;
+import com.nexusvoice.infrastructure.conversation.service.ConversationRuntimeConfigService;
 import com.nexusvoice.infrastructure.rag.service.RagCitationService;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
@@ -69,6 +72,9 @@ public class ChatStreamHandler implements WebSocketHandler {
     private final TempFileCleanupService tempFileCleanupService;
     private final DynamicAiModelBeanManager modelBeanManager;
     private final RagCitationService ragCitationService;
+    private final ConversationMessageMetadataService messageMetadataService;
+    private final ConversationRuntimeConfigService runtimeConfigService;
+    private final ConversationContextService conversationContextService;
     private final ObjectMapper objectMapper;
     
     // 存储会话信息
@@ -92,6 +98,9 @@ public class ChatStreamHandler implements WebSocketHandler {
                            TempFileCleanupService tempFileCleanupService,
                            DynamicAiModelBeanManager modelBeanManager,
                            RagCitationService ragCitationService,
+                           ConversationMessageMetadataService messageMetadataService,
+                           ConversationRuntimeConfigService runtimeConfigService,
+                           ConversationContextService conversationContextService,
                            ObjectMapper objectMapper,
                            @Qualifier("ttsVirtualThreadExecutor") ExecutorService ttsVirtualThreadExecutor,
                            @Qualifier("heartbeatVirtualThreadExecutor") ExecutorService heartbeatVirtualThreadExecutor) {
@@ -105,6 +114,9 @@ public class ChatStreamHandler implements WebSocketHandler {
         this.tempFileCleanupService = tempFileCleanupService;
         this.modelBeanManager = modelBeanManager;
         this.ragCitationService = ragCitationService;
+        this.messageMetadataService = messageMetadataService;
+        this.runtimeConfigService = runtimeConfigService;
+        this.conversationContextService = conversationContextService;
         this.objectMapper = objectMapper;
         this.ttsVirtualThreadExecutor = ttsVirtualThreadExecutor;
         this.heartbeatVirtualThreadExecutor = heartbeatVirtualThreadExecutor;
@@ -358,9 +370,14 @@ public class ChatStreamHandler implements WebSocketHandler {
             }
             
             // 5. 构建AI请求
-            ChatRequest aiRequest = buildStreamAiRequest(conversation, requestDto, role);
+            PreparedStreamAiRequest preparedAiRequest = buildStreamAiRequest(conversation, requestDto, role);
+            ChatRequest aiRequest = preparedAiRequest.request();
+            if (preparedAiRequest.configUpdated()) {
+                conversationRepository.save(conversation);
+            }
             // 注意：lambda中引用的本地变量需要是final或有效final，这里固定一份快照供后续lambda使用
             final Role roleSnapshot = role;
+            final var contextSnapshot = preparedAiRequest.contextSnapshot();
             
             // 6. 开始流式响应
             // 使用StringBuffer保证线程安全（多个TTS线程会并发append）
@@ -368,6 +385,7 @@ public class ChatStreamHandler implements WebSocketHandler {
             final AtomicReference<String> finalizedContent = new AtomicReference<>();
             final AtomicReference<List<com.nexusvoice.domain.rag.model.vo.RagCitation>> finalizedCitations =
                     new AtomicReference<>(List.of());
+            final AtomicReference<String> finalizedReasoning = new AtomicReference<>();
             // 是否启用“分段同步TTS”模式（当 enableAudio=true 时启用）
             final boolean segmentedTtsEnabled = requestDto.getEnableAudio() != null && requestDto.getEnableAudio();
             final String ttsGroupId = segmentedTtsEnabled ? UUID.randomUUID().toString() : null;
@@ -403,11 +421,18 @@ public class ChatStreamHandler implements WebSocketHandler {
                                 finalizedCitations.set(streamResponse.getCitations() != null
                                         ? streamResponse.getCitations()
                                         : List.of());
+                                finalizedReasoning.set(streamResponse.getReasoningContent());
                                 log.debug("收到AI模型的END信号，对话ID：{}", conversation.getId());
                                 return;
                             }
                             if (streamResponse.getType() == StreamChatResponse.StreamMessageType.START) {
                                 // 模型开始事件直接转发
+                                channel.sendMessage(streamResponse);
+                                return;
+                            }
+                            if (streamResponse.getType() == StreamChatResponse.StreamMessageType.THINKING_START
+                                    || streamResponse.getType() == StreamChatResponse.StreamMessageType.THINKING_DELTA
+                                    || streamResponse.getType() == StreamChatResponse.StreamMessageType.THINKING_END) {
                                 channel.sendMessage(streamResponse);
                                 return;
                             }
@@ -479,7 +504,10 @@ public class ChatStreamHandler implements WebSocketHandler {
                                                 null,
                                                 null // 分段TTS场景不设置整段audioUrl
                                         );
-                                        aiMessage.setMetadata(ragCitationService.writeMetadata(finalizedCitations.get()));
+                                        aiMessage.setMetadata(messageMetadataService.writeMetadata(
+                                                finalizedCitations.get(),
+                                                finalizedReasoning.get()
+                                        ));
                                         conversationDomainService.addMessageToConversation(conversation.getId(), aiMessage);
 
                                         log.info("流式聊天完成（{}），对话ID：{}，文本长度：{}",
@@ -503,6 +531,8 @@ public class ChatStreamHandler implements WebSocketHandler {
                                         endResp.setModel(aiRequest.getModel());
                                         endResp.setContent(finalContent);
                                         endResp.setCitations(finalizedCitations.get());
+                                        endResp.setReasoningContent(finalizedReasoning.get());
+                                        endResp.setContextSnapshot(contextSnapshot);
                                         endResp.setResponseTimeMs(System.currentTimeMillis() - startTime);
                                         if (segmentedTtsEnabled) {
                                             endResp.setTtsGroupId(ttsGroupId);
@@ -1038,42 +1068,31 @@ public class ChatStreamHandler implements WebSocketHandler {
     /**
      * 构建流式AI请求
      */
-    private ChatRequest buildStreamAiRequest(Conversation conversation, ChatRequestDto requestDto, Role role) {
+    private PreparedStreamAiRequest buildStreamAiRequest(Conversation conversation, ChatRequestDto requestDto, Role role) {
         // 获取对话历史（限制数量）
         List<ConversationMessage> history = conversationApplicationService.getConversationHistoryForInternal(
                 conversation.getId(), conversation.getUserId());
-        
-        List<ChatMessage> messages = new ArrayList<>();
-        
-        // 添加系统消息（与HTTP对齐：优先请求systemPrompt，其次会话，最后默认；并拼接角色人设）
+
         String systemPrompt = buildSystemPrompt(conversation, requestDto, role);
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            messages.add(ChatMessage.system(systemPrompt));
-        }
-        
-        // 动态裁剪历史：与HTTP路径一致，基于简单token预算从尾部选择，最多20条
-        addTrimmedHistory(messages, history, systemPrompt);
-
-        // 与HTTP语义对齐：联网搜索仅按请求开关控制，默认false
         boolean enableWebSearch = requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : false;
-        
-        // 处理模型名称（与HTTP完全一致）
-        String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName();
-        // 支持新的模型格式：provider:model，如果没有provider默认使用openai
-        if (modelName != null && !modelName.contains(":")) {
-            modelName = "openai:" + modelName;
-        }
+        String modelName = normalizeModelName(requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName());
+        ConversationContextService.PreparedConversationContext preparedContext = conversationContextService.prepareContext(
+                conversation,
+                requestDto,
+                systemPrompt,
+                history,
+                modelName
+        );
+        boolean configUpdated = runtimeConfigService.applyPolicy(conversation, preparedContext.policy());
 
-        Double temperature = requestDto.getTemperature() != null
-                ? requestDto.getTemperature()
-                : resolveDefaultTemperature(requestDto);
-
-        // 完全对标HTTP实现，添加RAG和知识库支持，以及图像输入支持
-        return ChatRequest.builder()
-                .messages(messages)
+        ChatRequest chatRequest = ChatRequest.builder()
+                .messages(preparedContext.messages())
                 .model(modelName)
-                .temperature(temperature)
-                .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
+                .temperature(preparedContext.policy().getTemperature())
+                .maxTokens(preparedContext.policy().getMaxTokens())
+                .topP(preparedContext.policy().getTopP())
+                .frequencyPenalty(preparedContext.policy().getFrequencyPenalty())
+                .presencePenalty(preparedContext.policy().getPresencePenalty())
                 .stream(true)
                 .userId(conversation.getUserId())
                 .conversationId(conversation.getId())
@@ -1083,16 +1102,23 @@ public class ChatStreamHandler implements WebSocketHandler {
                 .ragGroundingMode(requestDto.getRagGroundingMode())
                 .imageUrls(requestDto.getImageUrls())
                 .imageBase64(requestDto.getImageBase64())
+                .thinkingMode(preparedContext.policy().getThinkingMode())
+                .showThinking(preparedContext.policy().getShowThinking())
+                .thinkingBudgetTokens(preparedContext.policy().getThinkingBudgetTokens())
+                .reasoningEffort(preparedContext.policy().getReasoningEffort())
                 .build();
+        return new PreparedStreamAiRequest(
+                chatRequest,
+                runtimeConfigService.toDto(preparedContext.snapshot()),
+                configUpdated
+        );
     }
 
-    private Double resolveDefaultTemperature(ChatRequestDto requestDto) {
-        boolean enableRag = requestDto.getEnableRag() != null && requestDto.getEnableRag();
-        boolean strictMode = "STRICT".equalsIgnoreCase(requestDto.getRagGroundingMode());
-        if (enableRag && strictMode) {
-            return 0.2;
+    private String normalizeModelName(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return systemConfigService.getDefaultAiModel();
         }
-        return 0.7;
+        return modelName.contains(":") ? modelName : "openai:" + modelName;
     }
 
     /**
@@ -1198,6 +1224,13 @@ public class ChatStreamHandler implements WebSocketHandler {
             log.warn("读取系统配置失败，key={}，使用默认值 {}", key, defaultVal, e);
             return defaultVal;
         }
+    }
+
+    private record PreparedStreamAiRequest(
+            ChatRequest request,
+            com.nexusvoice.application.conversation.dto.ConversationContextSnapshotDto contextSnapshot,
+            boolean configUpdated
+    ) {
     }
 
 }
