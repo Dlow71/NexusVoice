@@ -39,6 +39,9 @@ public class ChatResponseDto {
     @Schema(description = "结构化来源引用")
     private List<RagCitation> citations;
 
+    @Schema(description = "完整思考过程")
+    private String reasoningContent;
+
     @Schema(description = "响应时间（毫秒）")
     private Long responseTimeMs;
 
@@ -73,6 +76,9 @@ public class ChatResponseDto {
 
     @Schema(description = "分段列表（顺序播放）")
     private java.util.List<TTSResponseDTO.Segment> ttsSegments;
+
+    @Schema(description = "本次请求的上下文快照")
+    private ConversationContextSnapshotDto contextSnapshot;
 
     @Data
     @Builder

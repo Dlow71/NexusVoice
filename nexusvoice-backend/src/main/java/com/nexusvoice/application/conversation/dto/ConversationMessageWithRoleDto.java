@@ -62,6 +62,9 @@ public class ConversationMessageWithRoleDto {
     @Schema(description = "结构化来源引用")
     private List<RagCitation> citations;
 
+    @Schema(description = "完整思考过程")
+    private String reasoningContent;
+
     @Schema(description = "消息发送时间")
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     @JsonSerialize(using = LocalDateTimeSerializer.class)

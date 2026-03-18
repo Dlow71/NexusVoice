@@ -35,6 +35,15 @@ public class ChatRequestDto {
     @Schema(description = "最大令牌数", example = "2000")
     private Integer maxTokens;
 
+    @Schema(description = "Top P采样参数", example = "1.0")
+    private Double topP;
+
+    @Schema(description = "频率惩罚", example = "0.0")
+    private Double frequencyPenalty;
+
+    @Schema(description = "存在惩罚", example = "0.0")
+    private Double presencePenalty;
+
     @Schema(description = "系统提示词", example = "你是一个有用的AI助手")
     private String systemPrompt;
 
@@ -69,4 +78,28 @@ public class ChatRequestDto {
     @Schema(description = "附件URL列表，JSON字符串数组，每个JSON包含{type,url,name,size,mimeType}等字段", 
             example = "[{\"type\":\"image\",\"url\":\"https://cdn.example.com/img.jpg\",\"name\":\"screenshot.jpg\",\"size\":102400}]")
     private java.util.List<String> attachmentUrls;
+
+    @Schema(description = "思考模式：disabled=关闭，auto=自动，enabled=开启", example = "disabled")
+    private String thinkingMode = "disabled";
+
+    @Schema(description = "是否向前端展示思考过程", example = "false")
+    private Boolean showThinking = false;
+
+    @Schema(description = "思考阶段token预算", example = "2048")
+    private Integer thinkingBudgetTokens;
+
+    @Schema(description = "推理强度：minimal/low/medium/high/none", example = "medium")
+    private String reasoningEffort;
+
+    @Schema(description = "上下文策略：AUTO / WINDOW_ONLY / COMPACT", example = "AUTO")
+    private String contextStrategy;
+
+    @Schema(description = "保留最近对话轮数", example = "8")
+    private Integer recentTurnsToKeep;
+
+    @Schema(description = "预留输出tokens", example = "2000")
+    private Integer reservedOutputTokens;
+
+    @Schema(description = "compact触发阈值比例", example = "0.72")
+    private Double compactTriggerRatio;
 }

@@ -2,18 +2,22 @@ package com.nexusvoice.application.conversation.service;
 
 import com.nexusvoice.application.conversation.dto.ChatRequestDto;
 import com.nexusvoice.application.conversation.dto.ChatResponseDto;
-import com.nexusvoice.application.conversation.dto.ConversationListDto;
 import com.nexusvoice.application.conversation.dto.ConversationCreateRequest;
 import com.nexusvoice.application.conversation.dto.ConversationCreateResponse;
+import com.nexusvoice.application.conversation.dto.ConversationListDto;
 import com.nexusvoice.application.conversation.dto.ConversationMessageWithRoleDto;
+import com.nexusvoice.application.conversation.dto.ConversationRuntimeConfigDto;
+import com.nexusvoice.application.conversation.dto.ConversationRuntimePolicyDto;
 import com.nexusvoice.application.conversation.assembler.ConversationAssembler;
 import com.nexusvoice.application.role.service.RoleApplicationService;
 import com.nexusvoice.application.tts.dto.TTSRequestDTO;
 import com.nexusvoice.application.tts.dto.TTSResponseDTO;
 import com.nexusvoice.application.tts.service.TTSService;
+import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.config.service.SystemConfigService;
 import com.nexusvoice.domain.conversation.model.Conversation;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
+import com.nexusvoice.domain.conversation.model.vo.ConversationRuntimePolicy;
 import com.nexusvoice.domain.conversation.repository.ConversationRepository;
 import com.nexusvoice.domain.conversation.repository.ConversationMessageRepository;
 import com.nexusvoice.domain.conversation.service.ConversationDomainService;
@@ -23,8 +27,11 @@ import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
-import com.nexusvoice.infrastructure.ai.service.AiChatService;
 import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
+import com.nexusvoice.infrastructure.ai.service.AiChatService;
+import com.nexusvoice.infrastructure.conversation.service.ConversationContextService;
+import com.nexusvoice.infrastructure.conversation.service.ConversationMessageMetadataService;
+import com.nexusvoice.infrastructure.conversation.service.ConversationRuntimeConfigService;
 import com.nexusvoice.infrastructure.rag.service.RagCitationService;
 import com.nexusvoice.utils.MarkdownTextUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +63,9 @@ public class ConversationApplicationService {
     private final ConversationResourceCleanupService resourceCleanupService;
     private final com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator;
     private final RagCitationService ragCitationService;
+    private final ConversationMessageMetadataService messageMetadataService;
+    private final ConversationRuntimeConfigService runtimeConfigService;
+    private final ConversationContextService conversationContextService;
 
     public ConversationApplicationService(ConversationRepository conversationRepository,
                                         ConversationMessageRepository messageRepository,
@@ -66,7 +76,10 @@ public class ConversationApplicationService {
                                         SystemConfigService systemConfigService,
                                         ConversationResourceCleanupService resourceCleanupService,
                                         com.nexusvoice.domain.conversation.service.ConversationTitleGenerator titleGenerator,
-                                        RagCitationService ragCitationService) {
+                                        RagCitationService ragCitationService,
+                                        ConversationMessageMetadataService messageMetadataService,
+                                        ConversationRuntimeConfigService runtimeConfigService,
+                                        ConversationContextService conversationContextService) {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
@@ -77,6 +90,9 @@ public class ConversationApplicationService {
         this.resourceCleanupService = resourceCleanupService;
         this.titleGenerator = titleGenerator;
         this.ragCitationService = ragCitationService;
+        this.messageMetadataService = messageMetadataService;
+        this.runtimeConfigService = runtimeConfigService;
+        this.conversationContextService = conversationContextService;
     }
 
     /**
@@ -133,7 +149,11 @@ public class ConversationApplicationService {
             userMessage = conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
 
             // 7. 构建AI请求
-            ChatRequest aiRequest = buildAiRequest(conversation, requestDto, role);
+            PreparedAiRequest preparedAiRequest = buildAiRequest(conversation, requestDto, role);
+            ChatRequest aiRequest = preparedAiRequest.request();
+            if (preparedAiRequest.configUpdated()) {
+                conversationRepository.save(conversation);
+            }
 
             // 8. 调用AI服务
             // 解析模型信息并获取对应的服务
@@ -182,7 +202,10 @@ public class ConversationApplicationService {
                         null,
                         audioUrl
                 );
-                aiMessage.setMetadata(ragCitationService.writeMetadata(aiResponse.getCitations()));
+                aiMessage.setMetadata(messageMetadataService.writeMetadata(
+                        aiResponse.getCitations(),
+                        aiResponse.getReasoningContent()
+                ));
                 aiMessage.setTokenCount(aiResponse.getUsage() != null ? aiResponse.getUsage().getCompletionTokens() : 0);
                 aiMessage = conversationDomainService.addMessageToConversation(conversation.getId(), aiMessage);
 
@@ -216,7 +239,7 @@ public class ConversationApplicationService {
                         ttsResponse.setSegments(segs);
                         ttsResponse.setChunked(false);
                     }
-                    return ChatResponseDto.successWithTts(
+                    ChatResponseDto responseDto = ChatResponseDto.successWithTts(
                             conversation.getId(),
                             aiMessage.getId(),
                             aiResponse.getContent(),
@@ -226,8 +249,11 @@ public class ConversationApplicationService {
                             aiResponse.getResponseTimeMs(),
                             ttsResponse
                     );
+                    responseDto.setReasoningContent(aiResponse.getReasoningContent());
+                    responseDto.setContextSnapshot(preparedAiRequest.contextSnapshot());
+                    return responseDto;
                 } else {
-                    return ChatResponseDto.success(
+                    ChatResponseDto responseDto = ChatResponseDto.success(
                             conversation.getId(),
                             aiMessage.getId(),
                             aiResponse.getContent(),
@@ -237,6 +263,9 @@ public class ConversationApplicationService {
                             aiResponse.getResponseTimeMs(),
                             audioUrl
                     );
+                    responseDto.setReasoningContent(aiResponse.getReasoningContent());
+                    responseDto.setContextSnapshot(preparedAiRequest.contextSnapshot());
+                    return responseDto;
                 }
             } else {
                 log.error("AI聊天失败，对话ID：{}，错误：{}", conversation.getId(), aiResponse.getErrorMessage());
@@ -317,7 +346,10 @@ public class ConversationApplicationService {
         
         // 转换为包含角色信息的DTO
         return ConversationAssembler.toConversationMessageWithRoleDtoList(messages, role).stream()
-                .peek(message -> message.setCitations(ragCitationService.readMetadata(message.getMetadata())))
+                .peek(message -> {
+                    message.setCitations(messageMetadataService.readCitations(message.getMetadata()));
+                    message.setReasoningContent(messageMetadataService.readReasoningContent(message.getMetadata()));
+                })
                 .collect(Collectors.toList());
     }
 
@@ -448,6 +480,51 @@ public class ConversationApplicationService {
                 .build();
     }
 
+    public ConversationRuntimeConfigDto getConversationRuntimeConfig(Long conversationId, Long userId) {
+        conversationDomainService.validateConversationAccess(conversationId, userId);
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.CONVERSATION_NOT_FOUND, "对话不存在"));
+
+        Role role = null;
+        if (conversation.getRoleId() != null) {
+            try {
+                role = roleApplicationService.getRoleForChat(conversation.getRoleId(), userId);
+            } catch (Exception e) {
+                log.warn("加载会话运行配置时获取角色失败，conversationId={}, roleId={}, error={}",
+                        conversationId, conversation.getRoleId(), e.getMessage());
+            }
+        }
+
+        String modelName = normalizeModelName(conversation.getModelName());
+        String systemPrompt = buildSystemPrompt(conversation, null, role);
+        List<ConversationMessage> history = messageRepository.findByConversationIdOrderBySequence(conversationId);
+        ConversationContextService.PreparedConversationContext preparedContext = conversationContextService.prepareContext(
+                conversation,
+                null,
+                systemPrompt,
+                history,
+                modelName,
+                false
+        );
+        return runtimeConfigService.toDto(preparedContext.policy(), preparedContext.snapshot());
+    }
+
+    @Transactional
+    public ConversationRuntimeConfigDto updateConversationRuntimeConfig(Long conversationId,
+                                                                       ConversationRuntimePolicyDto policyDto,
+                                                                       Long userId) {
+        conversationDomainService.validateConversationAccess(conversationId, userId);
+        Conversation conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.CONVERSATION_NOT_FOUND, "对话不存在"));
+
+        AiModel model = modelBeanManager.getModelByKey(normalizeModelName(conversation.getModelName()));
+        ConversationRuntimePolicy currentPolicy = runtimeConfigService.readPolicy(conversation, model);
+        ConversationRuntimePolicy updatedPolicy = runtimeConfigService.mergePolicyUpdate(currentPolicy, policyDto, model);
+        runtimeConfigService.applyPolicy(conversation, updatedPolicy);
+        conversationRepository.save(conversation);
+        return getConversationRuntimeConfig(conversationId, userId);
+    }
+
     /**
      * 获取或创建对话
      */
@@ -490,54 +567,45 @@ public class ConversationApplicationService {
     /**
      * 构建AI请求
      */
-    private ChatRequest buildAiRequest(Conversation conversation, ChatRequestDto requestDto, Role role) {
+    private PreparedAiRequest buildAiRequest(Conversation conversation, ChatRequestDto requestDto, Role role) {
         // 获取对话历史（已包含刚保存的用户消息）
         List<ConversationMessage> history = messageRepository.findByConversationIdOrderBySequence(conversation.getId());
 
-        // 转换为AI请求格式
-        List<ChatMessage> messages = new ArrayList<>();
-        
-        // 构建系统消息，集成角色信息
         String systemPrompt = buildSystemPrompt(conversation, requestDto, role);
-        if (systemPrompt != null && !systemPrompt.isEmpty()) {
-            messages.add(ChatMessage.system(systemPrompt));
-        }
-        
-        // 添加历史消息（动态截断，避免超额 token）
-        addTrimmedHistory(messages, history, systemPrompt);
-        
-        // 构建请求
-        String modelName = requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName();
-        // 支持新的模型格式：provider:model，如果没有provider默认使用openai
-        if (modelName != null && !modelName.contains(":")) {
-            modelName = "openai:" + modelName;
-        }
+        String modelName = normalizeModelName(requestDto.getModelName() != null ? requestDto.getModelName() : conversation.getModelName());
+        ConversationContextService.PreparedConversationContext preparedContext = conversationContextService.prepareContext(
+                conversation,
+                requestDto,
+                systemPrompt,
+                history,
+                modelName
+        );
+        boolean configUpdated = runtimeConfigService.applyPolicy(conversation, preparedContext.policy());
 
-        Double temperature = requestDto.getTemperature() != null
-                ? requestDto.getTemperature()
-                : resolveDefaultTemperature(requestDto);
-        
-        return ChatRequest.builder()
-                .messages(messages)
+        ChatRequest chatRequest = ChatRequest.builder()
+                .messages(preparedContext.messages())
                 .model(modelName)
-                .temperature(temperature)
-                .maxTokens(requestDto.getMaxTokens() != null ? requestDto.getMaxTokens() : 2000)
+                .temperature(preparedContext.policy().getTemperature())
+                .maxTokens(preparedContext.policy().getMaxTokens())
+                .topP(preparedContext.policy().getTopP())
+                .frequencyPenalty(preparedContext.policy().getFrequencyPenalty())
+                .presencePenalty(preparedContext.policy().getPresencePenalty())
                 .userId(conversation.getUserId())
                 .conversationId(conversation.getId())
                 .enableWebSearch(requestDto.getEnableWebSearch() != null ? requestDto.getEnableWebSearch() : false)
                 .enableRag(requestDto.getEnableRag() != null ? requestDto.getEnableRag() : false)
                 .knowledgeBaseIds(requestDto.getKnowledgeBaseIds())
                 .ragGroundingMode(requestDto.getRagGroundingMode())
+                .thinkingMode(preparedContext.policy().getThinkingMode())
+                .showThinking(preparedContext.policy().getShowThinking())
+                .thinkingBudgetTokens(preparedContext.policy().getThinkingBudgetTokens())
+                .reasoningEffort(preparedContext.policy().getReasoningEffort())
                 .build();
-    }
-
-    private Double resolveDefaultTemperature(ChatRequestDto requestDto) {
-        boolean enableRag = requestDto.getEnableRag() != null && requestDto.getEnableRag();
-        boolean strictMode = "STRICT".equalsIgnoreCase(requestDto.getRagGroundingMode());
-        if (enableRag && strictMode) {
-            return 0.2;
-        }
-        return 0.7;
+        return new PreparedAiRequest(
+                chatRequest,
+                runtimeConfigService.toDto(preparedContext.snapshot()),
+                configUpdated
+        );
     }
     
     /**
@@ -545,10 +613,11 @@ public class ConversationApplicationService {
      */
     private String buildSystemPrompt(Conversation conversation, ChatRequestDto requestDto, Role role) {
         StringBuilder systemPromptBuilder = new StringBuilder();
+        String requestSystemPrompt = requestDto != null ? requestDto.getSystemPrompt() : null;
         
         // 1. 优先使用请求中的系统提示词
-        if (requestDto.getSystemPrompt() != null && !requestDto.getSystemPrompt().trim().isEmpty()) {
-            systemPromptBuilder.append(requestDto.getSystemPrompt().trim());
+        if (requestSystemPrompt != null && !requestSystemPrompt.trim().isEmpty()) {
+            systemPromptBuilder.append(requestSystemPrompt.trim());
         }
         // 2. 其次使用对话中保存的系统提示词
         else if (conversation.getSystemPrompt() != null && !conversation.getSystemPrompt().trim().isEmpty()) {
@@ -584,6 +653,13 @@ public class ConversationApplicationService {
         systemPromptBuilder.append("【重要】回复风格要求：请保持回答简洁精炼，直击要点，避免冗长的解释和不必要的铺垫。");
         
         return systemPromptBuilder.toString();
+    }
+
+    private String normalizeModelName(String modelName) {
+        if (modelName == null || modelName.isBlank()) {
+            return systemConfigService.getDefaultAiModel();
+        }
+        return modelName.contains(":") ? modelName : "openai:" + modelName;
     }
 
     /**
@@ -690,5 +766,12 @@ public class ConversationApplicationService {
         
         log.info("对话标题生成成功，conversationId: {}, title: {}", conversationId, generatedTitle);
         return generatedTitle;
+    }
+
+    private record PreparedAiRequest(
+            ChatRequest request,
+            com.nexusvoice.application.conversation.dto.ConversationContextSnapshotDto contextSnapshot,
+            boolean configUpdated
+    ) {
     }
 }
