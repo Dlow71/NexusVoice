@@ -50,6 +50,9 @@ public class AiModelPOConverter {
         po.setConfigJson(model.getConfigJson());
         po.setStatus(model.getStatus());
         po.setPriority(model.getPriority());
+        po.setCapabilities(model.getCapabilities());
+        po.setInputTypes(model.getInputTypes());
+        po.setOutputTypes(model.getOutputTypes());
         
         return po;
     }
@@ -90,6 +93,9 @@ public class AiModelPOConverter {
         model.setConfigJson(po.getConfigJson());
         model.setStatus(po.getStatus());
         model.setPriority(po.getPriority());
+        model.setCapabilities(po.getCapabilities());
+        model.setInputTypes(po.getInputTypes());
+        model.setOutputTypes(po.getOutputTypes());
         
         return model;
     }

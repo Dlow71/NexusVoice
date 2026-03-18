@@ -133,4 +133,22 @@ public class AiModelPO extends BasePO {
      */
     @TableField("priority")
     private Integer priority;
+
+    /**
+     * 模型支持的能力列表（数组）
+     */
+    @TableField("capabilities")
+    private String[] capabilities;
+
+    /**
+     * 支持的输入类型（数组）
+     */
+    @TableField("input_types")
+    private String[] inputTypes;
+
+    /**
+     * 支持的输出类型（数组）
+     */
+    @TableField("output_types")
+    private String[] outputTypes;
 }
