@@ -7,6 +7,7 @@ import com.nexusvoice.domain.ai.repository.AiProviderRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.adapter.ProviderAdapter;
+import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -15,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -56,6 +58,16 @@ public class LangChain4jModelFactory {
      * @return LangChain4j聊天模型
      */
     public ChatLanguageModel createChatModel(AiModel model, AiApiKey apiKey) {
+        return createChatModel(model, apiKey, null);
+    }
+
+    public ChatLanguageModel createChatModel(AiModel model, AiApiKey apiKey, ChatRequest request) {
+        if (hasRuntimeOverrides(model, request)) {
+            ChatLanguageModel chatModel = createChatModelByProvider(model, apiKey, request);
+            log.info("创建请求级聊天模型实例，模型：{}，密钥ID：{}", model.getModelKey(), apiKey.getId());
+            return chatModel;
+        }
+
         String cacheKey = model.getModelKey() + ":" + apiKey.getId();
         
         // 检查缓存
@@ -65,7 +77,7 @@ public class LangChain4jModelFactory {
         }
         
         // 新方案：通过Provider + Protocol创建模型
-        ChatLanguageModel chatModel = createChatModelByProvider(model, apiKey);
+        ChatLanguageModel chatModel = createChatModelByProvider(model, apiKey, null);
         
         // 缓存模型实例
         modelCache.put(cacheKey, chatModel);
@@ -78,6 +90,16 @@ public class LangChain4jModelFactory {
      * 创建流式聊天模型（重构版）
      */
     public StreamingChatLanguageModel createStreamingChatModel(AiModel model, AiApiKey apiKey) {
+        return createStreamingChatModel(model, apiKey, null);
+    }
+
+    public StreamingChatLanguageModel createStreamingChatModel(AiModel model, AiApiKey apiKey, ChatRequest request) {
+        if (hasRuntimeOverrides(model, request)) {
+            StreamingChatLanguageModel streamingModel = createStreamingChatModelByProvider(model, apiKey, request);
+            log.info("创建请求级流式聊天模型实例，模型：{}，密钥ID：{}", model.getModelKey(), apiKey.getId());
+            return streamingModel;
+        }
+
         String cacheKey = model.getModelKey() + ":" + apiKey.getId();
         
         // 检查缓存
@@ -87,7 +109,7 @@ public class LangChain4jModelFactory {
         }
         
         // 新方案：通过Provider + Protocol创建模型
-        StreamingChatLanguageModel streamingModel = createStreamingChatModelByProvider(model, apiKey);
+        StreamingChatLanguageModel streamingModel = createStreamingChatModelByProvider(model, apiKey, null);
         
         // 缓存模型实例
         streamingModelCache.put(cacheKey, streamingModel);
@@ -99,7 +121,7 @@ public class LangChain4jModelFactory {
     /**
      * 通过Provider创建聊天模型（核心方法）
      */
-    private ChatLanguageModel createChatModelByProvider(AiModel model, AiApiKey apiKey) {
+    private ChatLanguageModel createChatModelByProvider(AiModel model, AiApiKey apiKey, ChatRequest request) {
         // 1. 获取Provider配置
         AiProvider provider = getProvider(model);
         
@@ -107,13 +129,13 @@ public class LangChain4jModelFactory {
         ProviderAdapter adapter = getAdapter(provider.getProtocol());
         
         // 3. 使用适配器创建模型
-        return adapter.createChatModel(provider, model, apiKey);
+        return adapter.createChatModel(provider, model, apiKey, request);
     }
     
     /**
      * 通过Provider创建流式聊天模型（核心方法）
      */
-    private StreamingChatLanguageModel createStreamingChatModelByProvider(AiModel model, AiApiKey apiKey) {
+    private StreamingChatLanguageModel createStreamingChatModelByProvider(AiModel model, AiApiKey apiKey, ChatRequest request) {
         // 1. 获取Provider配置
         AiProvider provider = getProvider(model);
         
@@ -121,7 +143,7 @@ public class LangChain4jModelFactory {
         ProviderAdapter adapter = getAdapter(provider.getProtocol());
         
         // 3. 使用适配器创建模型
-        return adapter.createStreamingChatModel(provider, model, apiKey);
+        return adapter.createStreamingChatModel(provider, model, apiKey, request);
     }
     
     /**
@@ -224,5 +246,19 @@ public class LangChain4jModelFactory {
         streamingModelCache.entrySet().removeIf(entry -> entry.getKey().startsWith(modelKey + ":"));
         embeddingModelCache.entrySet().removeIf(entry -> entry.getKey().startsWith(modelKey + ":"));
         log.info("清除模型{}的实例缓存", modelKey);
+    }
+
+    private boolean hasRuntimeOverrides(AiModel model, ChatRequest request) {
+        if (request == null) {
+            return false;
+        }
+        Double defaultTemperature = model.getDefaultTemperature() != null ? model.getDefaultTemperature().doubleValue() : 0.7;
+        Integer defaultMaxTokens = model.getDefaultMaxTokens() != null ? model.getDefaultMaxTokens() : 2000;
+        return !Objects.equals(request.getTemperature(), defaultTemperature)
+                || !Objects.equals(request.getMaxTokens(), defaultMaxTokens)
+                || request.getTopP() != null
+                || request.getFrequencyPenalty() != null
+                || request.getPresencePenalty() != null
+                || (request.getStop() != null && !request.getStop().isEmpty());
     }
 }

@@ -76,6 +76,11 @@ public class ChatResponse {
     private List<RagCitation> citations;
 
     /**
+     * 完整思考过程。
+     */
+    private String reasoningContent;
+
+    /**
      * 令牌使用统计
      */
     @Data

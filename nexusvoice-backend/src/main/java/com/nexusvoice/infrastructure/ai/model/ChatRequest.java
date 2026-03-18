@@ -111,6 +111,26 @@ public class ChatRequest {
     private String imageBase64;
 
     /**
+     * 思考模式：disabled / auto / enabled
+     */
+    private String thinkingMode;
+
+    /**
+     * 是否向前端显式展示思考过程
+     */
+    private Boolean showThinking;
+
+    /**
+     * 思考token预算
+     */
+    private Integer thinkingBudgetTokens;
+
+    /**
+     * 推理强度：minimal / low / medium / high / none
+     */
+    private String reasoningEffort;
+
+    /**
      * 创建默认配置的请求
      * @deprecated 建议使用Builder模式并从SystemConfigService获取默认值，这里的硬编码值仅作为fallback
      */

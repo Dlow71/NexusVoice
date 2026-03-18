@@ -48,6 +48,10 @@ public class AiModelConverter {
                 // 添加图像字段转换
                 .imageUrls(domainRequest.getImageUrls())
                 .imageBase64(domainRequest.getImageBase64())
+                .thinkingMode(domainRequest.getThinkingMode())
+                .showThinking(domainRequest.getShowThinking())
+                .thinkingBudgetTokens(domainRequest.getThinkingBudgetTokens())
+                .reasoningEffort(domainRequest.getReasoningEffort())
                 .build();
 
         // 转换消息列表
@@ -88,6 +92,10 @@ public class AiModelConverter {
                 // 添加图像字段转换
                 .imageUrls(infraRequest.getImageUrls())
                 .imageBase64(infraRequest.getImageBase64())
+                .thinkingMode(infraRequest.getThinkingMode())
+                .showThinking(infraRequest.getShowThinking())
+                .thinkingBudgetTokens(infraRequest.getThinkingBudgetTokens())
+                .reasoningEffort(infraRequest.getReasoningEffort())
                 .build();
 
         // 转换消息列表

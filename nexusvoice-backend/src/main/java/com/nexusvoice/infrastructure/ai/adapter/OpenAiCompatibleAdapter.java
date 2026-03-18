@@ -5,6 +5,7 @@ import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.ai.model.AiProvider;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -30,44 +31,52 @@ public class OpenAiCompatibleAdapter implements ProviderAdapter {
     
     @Override
     public ChatLanguageModel createChatModel(AiProvider provider, AiModel model, AiApiKey apiKey) {
+        return createChatModel(provider, model, apiKey, null);
+    }
+
+    @Override
+    public ChatLanguageModel createChatModel(AiProvider provider, AiModel model, AiApiKey apiKey, ChatRequest request) {
         String baseUrl = resolveBaseUrl(provider, model, apiKey);
         
         log.debug("创建OpenAI兼容聊天模型，服务商：{}，模型：{}，端点：{}", 
                 provider.getProviderName(), model.getModelCode(), baseUrl);
         
-        return OpenAiChatModel.builder()
+        OpenAiChatModel.OpenAiChatModelBuilder builder = OpenAiChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey.getApiKey())
                 .modelName(model.getModelCode())
-                .temperature(model.getDefaultTemperature() != null ? 
-                        model.getDefaultTemperature().doubleValue() : 0.7)
-                .maxTokens(model.getDefaultMaxTokens() != null ? 
-                        model.getDefaultMaxTokens() : 2000)
                 .timeout(Duration.ofSeconds(model.getDefaultTimeoutSeconds() != null ? 
                         model.getDefaultTimeoutSeconds() : 60))
                 .logRequests(true)
-                .logResponses(false)
-                .build();
+                .logResponses(false);
+
+        applyRequestOverrides(builder, model, request);
+        return builder.build();
     }
     
     @Override
     public StreamingChatLanguageModel createStreamingChatModel(AiProvider provider, AiModel model, AiApiKey apiKey) {
+        return createStreamingChatModel(provider, model, apiKey, null);
+    }
+
+    @Override
+    public StreamingChatLanguageModel createStreamingChatModel(AiProvider provider, AiModel model, AiApiKey apiKey, ChatRequest request) {
         String baseUrl = resolveBaseUrl(provider, model, apiKey);
         
         log.debug("创建OpenAI兼容流式聊天模型，服务商：{}，模型：{}，端点：{}", 
                 provider.getProviderName(), model.getModelCode(), baseUrl);
         
-        return OpenAiStreamingChatModel.builder()
+        OpenAiStreamingChatModel.OpenAiStreamingChatModelBuilder builder = OpenAiStreamingChatModel.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey.getApiKey())
                 .modelName(model.getModelCode())
-                .temperature(model.getDefaultTemperature() != null ? 
-                        model.getDefaultTemperature().doubleValue() : 0.7)
                 .timeout(Duration.ofSeconds(model.getDefaultTimeoutSeconds() != null ? 
                         model.getDefaultTimeoutSeconds() : 60))
                 .logRequests(true)
-                .logResponses(false)
-                .build();
+                .logResponses(false);
+
+        applyRequestOverrides(builder, model, request);
+        return builder.build();
     }
     
     @Override
@@ -148,5 +157,55 @@ public class OpenAiCompatibleAdapter implements ProviderAdapter {
             log.warn("解析模型dimensions参数失败，模型：{}", model.getModelKey(), e);
         }
         return null;
+    }
+
+    private void applyRequestOverrides(OpenAiChatModel.OpenAiChatModelBuilder builder, AiModel model, ChatRequest request) {
+        Double temperature = request != null && request.getTemperature() != null
+                ? request.getTemperature()
+                : (model.getDefaultTemperature() != null ? model.getDefaultTemperature().doubleValue() : 0.7);
+        Integer maxTokens = request != null && request.getMaxTokens() != null
+                ? request.getMaxTokens()
+                : (model.getDefaultMaxTokens() != null ? model.getDefaultMaxTokens() : 2000);
+
+        builder.temperature(temperature).maxTokens(maxTokens);
+        if (request != null) {
+            if (request.getTopP() != null) {
+                builder.topP(request.getTopP());
+            }
+            if (request.getPresencePenalty() != null) {
+                builder.presencePenalty(request.getPresencePenalty());
+            }
+            if (request.getFrequencyPenalty() != null) {
+                builder.frequencyPenalty(request.getFrequencyPenalty());
+            }
+            if (request.getStop() != null && !request.getStop().isEmpty()) {
+                builder.stop(request.getStop());
+            }
+        }
+    }
+
+    private void applyRequestOverrides(OpenAiStreamingChatModel.OpenAiStreamingChatModelBuilder builder, AiModel model, ChatRequest request) {
+        Double temperature = request != null && request.getTemperature() != null
+                ? request.getTemperature()
+                : (model.getDefaultTemperature() != null ? model.getDefaultTemperature().doubleValue() : 0.7);
+        Integer maxTokens = request != null && request.getMaxTokens() != null
+                ? request.getMaxTokens()
+                : (model.getDefaultMaxTokens() != null ? model.getDefaultMaxTokens() : 2000);
+
+        builder.temperature(temperature).maxTokens(maxTokens);
+        if (request != null) {
+            if (request.getTopP() != null) {
+                builder.topP(request.getTopP());
+            }
+            if (request.getPresencePenalty() != null) {
+                builder.presencePenalty(request.getPresencePenalty());
+            }
+            if (request.getFrequencyPenalty() != null) {
+                builder.frequencyPenalty(request.getFrequencyPenalty());
+            }
+            if (request.getStop() != null && !request.getStop().isEmpty()) {
+                builder.stop(request.getStop());
+            }
+        }
     }
 }

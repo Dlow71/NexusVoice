@@ -9,13 +9,16 @@ import com.nexusvoice.domain.audio.model.AudioTranscriptionResult;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.http.*;
 import org.springframework.stereotype.Component;
-import org.springframework.util.LinkedMultiValueMap;
-import org.springframework.util.MultiValueMap;
-import org.springframework.web.client.RestTemplate;
+
+import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.UUID;
 
 /**
  * 硅基流动ASR语音识别适配器
@@ -27,16 +30,16 @@ import org.springframework.web.client.RestTemplate;
 @Component
 public class SiliconFlowAsrAdapter {
     
-    private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
     
     private static final String AUDIO_TRANSCRIPTIONS_ENDPOINT = "/audio/transcriptions";
     
-    public SiliconFlowAsrAdapter(
-            @Qualifier("searchRestTemplate") RestTemplate restTemplate,
-            ObjectMapper objectMapper) {
-        this.restTemplate = restTemplate;
+    public SiliconFlowAsrAdapter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .build();
     }
     
     /**
@@ -54,55 +57,37 @@ public class SiliconFlowAsrAdapter {
         long startTime = System.currentTimeMillis();
         
         try {
-            // 1. 构建multipart/form-data请求
-            MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-            
-            // 添加音频文件
-            ByteArrayResource fileResource = new ByteArrayResource(request.getAudioFile().getBytes()) {
-                @Override
-                public String getFilename() {
-                    return request.getAudioFile().getOriginalFilename();
-                }
-            };
-            body.add("file", fileResource);
-            
-            // 添加模型名称（使用实际模型名称，如 TeleAI/TeleSpeechASR）
-            body.add("model", model.getModelName());
-            
-            // 可选参数
-            if (request.getLanguage() != null) {
-                body.add("language", request.getLanguage());
-            }
-            
-            // 2. 设置请求头
-            HttpHeaders headers = new HttpHeaders();
-            headers.set("Authorization", "Bearer " + apiKey.getApiKey());
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            
-            HttpEntity<MultiValueMap<String, Object>> httpEntity = new HttpEntity<>(body, headers);
-            
-            // 3. 调用API
+            byte[] requestBody = buildMultipartBody(request, model);
+
             String baseUrl = apiKey.getBaseUrl() != null && !apiKey.getBaseUrl().isEmpty() 
                     ? apiKey.getBaseUrl() 
                     : model.getDefaultBaseUrl();
             String url = baseUrl + AUDIO_TRANSCRIPTIONS_ENDPOINT;
             
             log.debug("调用硅基流动ASR API: {}", url);
-            
-            ResponseEntity<String> response = restTemplate.exchange(
-                url, HttpMethod.POST, httpEntity, String.class);
+
+            String boundary = currentBoundary.get();
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .timeout(Duration.ofSeconds(60))
+                    .header("Authorization", "Bearer " + apiKey.getApiKey())
+                    .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(requestBody))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(httpRequest, HttpResponse.BodyHandlers.ofString());
             
             long transcriptionTime = System.currentTimeMillis() - startTime;
             
-            if (!response.getStatusCode().is2xxSuccessful()) {
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 log.error("硅基流动ASR API调用失败，状态码: {}, 响应: {}", 
-                         response.getStatusCode(), response.getBody());
+                         response.statusCode(), response.body());
                 throw BizException.of(ErrorCodeEnum.AI_SERVICE_ERROR, 
-                                     "语音识别失败，状态码: " + response.getStatusCode());
+                                     "语音识别失败，状态码: " + response.statusCode() + ": " + response.body());
             }
             
             // 4. 解析响应
-            AudioTranscriptionResult result = parseResponse(response.getBody(), transcriptionTime, model);
+            AudioTranscriptionResult result = parseResponse(response.body(), transcriptionTime, model);
             
             log.info("语音识别成功，耗时: {}ms, 文本长度: {}", 
                     result.getTranscriptionTime(), result.getTextLength());
@@ -116,6 +101,59 @@ public class SiliconFlowAsrAdapter {
             throw BizException.of(ErrorCodeEnum.AI_SERVICE_ERROR, 
                                  "语音识别失败: " + e.getMessage(), e);
         }
+    }
+
+    private final ThreadLocal<String> currentBoundary = new ThreadLocal<>();
+
+    private byte[] buildMultipartBody(AudioTranscriptionRequest request, AiModel model) throws Exception {
+        String boundary = "----NexusVoiceBoundary" + UUID.randomUUID().toString().replace("-", "");
+        currentBoundary.set(boundary);
+
+        String originalFilename = request.getAudioFile().getOriginalFilename();
+        String filename = originalFilename != null && !originalFilename.isBlank()
+                ? originalFilename
+                : "audio-upload.webm";
+        String contentType = request.getAudioFile().getContentType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "application/octet-stream";
+        }
+
+        byte[] fileBytes = request.getAudioFile().getBytes();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+
+        writeTextPart(output, boundary, "model", model.getModelName());
+        if (request.getLanguage() != null && !request.getLanguage().isBlank()) {
+            writeTextPart(output, boundary, "language", request.getLanguage());
+        }
+        writeFilePart(output, boundary, "file", filename, contentType, fileBytes);
+        output.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+
+        return output.toByteArray();
+    }
+
+    private void writeTextPart(ByteArrayOutputStream output,
+                               String boundary,
+                               String name,
+                               String value) throws Exception {
+        output.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        output.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n")
+                .getBytes(StandardCharsets.UTF_8));
+        output.write(value.getBytes(StandardCharsets.UTF_8));
+        output.write("\r\n".getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void writeFilePart(ByteArrayOutputStream output,
+                               String boundary,
+                               String name,
+                               String filename,
+                               String contentType,
+                               byte[] fileBytes) throws Exception {
+        output.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
+        output.write(("Content-Disposition: form-data; name=\"" + name + "\"; filename=\"" + filename + "\"\r\n")
+                .getBytes(StandardCharsets.UTF_8));
+        output.write(("Content-Type: " + contentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        output.write(fileBytes);
+        output.write("\r\n".getBytes(StandardCharsets.UTF_8));
     }
     
     /**

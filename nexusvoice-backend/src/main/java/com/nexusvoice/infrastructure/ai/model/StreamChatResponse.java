@@ -2,6 +2,7 @@ package com.nexusvoice.infrastructure.ai.model;
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.nexusvoice.application.conversation.dto.ConversationContextSnapshotDto;
 import com.nexusvoice.domain.rag.model.vo.RagCitation;
 import lombok.Data;
 import lombok.Builder;
@@ -105,6 +106,16 @@ public class StreamChatResponse {
     private List<RagCitation> citations;
 
     /**
+     * 完整思考过程，仅在END时回填。
+     */
+    private String reasoningContent;
+
+    /**
+     * 本次上下文快照，仅在END时返回。
+     */
+    private ConversationContextSnapshotDto contextSnapshot;
+
+    /**
      * 流消息类型
      */
     public enum StreamMessageType {
@@ -133,6 +144,21 @@ public class StreamChatResponse {
          */
         HEARTBEAT
         ,
+        /**
+         * 思考过程开始。
+         */
+        THINKING_START,
+
+        /**
+         * 思考过程增量片段。
+         */
+        THINKING_DELTA,
+
+        /**
+         * 思考过程结束。
+         */
+        THINKING_END,
+
         /**
          * 分段TTS消息（携带该段文本与对应音频地址）
          */
@@ -197,6 +223,33 @@ public class StreamChatResponse {
     public static StreamChatResponse heartbeat() {
         return StreamChatResponse.builder()
                 .type(StreamMessageType.HEARTBEAT)
+                .isEnd(false)
+                .build();
+    }
+
+    public static StreamChatResponse thinkingStart(String id, String model) {
+        return StreamChatResponse.builder()
+                .id(id)
+                .model(model)
+                .type(StreamMessageType.THINKING_START)
+                .isEnd(false)
+                .build();
+    }
+
+    public static StreamChatResponse thinkingDelta(String delta, Integer index) {
+        return StreamChatResponse.builder()
+                .delta(delta)
+                .index(index)
+                .type(StreamMessageType.THINKING_DELTA)
+                .isEnd(false)
+                .build();
+    }
+
+    public static StreamChatResponse thinkingEnd(String id, String model) {
+        return StreamChatResponse.builder()
+                .id(id)
+                .model(model)
+                .type(StreamMessageType.THINKING_END)
                 .isEnd(false)
                 .build();
     }

@@ -3,12 +3,15 @@ package com.nexusvoice.infrastructure.ai.manager;
 import com.nexusvoice.domain.ai.model.AiApiCallLog;
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
+import com.nexusvoice.domain.ai.model.AiProvider;
 import com.nexusvoice.domain.ai.model.EnhancementContext;
 import com.nexusvoice.domain.ai.repository.AiApiCallLogRepository;
 import com.nexusvoice.domain.ai.repository.AiModelRepository;
+import com.nexusvoice.domain.ai.repository.AiProviderRepository;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
 import com.nexusvoice.infrastructure.ai.chain.ChatEnhancementChain;
+import com.nexusvoice.infrastructure.ai.client.NativeThinkingChatClient;
 import com.nexusvoice.infrastructure.ai.converter.AiModelConverter;
 import com.nexusvoice.infrastructure.ai.factory.LangChain4jModelFactory;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
@@ -36,6 +39,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -57,6 +61,9 @@ public class DynamicAiModelBeanManager {
     
     @Autowired
     private AiApiCallLogRepository callLogRepository;
+
+    @Autowired
+    private AiProviderRepository providerRepository;
     
     @Autowired
     private ApiKeyPoolManager apiKeyPoolManager;
@@ -90,6 +97,9 @@ public class DynamicAiModelBeanManager {
 
     @Autowired(required = false)
     private RagCitationService ragCitationService;
+
+    @Autowired
+    private NativeThinkingChatClient nativeThinkingChatClient;
     
     /**
      * 模型服务映射表
@@ -335,6 +345,15 @@ public class DynamicAiModelBeanManager {
                 .map(service -> service.model)
                 .collect(Collectors.toList());
     }
+
+    public AiModel getModelByKey(String modelKey) {
+        if (modelKey == null || !modelKey.contains(":")) {
+            throw new BizException(ErrorCodeEnum.PARAM_ERROR, "无效的模型键：" + modelKey);
+        }
+        String[] parts = modelKey.split(":", 2);
+        return modelRepository.findByProviderAndModel(parts[0], parts[1])
+                .orElseThrow(() -> new BizException(ErrorCodeEnum.DATA_NOT_FOUND, "模型不存在：" + modelKey));
+    }
     
     /**
      * 动态AI聊天服务内部类
@@ -361,9 +380,14 @@ public class DynamicAiModelBeanManager {
 
                 // 1. 获取API密钥
                 apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+
+                if (shouldUseNativeThinkingClient()) {
+                    ChatResponse nativeResponse = chatWithNativeThinkingClient(finalRequest, apiKey, startTime, requestTime, requestId);
+                    return nativeResponse;
+                }
                 
                 // 2. 创建模型实例
-                ChatLanguageModel chatModel = modelFactory.createChatModel(model, apiKey);
+                ChatLanguageModel chatModel = modelFactory.createChatModel(model, apiKey, finalRequest);
                 
                 // 3. 转换消息格式
                 List<ChatMessage> langchainMessages = convertMessages(finalRequest);
@@ -454,9 +478,15 @@ public class DynamicAiModelBeanManager {
                 
                 // 2. 获取API密钥
                 apiKey = apiKeyPoolManager.getNextApiKey(model.getProviderCode(), model.getModelCode());
+
+                if (shouldUseNativeThinkingClient()) {
+                    streamChatWithNativeThinkingClient(finalRequest, apiKey, strictBufferedMode,
+                            startTime, requestTime, requestId, onNext, onError, onComplete);
+                    return;
+                }
                 
                 // 3. 创建流式模型实例
-                StreamingChatLanguageModel streamingModel = modelFactory.createStreamingChatModel(model, apiKey);
+                StreamingChatLanguageModel streamingModel = modelFactory.createStreamingChatModel(model, apiKey, finalRequest);
                 
                 // 4. 转换消息格式
                 List<ChatMessage> langchainMessages = convertMessages(finalRequest);
@@ -616,6 +646,208 @@ public class DynamicAiModelBeanManager {
             return request != null
                     && Boolean.TRUE.equals(request.getEnableRag())
                     && "STRICT".equalsIgnoreCase(request.getRagGroundingMode());
+        }
+
+        private boolean shouldUseNativeThinkingClient() {
+            Object enabled = model.getConfigMap().get("nativeThinkingProtocol");
+            if (enabled instanceof Boolean booleanValue) {
+                return booleanValue;
+            }
+            return "true".equalsIgnoreCase(String.valueOf(enabled));
+        }
+
+        private ChatResponse chatWithNativeThinkingClient(ChatRequest finalRequest,
+                                                          AiApiKey apiKey,
+                                                          long startTime,
+                                                          LocalDateTime requestTime,
+                                                          String requestId) throws Exception {
+            AiProvider provider = resolveProvider();
+            NativeThinkingChatClient.ChatResult nativeResult = nativeThinkingChatClient.chat(provider, model, apiKey, finalRequest);
+
+            String finalContent = postProcessIfNeeded(finalRequest, nativeResult.content());
+            RagCitationService.RagAnswerPackage answerPackage = buildAnswerPackage(finalRequest, finalContent);
+            finalContent = answerPackage.content();
+
+            int promptTokens = estimateTokenCount(finalRequest.getMessages().stream()
+                    .map(m -> m.getContent())
+                    .collect(Collectors.joining("\n")));
+            int completionTokens = estimateTokenCount(finalContent);
+            BigDecimal cost = model.calculateCost(promptTokens, completionTokens);
+
+            apiKeyPoolManager.markSuccess(apiKey.getId(), promptTokens + completionTokens, cost);
+
+            AiApiCallLog callLog = AiApiCallLog.success(
+                    apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                    finalRequest.getUserId(), finalRequest.getConversationId(),
+                    requestId, requestTime,
+                    (int) (System.currentTimeMillis() - startTime),
+                    promptTokens, completionTokens, cost
+            );
+            com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
+            callLogRepository.save(callLog);
+
+            ChatResponse chatResponse = ChatResponse.success(
+                    finalContent,
+                    model.getModelKey(),
+                    ChatResponse.TokenUsage.builder()
+                            .promptTokens(promptTokens)
+                            .completionTokens(completionTokens)
+                            .totalTokens(promptTokens + completionTokens)
+                            .build(),
+                    System.currentTimeMillis() - startTime
+            );
+            chatResponse.setCitations(answerPackage.citations());
+            chatResponse.setReasoningContent(shouldExposeReasoning(finalRequest) ? nativeResult.reasoningContent() : null);
+            chatResponse.setFinishReason(
+                    nativeResult.finishReason() != null && !nativeResult.finishReason().isBlank()
+                            ? nativeResult.finishReason()
+                            : "stop"
+            );
+            return chatResponse;
+        }
+
+        private void streamChatWithNativeThinkingClient(ChatRequest finalRequest,
+                                                        AiApiKey apiKey,
+                                                        boolean strictBufferedMode,
+                                                        long startTime,
+                                                        LocalDateTime requestTime,
+                                                        String requestId,
+                                                        Consumer<StreamChatResponse> onNext,
+                                                        Consumer<Throwable> onError,
+                                                        Runnable onComplete) {
+            AiProvider provider = resolveProvider();
+            AtomicInteger contentIndex = new AtomicInteger(0);
+            AtomicInteger thinkingIndex = new AtomicInteger(0);
+            AtomicReference<String> responseId = new AtomicReference<>("stream_" + System.currentTimeMillis());
+            StringBuilder fullResponse = new StringBuilder();
+            StringBuilder fullReasoning = new StringBuilder();
+            AtomicBoolean thinkingStarted = new AtomicBoolean(false);
+            AtomicBoolean thinkingEnded = new AtomicBoolean(false);
+            AiApiKey finalApiKey = apiKey;
+
+            try {
+                StreamChatResponse startResponse = StreamChatResponse.start(responseId.get(), model.getModelKey());
+                onNext.accept(startResponse);
+
+                nativeThinkingChatClient.streamChat(provider, model, apiKey, finalRequest, new NativeThinkingChatClient.StreamListener() {
+                    @Override
+                    public void onThinkingStart() {
+                        if (!shouldExposeReasoning(finalRequest) || thinkingStarted.getAndSet(true)) {
+                            return;
+                        }
+                        StreamChatResponse response = StreamChatResponse.thinkingStart(responseId.get(), model.getModelKey());
+                        onNext.accept(response);
+                    }
+
+                    @Override
+                    public void onThinkingDelta(String delta) {
+                        fullReasoning.append(delta);
+                        if (!shouldExposeReasoning(finalRequest)) {
+                            return;
+                        }
+                        StreamChatResponse response = StreamChatResponse.thinkingDelta(delta, thinkingIndex.getAndIncrement());
+                        response.setId(responseId.get());
+                        response.setModel(model.getModelKey());
+                        onNext.accept(response);
+                    }
+
+                    @Override
+                    public void onThinkingEnd() {
+                        if (!shouldExposeReasoning(finalRequest) || !thinkingStarted.get() || thinkingEnded.getAndSet(true)) {
+                            return;
+                        }
+                        StreamChatResponse response = StreamChatResponse.thinkingEnd(responseId.get(), model.getModelKey());
+                        onNext.accept(response);
+                    }
+
+                    @Override
+                    public void onContentDelta(String delta) {
+                        fullResponse.append(delta);
+                        if (!strictBufferedMode) {
+                            StreamChatResponse response = StreamChatResponse.content(delta, contentIndex.getAndIncrement());
+                            response.setId(responseId.get());
+                            response.setModel(model.getModelKey());
+                            onNext.accept(response);
+                        }
+                    }
+
+                    @Override
+                    public void onComplete(NativeThinkingChatClient.ChatResult result) {
+                        try {
+                            if (thinkingStarted.get() && !thinkingEnded.get()) {
+                                onThinkingEnd();
+                            }
+
+                            String finalContent = strictBufferedMode
+                                    ? postProcessIfNeeded(finalRequest, fullResponse.toString())
+                                    : fullResponse.toString();
+                            RagCitationService.RagAnswerPackage answerPackage = buildAnswerPackage(finalRequest, finalContent);
+                            finalContent = answerPackage.content();
+                            if (strictBufferedMode) {
+                                emitBufferedContent(finalContent, model.getModelKey(), responseId.get(), onNext);
+                            }
+
+                            int promptTokens = estimateTokenCount(finalRequest.getMessages().stream()
+                                    .map(m -> m.getContent())
+                                    .collect(Collectors.joining("\n")));
+                            int completionTokens = estimateTokenCount(finalContent);
+                            BigDecimal cost = model.calculateCost(promptTokens, completionTokens);
+
+                            apiKeyPoolManager.markSuccess(finalApiKey.getId(), promptTokens + completionTokens, cost);
+
+                            AiApiCallLog callLog = AiApiCallLog.success(
+                                    finalApiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                                    finalRequest.getUserId(), finalRequest.getConversationId(),
+                                    requestId, requestTime,
+                                    (int) (System.currentTimeMillis() - startTime),
+                                    promptTokens, completionTokens, cost
+                            );
+                            com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
+                            callLogRepository.save(callLog);
+
+                            StreamChatResponse endResponse = StreamChatResponse.end(
+                                    result.finishReason() != null && !result.finishReason().isBlank()
+                                            ? result.finishReason()
+                                            : "stop"
+                            );
+                            endResponse.setContent(finalContent);
+                            endResponse.setCitations(answerPackage.citations());
+                            endResponse.setReasoningContent(shouldExposeReasoning(finalRequest) ? fullReasoning.toString() : null);
+                            onNext.accept(endResponse);
+                            onComplete.run();
+                        } catch (Exception e) {
+                            onError.accept(e);
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                log.error("原生思考流聊天失败，模型：{}", model.getModelKey(), e);
+                apiKeyPoolManager.markFailed(apiKey.getId());
+
+                AiApiCallLog callLog = AiApiCallLog.failure(
+                        apiKey.getId(), model.getProviderCode(), model.getModelCode(),
+                        finalRequest.getUserId(), finalRequest.getConversationId(),
+                        requestId, requestTime, e.getMessage()
+                );
+                com.nexusvoice.infrastructure.ai.util.CallLogContextEnricher.enrich(callLog);
+                callLogRepository.save(callLog);
+
+                onError.accept(e);
+            }
+        }
+
+        private boolean shouldExposeReasoning(ChatRequest request) {
+            return request != null
+                    && Boolean.TRUE.equals(request.getShowThinking())
+                    && !"disabled".equalsIgnoreCase(String.valueOf(request.getThinkingMode()));
+        }
+
+        private AiProvider resolveProvider() {
+            return providerRepository.findByCode(model.getProviderCode())
+                    .orElseThrow(() -> BizException.of(
+                            ErrorCodeEnum.AI_MODEL_CONFIG_ERROR,
+                            "模型未绑定可用的服务商配置：" + model.getProviderCode()
+                    ));
         }
 
         private RagCitationService.RagAnswerPackage buildAnswerPackage(ChatRequest request, String content) {

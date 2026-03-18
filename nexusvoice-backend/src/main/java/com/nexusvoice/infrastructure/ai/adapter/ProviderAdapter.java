@@ -3,6 +3,7 @@ package com.nexusvoice.infrastructure.ai.adapter;
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.ai.model.AiProvider;
+import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.chat.StreamingChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -30,6 +31,16 @@ public interface ProviderAdapter {
      * @return 聊天模型实例
      */
     ChatLanguageModel createChatModel(AiProvider provider, AiModel model, AiApiKey apiKey);
+
+    /**
+     * 创建聊天模型，并允许本次请求覆盖默认生成参数。
+     */
+    default ChatLanguageModel createChatModel(AiProvider provider,
+                                              AiModel model,
+                                              AiApiKey apiKey,
+                                              ChatRequest request) {
+        return createChatModel(provider, model, apiKey);
+    }
     
     /**
      * 创建流式聊天模型
@@ -40,6 +51,16 @@ public interface ProviderAdapter {
      * @return 流式聊天模型实例
      */
     StreamingChatLanguageModel createStreamingChatModel(AiProvider provider, AiModel model, AiApiKey apiKey);
+
+    /**
+     * 创建流式聊天模型，并允许本次请求覆盖默认生成参数。
+     */
+    default StreamingChatLanguageModel createStreamingChatModel(AiProvider provider,
+                                                                AiModel model,
+                                                                AiApiKey apiKey,
+                                                                ChatRequest request) {
+        return createStreamingChatModel(provider, model, apiKey);
+    }
     
     /**
      * 创建Embedding模型
