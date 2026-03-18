@@ -1,0 +1,120 @@
+/* ===== Sakura Anime 樱花二次元主题 ===== */
+[data-theme="sakura-anime"] {
+    /* 基础 */
+    color: #fdf2f8;
+    background-color: #1a101f;
+
+    /* === 主题色 === */
+    --primary-color: #ff7eb3;
+    --primary-color-hover: #ff9cbd;
+    --primary-color-glow: rgba(255, 126, 179, 0.45);
+    --accent-color: #ff758c;
+    --primary-gradient: linear-gradient(135deg, #ff7eb3, #ff758c);
+    --primary-gradient-start: #ff7eb3;
+    --primary-gradient-mid: #ff758c;
+    --primary-gradient-end: #ff5e83;
+
+    /* === Surface 表面色 === */
+    --surface-base: #1a101f;
+    --surface-base-alt: #231529;
+    --surface-elevated: rgba(26, 16, 31, 0.75);
+    --surface-overlay: rgba(26, 16, 31, 0.95);
+    --surface-glass: rgba(255, 126, 179, 0.04);
+    --surface-glass-hover: rgba(255, 126, 179, 0.08);
+    --surface-glass-active: rgba(255, 126, 179, 0.12);
+    --surface-glass-subtle: rgba(255, 126, 179, 0.02);
+    --surface-glass-strong: rgba(255, 126, 179, 0.08);
+
+    /* === Primary soft === */
+    --primary-soft-bg: rgba(255, 126, 179, 0.15);
+    --primary-soft-bg-hover: rgba(255, 126, 179, 0.25);
+    --primary-soft-border: rgba(255, 126, 179, 0.3);
+    --primary-soft-border-hover: rgba(255, 126, 179, 0.5);
+
+    /* === Accent soft === */
+    --accent-soft-bg: rgba(255, 117, 140, 0.15);
+    --accent-soft-bg-hover: rgba(255, 117, 140, 0.25);
+    --accent-soft-border: rgba(255, 117, 140, 0.3);
+    --accent-soft-border-hover: rgba(255, 117, 140, 0.5);
+
+    /* === 背景色 (兼容) === */
+    --bg-main: #1a101f;
+    --bg-secondary: rgba(26, 16, 31, 0.85);
+    --bg-glass: rgba(255, 126, 179, 0.05);
+    --bg-glass-hover: rgba(255, 126, 179, 0.08);
+    --bg-glass-active: rgba(255, 126, 179, 0.12);
+
+    /* === 边框 === */
+    --border-subtle: rgba(255, 126, 179, 0.08);
+    --border-default: rgba(255, 126, 179, 0.15);
+    --border-strong: rgba(255, 126, 179, 0.25);
+    --border-focus: rgba(255, 126, 179, 0.6);
+    --border-focus-ring: rgba(255, 126, 179, 0.15);
+    --border-glass: rgba(255, 126, 179, 0.1);
+    --border-glass-hover: rgba(255, 126, 179, 0.18);
+    --border-color: rgba(255, 126, 179, 0.15);
+    --border-color-hover: rgba(255, 126, 179, 0.25);
+
+    /* === 文字颜色 === */
+    --text-bright: #ffffff;
+    --text-primary: #fdf2f8;
+    --text-default: #fce7f3;
+    --text-secondary: #fbcfe8;
+    --text-subtle: #f9a8d4;
+    --text-dim: #f472b6;
+    --text-dimmer: #ec4899;
+    --text-dimmest: #db2777;
+    --text-accent: #ff9cbd;
+    --text-accent-hover: #ffb8d2;
+    --text-accent-strong: #ff7eb3;
+    --text-accent-purple: #ff758c;
+    --text-muted: #f472b6;
+
+    /* === 语义色 === */
+    --success-color: #34d399;
+    --success-glow: rgba(52, 211, 153, 0.5);
+    --error-color: #fb7185;
+    --error-soft-bg: rgba(251, 113, 133, 0.15);
+    --error-soft-border: rgba(251, 113, 133, 0.3);
+    --error-text: #fda4af;
+    --warning-color: #fbbf24;
+
+    /* === 气泡 === */
+    --user-bubble-bg: linear-gradient(135deg, #ff7eb3, #ff758c);
+    --user-bubble-shadow: 0 4px 20px rgba(255, 126, 179, 0.25);
+    --user-bubble-shadow-hover: 0 6px 24px rgba(255, 126, 179, 0.4);
+    --ai-bubble-bg: rgba(255, 126, 179, 0.05);
+    --ai-bubble-border: rgba(255, 126, 179, 0.12);
+    --ai-bubble-border-hover: rgba(255, 126, 179, 0.22);
+    --ai-bubble-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    --ai-bubble-shadow-hover: 0 6px 20px rgba(0, 0, 0, 0.3);
+
+    /* === 开关 === */
+    --switch-track-bg: rgba(255, 126, 179, 0.1);
+    --switch-track-border: rgba(255, 126, 179, 0.15);
+    --switch-track-active: linear-gradient(135deg, rgba(255, 126, 179, 0.6), rgba(255, 117, 140, 0.6));
+    --switch-track-active-border: rgba(255, 126, 179, 0.4);
+    --switch-knob: #fbcfe8;
+    --switch-knob-active: #ffffff;
+    --switch-knob-glow: rgba(255, 126, 179, 0.6);
+
+    /* === Ambient 光斑 === */
+    --ambient-glow-1: rgba(255, 126, 179, 0.15);
+    --ambient-glow-2: rgba(255, 117, 140, 0.15);
+
+    /* === 阴影 === */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.35);
+    --shadow-glow: 0 0 20px rgba(244, 114, 182, 0.12);
+    --shadow-glow-accent: 0 0 12px rgba(192, 132, 252, 0.1);
+
+    /* === 滚动条 === */
+    --scrollbar-thumb: rgba(196, 181, 253, 0.2);
+    --scrollbar-thumb-hover: rgba(196, 181, 253, 0.35);
+    --scrollbar-thumb-subtle: rgba(196, 181, 253, 0.15);
+    --scrollbar-thumb-subtle-hover: rgba(196, 181, 253, 0.25);
+
+    /* === 选中色 === */
+    --selection-bg: rgba(244, 114, 182, 0.3);
+}

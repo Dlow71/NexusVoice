@@ -1,0 +1,114 @@
+/* ===== Element Plus Glass Premium 全局覆盖 ===== */
+
+/* --- Glass Popper (下拉菜单弹出层) --- */
+.glass-popper.el-select-dropdown,
+.glass-popper.el-popper {
+  background: var(--surface-overlay) !important;
+  border: 1px solid var(--border-default) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+.glass-popper .el-select-dropdown__item {
+  color: var(--text-subtle) !important;
+  background-color: transparent !important;
+  transition: all 0.2s !important;
+  border-radius: 6px !important;
+  margin: 2px 4px !important;
+}
+
+.glass-popper .el-select-dropdown__item:hover {
+  background: var(--surface-glass-strong) !important;
+  color: var(--text-default) !important;
+}
+
+.glass-popper .el-select-dropdown__item.selected,
+.glass-popper .el-select-dropdown__item.is-selected {
+  color: var(--text-accent) !important;
+  font-weight: 600 !important;
+  background: var(--primary-soft-bg) !important;
+}
+
+.glass-popper .el-select-dropdown__item.selected::after,
+.glass-popper .el-select-dropdown__item.is-selected::after {
+  content: "✓";
+  margin-left: 8px;
+  color: var(--text-accent-strong);
+}
+
+/* Popper 滚动条 */
+.glass-popper .el-select-dropdown__wrap {
+  background: transparent !important;
+}
+
+.glass-popper .el-scrollbar__thumb {
+  background: var(--scrollbar-thumb) !important;
+  border-radius: 3px !important;
+}
+
+/* Popper arrow */
+.glass-popper .el-popper__arrow::before {
+  background: var(--surface-overlay) !important;
+  border-color: var(--border-default) !important;
+}
+
+/* --- Glass Select (触发器) --- */
+.glass-select .el-input__wrapper {
+  background-color: var(--surface-glass) !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: none !important;
+  border-radius: 8px !important;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.glass-select .el-input__inner {
+  color: var(--text-secondary) !important;
+}
+
+.glass-select .el-input__wrapper:hover {
+  border-color: var(--border-strong) !important;
+}
+
+.glass-select .el-input__wrapper.is-focus {
+  border-color: var(--border-focus) !important;
+  box-shadow: 0 0 0 2px var(--border-focus-ring) !important;
+}
+
+.glass-select .el-select__caret {
+  color: var(--text-dim) !important;
+}
+
+/* --- Glass Select: 多选 tag --- */
+.glass-select .el-tag {
+  background-color: var(--primary-soft-bg) !important;
+  border-color: var(--primary-soft-border) !important;
+  color: var(--text-accent) !important;
+}
+
+.glass-select .el-tag .el-tag__close {
+  color: var(--text-accent) !important;
+}
+
+.glass-select .el-tag .el-tag__close:hover {
+  background-color: var(--primary-soft-bg-hover) !important;
+  color: var(--text-accent-hover) !important;
+}
+
+/* --- Element Plus 全局组件覆盖 --- */
+
+/* Message Box */
+.el-message-box {
+  background-color: var(--surface-overlay) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: 12px !important;
+}
+
+.el-message-box__title {
+  color: var(--text-primary) !important;
+}
+
+.el-message-box__message {
+  color: var(--text-secondary) !important;
+}

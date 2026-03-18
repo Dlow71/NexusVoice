@@ -68,6 +68,12 @@ const routes = [
         name: 'RtcVoice',
         component: () => import('../views/RtcVoiceView.vue'),
         meta: { requiresAuth: true }
+    },
+    {
+        path: '/voice-call',
+        name: 'VoiceCall',
+        component: () => import('../views/VoiceCallView.vue'),
+        meta: { requiresAuth: true }
     }
 ]
 
