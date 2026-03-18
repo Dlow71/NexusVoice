@@ -296,7 +296,12 @@ public class AiModel extends BaseDomainEntity {
      * 检查是否支持深度思考能力
      */
     public boolean supportsThinking() {
-        return hasCapability("thinking");
+        if (hasCapability("thinking")) {
+            return true;
+        }
+        Map<String, Object> configMap = getConfigMap();
+        return configMap.containsKey("thinkingModes")
+                || Boolean.parseBoolean(String.valueOf(configMap.get("nativeThinkingProtocol")));
     }
     
     /**

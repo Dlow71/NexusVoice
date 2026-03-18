@@ -103,6 +103,26 @@ public class AiChatRequest {
     private String imageBase64;
 
     /**
+     * 思考模式：disabled / auto / enabled
+     */
+    private String thinkingMode;
+
+    /**
+     * 是否展示思考过程
+     */
+    private Boolean showThinking;
+
+    /**
+     * 思考token预算
+     */
+    private Integer thinkingBudgetTokens;
+
+    /**
+     * 推理强度：minimal / low / medium / high / none
+     */
+    private String reasoningEffort;
+
+    /**
      * 构建器
      */
     public static Builder builder() {
@@ -126,6 +146,8 @@ public class AiChatRequest {
         request.enableRag = false;
         request.enableMultiModal = false;
         request.ragGroundingMode = "STRICT";
+        request.thinkingMode = "disabled";
+        request.showThinking = false;
         return request;
     }
 
@@ -234,6 +256,26 @@ public class AiChatRequest {
             return this;
         }
 
+        public Builder thinkingMode(String thinkingMode) {
+            request.thinkingMode = thinkingMode;
+            return this;
+        }
+
+        public Builder showThinking(Boolean showThinking) {
+            request.showThinking = showThinking;
+            return this;
+        }
+
+        public Builder thinkingBudgetTokens(Integer thinkingBudgetTokens) {
+            request.thinkingBudgetTokens = thinkingBudgetTokens;
+            return this;
+        }
+
+        public Builder reasoningEffort(String reasoningEffort) {
+            request.reasoningEffort = reasoningEffort;
+            return this;
+        }
+
         public AiChatRequest build() {
             return request;
         }
@@ -310,6 +352,22 @@ public class AiChatRequest {
     
     public String getImageBase64() {
         return imageBase64;
+    }
+
+    public String getThinkingMode() {
+        return thinkingMode;
+    }
+
+    public Boolean getShowThinking() {
+        return showThinking;
+    }
+
+    public Integer getThinkingBudgetTokens() {
+        return thinkingBudgetTokens;
+    }
+
+    public String getReasoningEffort() {
+        return reasoningEffort;
     }
 
     // Setter methods
