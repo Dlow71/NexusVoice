@@ -120,6 +120,23 @@ export default {
         return apiClient.get(`/v1/conversations/${conversationId}/history`);
     },
     /**
+     * 获取会话运行配置
+     * @param {string} conversationId
+     * @returns {Promise<axios.AxiosResponse<any>>}
+     */
+    getConversationRuntimeConfig(conversationId) {
+        return apiClient.get(`/v1/conversations/${conversationId}/runtime-config`);
+    },
+    /**
+     * 更新会话运行配置
+     * @param {string} conversationId
+     * @param {object} payload
+     * @returns {Promise<axios.AxiosResponse<any>>}
+     */
+    updateConversationRuntimeConfig(conversationId, payload) {
+        return apiClient.put(`/v1/conversations/${conversationId}/runtime-config`, payload);
+    },
+    /**
      * 除指定ID的对话
      * @param {string} conversationId -
      */
@@ -183,4 +200,3 @@ export default {
         return apiClient.post(`/v1/conversations/${conversationId}/generate-title`);
     },
 };
-

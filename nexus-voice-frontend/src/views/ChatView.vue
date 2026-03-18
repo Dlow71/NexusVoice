@@ -14,6 +14,7 @@
               :src="getAvatarUrl(currentCharacter.avatarUrl)"
               alt="avatar"
               class="avatar"
+              @error="handleImageElementError"
           />
           <h2 class="name">{{ currentCharacter.name }}</h2>
         </div>
@@ -124,7 +125,7 @@
             <div class="form-group">
               <label>头像</label>
               <div class="avatar-upload-group">
-                <img v-if="roleBrief.avatarUrl" :src="roleBrief.avatarUrl" alt="头像预览" class="avatar-preview">
+                <img v-if="roleBrief.avatarUrl" :src="roleBrief.avatarUrl" alt="头像预览" class="avatar-preview" @error="handleImageElementError">
                 <div class="upload-inputs">
                   <input type="text" v-model="roleBrief.avatarUrl" placeholder="可粘贴URL或上传图片">
                   <div class="button-group"> <input type="file" ref="fileInput" @change="handleImageUpload" accept="image/*" style="display: none;">
@@ -222,6 +223,7 @@ import ConversationSidebar from "../components/ConversationSidebar.vue";
 import ChatMessage from "../components/ChatMessage.vue";
 import characterApi from "../services/character";
 import {ElMessage, ElMessageBox} from "element-plus";
+import { replaceImageWithStarFallback, withStarFallback } from "../utils/starFallback";
 
 const route = useRoute();
 const router = useRouter();
@@ -567,8 +569,11 @@ const scrollToBottom = async () => {
 
 const goBack = () => router.push("/");
 
-const getAvatarUrl = (url) =>
-    url || new URL("../assets/placeholder.svg", import.meta.url).href;
+const handleImageElementError = (event) => {
+  replaceImageWithStarFallback(event.target);
+};
+
+const getAvatarUrl = (url) => withStarFallback(url);
 
 const initializeSpeechRecognition = () => {
   const SpeechRecognition =

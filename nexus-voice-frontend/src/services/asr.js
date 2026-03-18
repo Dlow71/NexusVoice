@@ -138,9 +138,11 @@ class AsrService {
    * 健康检查
    * @returns {Promise<Object>} 健康状态
    */
-  async healthCheck() {
+  async healthCheck(modelKey) {
     try {
-      const response = await apiClient.get(`${ASR_BASE_URL}/health`);
+      const response = await apiClient.get(`${ASR_BASE_URL}/health`, {
+        params: { modelKey }
+      });
       return response.data;
     } catch (error) {
       console.error('ASR健康检查失败:', error);

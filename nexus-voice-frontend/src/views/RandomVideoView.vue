@@ -869,7 +869,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .video-view-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #0f172a, #1e293b, #0f172a);
+  background: linear-gradient(135deg, #f8fafc, #f1f5f9, #f8fafc);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -886,7 +886,7 @@ onBeforeUnmount(() => {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.03) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.05) 0%, transparent 70%);
   animation: pulse 15s ease-in-out infinite;
   pointer-events: none;
 }
@@ -904,12 +904,12 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 12px 20px;
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -919,9 +919,9 @@ onBeforeUnmount(() => {
 
 .back-button:hover {
   transform: translateY(-2px);
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(16, 185, 129, 0.4);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+  background: white;
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 4px 16px rgba(6, 182, 212, 0.2);
 }
 
 .back-icon {
@@ -936,9 +936,9 @@ onBeforeUnmount(() => {
   right: 1rem;
   display: flex;
   gap: 8px;
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 6px;
   z-index: 200;
@@ -949,7 +949,7 @@ onBeforeUnmount(() => {
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -957,14 +957,14 @@ onBeforeUnmount(() => {
 }
 
 .mode-btn:hover {
-  color: #e2e8f0;
+  color: #1e293b;
   background: rgba(148, 163, 184, 0.1);
 }
 
 .mode-btn.active {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
-  color: #10b981;
-  border-color: rgba(16, 185, 129, 0.4);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2));
+  color: #06b6d4;
+  border-color: rgba(6, 182, 212, 0.4);
 }
 
 /* 播放器容器 */
@@ -990,13 +990,13 @@ onBeforeUnmount(() => {
   width: auto;
   aspect-ratio: 9 / 16;
   max-width: 90vw;
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #e2e8f0;
   border-radius: 20px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4),
-              0 0 40px rgba(16, 185, 129, 0.1);
+              0 0 40px rgba(6, 182, 212, 0.1);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -1011,14 +1011,14 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(16, 185, 129, 0.6), transparent);
+  background: linear-gradient(90deg, transparent, rgba(6, 182, 212, 0.6), transparent);
   z-index: 1;
 }
 
 .video-container:hover {
-  border-color: rgba(16, 185, 129, 0.3);
+  border-color: rgba(6, 182, 212, 0.3);
   box-shadow: 0 24px 72px rgba(0, 0, 0, 0.5),
-              0 0 60px rgba(16, 185, 129, 0.2);
+              0 0 60px rgba(6, 182, 212, 0.2);
 }
 
 /* 视频包装器 */
@@ -1061,8 +1061,8 @@ video {
 .spinner {
   width: 60px;
   height: 60px;
-  border: 4px solid rgba(16, 185, 129, 0.2);
-  border-top-color: #10b981;
+  border: 4px solid rgba(6, 182, 212, 0.2);
+  border-top-color: #06b6d4;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1073,7 +1073,7 @@ video {
 
 .loading-text {
   margin-top: 16px;
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 16px;
   font-weight: 500;
 }
@@ -1088,11 +1088,11 @@ video {
 .control-btn {
   min-width: 130px;
   padding: 12px 20px;
-  background: rgba(30, 41, 59, 0.6);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -1108,7 +1108,7 @@ video {
   left: 50%;
   width: 0;
   height: 0;
-  background: radial-gradient(circle, rgba(16, 185, 129, 0.3), transparent);
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.3), transparent);
   transform: translate(-50%, -50%);
   transition: width 0.6s, height 0.6s;
   border-radius: 50%;
@@ -1121,9 +1121,9 @@ video {
 
 .control-btn:hover {
   transform: translateY(-2px);
-  background: rgba(30, 41, 59, 0.8);
-  border-color: rgba(16, 185, 129, 0.4);
-  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.2);
+  background: white;
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.2);
 }
 
 .control-btn:active {
@@ -1133,15 +1133,15 @@ video {
 /* 激活状态 */
 .mute-active,
 .auto-play-active {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
-  border-color: rgba(16, 185, 129, 0.4);
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2));
+  border-color: rgba(6, 182, 212, 0.4);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
 }
 
 .mute-active:hover,
 .auto-play-active:hover {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.3));
-  border-color: rgba(16, 185, 129, 0.5);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.3), rgba(59, 130, 246, 0.3));
+  border-color: rgba(6, 182, 212, 0.5);
 }
 
 /* 响应式设计 */
@@ -1286,9 +1286,9 @@ video {
 .preview-list {
   width: 280px;
   height: calc(100vh - 3rem);
-  background: rgba(30, 41, 59, 0.4);
+  background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 16px;
   display: flex;
@@ -1303,13 +1303,13 @@ video {
   align-items: center;
   padding-bottom: 12px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.2);
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 14px;
   font-weight: 600;
 }
 
 .cache-count {
-  color: #10b981;
+  color: #06b6d4;
   font-size: 13px;
 }
 
@@ -1334,12 +1334,12 @@ video {
 }
 
 .preview-scroll::-webkit-scrollbar-thumb {
-  background: rgba(16, 185, 129, 0.3);
+  background: rgba(6, 182, 212, 0.3);
   border-radius: 3px;
 }
 
 .preview-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(16, 185, 129, 0.5);
+  background: rgba(6, 182, 212, 0.5);
 }
 
 /* 预览项 */
@@ -1351,18 +1351,18 @@ video {
   cursor: pointer;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   border: 2px solid transparent;
-  background: rgba(15, 23, 42, 0.6);
+  background: white;
 }
 
 .preview-item:hover {
   transform: translateX(-4px);
-  border-color: rgba(16, 185, 129, 0.5);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 4px 16px rgba(6, 182, 212, 0.2);
 }
 
 .preview-item.active {
-  border-color: #10b981;
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+  border-color: #06b6d4;
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
 }
 
 .preview-item.loading {
@@ -1377,7 +1377,7 @@ video {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(15, 23, 42, 0.8);
+  background: white;
 }
 
 .preview-thumbnail img {
@@ -1397,7 +1397,7 @@ video {
 
 .play-icon {
   font-size: 48px;
-  color: rgba(16, 185, 129, 0.6);
+  color: rgba(6, 182, 212, 0.6);
 }
 
 /* 播放中指示器 */
@@ -1406,7 +1406,7 @@ video {
   bottom: 8px;
   left: 8px;
   right: 8px;
-  background: rgba(16, 185, 129, 0.9);
+  background: rgba(6, 182, 212, 0.9);
   backdrop-filter: blur(10px);
   padding: 6px 10px;
   border-radius: 6px;
@@ -1442,8 +1442,8 @@ video {
 .mini-spinner {
   width: 24px;
   height: 24px;
-  border: 3px solid rgba(16, 185, 129, 0.2);
-  border-top-color: #10b981;
+  border: 3px solid rgba(6, 182, 212, 0.2);
+  border-top-color: #06b6d4;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -1459,7 +1459,7 @@ video {
   border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: #1e293b;
 }
 
 /* 更多视频提示 */
@@ -1469,10 +1469,10 @@ video {
   align-items: center;
   gap: 6px;
   padding: 16px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px dashed rgba(16, 185, 129, 0.3);
+  background: white;
+  border: 1px dashed rgba(6, 182, 212, 0.3);
   border-radius: 12px;
-  color: #94a3b8;
+  color: #64748b;
   font-size: 12px;
   text-align: center;
 }
@@ -1482,7 +1482,7 @@ video {
 }
 
 .cache-total {
-  color: #10b981;
+  color: #06b6d4;
   font-weight: 600;
   font-size: 13px;
 }
@@ -1583,20 +1583,20 @@ video {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(30, 41, 59, 0.8);
+  background: white;
   backdrop-filter: blur(20px);
-  border: 2px solid rgba(16, 185, 129, 0.5);
+  border: 2px solid rgba(6, 182, 212, 0.5);
   border-radius: 50%;
-  color: #10b981;
+  color: #06b6d4;
   font-size: 36px;
   padding-left: 6px;
-  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
   animation: pulse-play 2s infinite;
 }
 
 .play-hint-text {
   margin-top: 16px;
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 16px;
   font-weight: 600;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
@@ -1605,11 +1605,11 @@ video {
 @keyframes pulse-play {
   0%, 100% {
     transform: scale(1);
-    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 8px 24px rgba(6, 182, 212, 0.3);
   }
   50% {
     transform: scale(1.05);
-    box-shadow: 0 8px 32px rgba(16, 185, 129, 0.5);
+    box-shadow: 0 8px 32px rgba(6, 182, 212, 0.5);
   }
 }
 
@@ -1630,9 +1630,9 @@ video {
 }
 
 .swipe-info-content {
-  background: rgba(30, 41, 59, 0.8);
+  background: white;
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 12px 20px;
   display: flex;
@@ -1642,7 +1642,7 @@ video {
 }
 
 .swipe-index {
-  color: #10b981;
+  color: #06b6d4;
   font-size: 14px;
   font-weight: 600;
 }
@@ -1650,10 +1650,10 @@ video {
 .swipe-mute-btn {
   width: 40px;
   height: 40px;
-  background: rgba(15, 23, 42, 0.6);
+  background: white;
   border: 1px solid rgba(148, 163, 184, 0.3);
   border-radius: 10px;
-  color: #e2e8f0;
+  color: #1e293b;
   font-size: 20px;
   cursor: pointer;
   display: flex;
@@ -1663,15 +1663,15 @@ video {
 }
 
 .swipe-mute-btn:hover {
-  background: rgba(15, 23, 42, 0.8);
-  border-color: rgba(16, 185, 129, 0.5);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+  background: white;
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 0 12px rgba(6, 182, 212, 0.3);
   transform: scale(1.05);
 }
 
 .swipe-mute-btn.active {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
-  border-color: rgba(16, 185, 129, 0.5);
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(59, 130, 246, 0.2));
+  border-color: rgba(6, 182, 212, 0.5);
 }
 
 /* 滑动模式响应式 */

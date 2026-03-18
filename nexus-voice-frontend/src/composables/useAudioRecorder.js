@@ -32,6 +32,7 @@ const DEFAULT_CONFIG = {
  * @param {Object} config - 配置选项
  * @param {number} [config.maxDuration=60] - 最大录音时长（秒）
  * @param {Function} [config.onRecordComplete] - 录音完成回调
+ * @param {Function} [config.onDataChunk] - 录音分片回调
  * @param {Function} [config.onError] - 错误回调
  * @returns {Object} 录音相关的响应式状态和方法
  */
@@ -159,6 +160,13 @@ export function useAudioRecorder(config = {}) {
       mediaRecorder.value.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) {
           audioChunks.value.push(event.data);
+          if (options.onDataChunk) {
+            try {
+              options.onDataChunk(event.data);
+            } catch (error) {
+              console.error('[录音] 分片回调失败:', error);
+            }
+          }
         }
       };
 
