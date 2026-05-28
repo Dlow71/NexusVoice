@@ -16,6 +16,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.util.matcher.RegexRequestMatcher;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -94,6 +95,9 @@ public class SecurityConfig {
                     "/",
                     "/api/health",
                     "/api/auth/**",
+                    "/api/roles/public",
+                    "/api/roles/public/**",
+                    "/api/tts/voice-types",
                     // 开发者API密钥测试端点：使用X-API-Key自行校验，不走JWT
                     "/api/v1/developer/test/**",
                     "/api/admin/auth/login",
@@ -110,6 +114,7 @@ public class SecurityConfig {
                     "/oauth2/**",
                     "/login/oauth2/**"
                 ).permitAll()
+                .requestMatchers(new RegexRequestMatcher("^/api/roles/\\d+$", "GET")).permitAll()
                 // 注意：/ws/** 已通过webSecurityCustomizer()完全忽略，不在此配置
                 
                 // 需要认证的端点

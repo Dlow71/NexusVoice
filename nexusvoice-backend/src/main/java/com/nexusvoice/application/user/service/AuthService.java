@@ -368,9 +368,13 @@ public class AuthService {
         }
         userInfo.setRoles(roles);
         
-        // ✅ 创建用户会话（保存到Redis）
+        // 创建会话失败不应阻塞登录/注册主流程，避免Redis或序列化异常导致认证整体不可用
         if (httpRequest != null) {
-            tokenManagementService.createSession(user.getId(), accessToken, refreshToken, httpRequest);
+            try {
+                tokenManagementService.createSession(user.getId(), accessToken, refreshToken, httpRequest);
+            } catch (Exception e) {
+                log.error("创建用户会话失败，降级为仅返回令牌: userId={}", user.getId(), e);
+            }
         }
 
         return new AuthResponse(accessToken, refreshToken, expiresAt, userInfo);
