@@ -8,11 +8,11 @@
       <div class="grid-pattern"></div>
     </div>
 
-    <!-- 视频入口按钮 -->
-    <button @click="goToRandomVideo" class="video-entrance-btn">
+    <!-- 视频入口按钮 - 已隐藏 -->
+    <!-- <button @click="goToRandomVideo" class="video-entrance-btn">
       <span class="video-icon">🎬</span>
       <span>随机视频</span>
-    </button>
+    </button> -->
 
     <!-- 主卡片 -->
     <div class="card-wrapper">

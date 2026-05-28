@@ -77,7 +77,7 @@
             :disabled="startingSession"
             @click="handleStartSession"
           >
-            {{ startingSession ? '启动中...' : '开始语音会话' }}
+            {{ startingSession ? startSessionLabel : '开始语音通话' }}
           </button>
 
           <template v-else>
@@ -97,6 +97,15 @@
               @click="toggleAudioRecording"
             >
               {{ isRecordingAudio ? `结束录音 ${recordingDurationLabel}` : '录音识别' }}
+            </button>
+
+            <button
+              class="control-button"
+              :class="{ active: audioUnlocked }"
+              :disabled="audioUnlocking"
+              @click="handleAudioUnlock"
+            >
+              {{ audioUnlocking ? '启用中...' : (audioUnlocked ? '语音已启用' : '启用语音输出') }}
             </button>
 
             <button
@@ -154,9 +163,18 @@
                 v-if="audioStatusLabel"
                 class="audio-status-badge"
                 :class="audioStatusClass"
+                :title="audioStatusTitle"
               >
                 {{ audioStatusLabel }}
               </div>
+              <button
+                v-if="showAudioUnlockButton"
+                class="collapse-chip"
+                :disabled="audioUnlocking"
+                @click="unlockAndReplayAudio"
+              >
+                {{ audioUnlocking ? '启用中...' : playbackBlocked ? '启用声音并重播' : '启用声音' }}
+              </button>
               <button
                 v-if="latestAudioSegment"
                 class="collapse-chip"
@@ -248,6 +266,7 @@
         accept="audio/*"
         @change="handleAudioFileSelected"
       />
+      <audio ref="assistantAudioElement" class="hidden-audio-player" preload="auto" playsinline></audio>
     </section>
 
     <el-drawer
@@ -407,6 +426,7 @@ const userPartialTranscript = ref('')
 const latestUserTranscript = ref('')
 const manualTranscript = ref('')
 const audioFileInput = ref(null)
+const assistantAudioElement = ref(null)
 const assistantDisplayText = ref('')
 const reasoningContent = ref('')
 const citations = ref([])
@@ -426,12 +446,19 @@ const currentAudioInputMode = ref('')
 const handsFreeMode = ref(false)
 const playbackBlocked = ref(false)
 const audioPlaybackState = ref('idle')
+const audioBackendState = ref('idle')
+const audioStatusMessage = ref('')
+const audioUnlocked = ref(false)
+const audioUnlocking = ref(false)
+const microphonePermissionState = ref('unknown')
 
 let recognition = null
 let voiceSocket = null
 let currentAudio = null
 const playbackQueue = []
 let autoListenTimer = null
+
+const SILENT_AUDIO_DATA_URI = 'data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAIlYAAESsAAACABAAZGF0YTAAAAAA'
 
 const runtimeConfig = reactive({
   strictMode: true,
@@ -580,22 +607,38 @@ const contextTooltip = computed(() => {
 const assistantDisplayHtml = computed(() => renderMarkdown(assistantDisplayText.value || ''))
 const latestAudioSegment = computed(() => assistantAudioQueue.value.at(-1) || null)
 const audioStatusLabel = computed(() => {
-  const mapping = {
-    generating: '语音生成中',
-    ready: '语音已生成',
-    playing: '播放中',
-    blocked: '自动播放受限',
-    completed: '播放完成',
-    error: '播放失败'
-  }
-  return mapping[audioPlaybackState.value] || ''
+  if (audioPlaybackState.value === 'playing') return '播放中'
+  if (audioPlaybackState.value === 'blocked') return '自动播放受限'
+  if (audioPlaybackState.value === 'error') return '播放失败'
+  if (audioPlaybackState.value === 'completed' && audioBackendState.value === 'ready') return '播放完成'
+  if (audioBackendState.value === 'generating') return '语音生成中'
+  if (audioBackendState.value === 'failed') return '语音生成失败'
+  if (audioBackendState.value === 'ready') return '语音已生成'
+  return ''
 })
 const audioStatusClass = computed(() => {
   return {
-    active: audioPlaybackState.value === 'playing' || audioPlaybackState.value === 'ready',
+    active: audioPlaybackState.value === 'playing'
+      || (audioPlaybackState.value === 'completed' && audioBackendState.value === 'ready')
+      || audioBackendState.value === 'ready',
     warning: audioPlaybackState.value === 'blocked',
-    error: audioPlaybackState.value === 'error'
+    error: audioPlaybackState.value === 'error' || audioBackendState.value === 'failed'
   }
+})
+const audioStatusTitle = computed(() => {
+  if (audioPlaybackState.value === 'blocked') {
+    return '浏览器阻止了自动播放，需要用户手势再次启用声音'
+  }
+  return audioStatusMessage.value || ''
+})
+const showAudioUnlockButton = computed(() => {
+  if (!sessionActive.value) return false
+  return playbackBlocked.value || (!audioUnlocked.value && assistantAudioQueue.value.length > 0)
+})
+const startSessionLabel = computed(() => {
+  if (audioUnlocking.value) return '启用语音输出中...'
+  if (startingSession.value && microphonePermissionState.value === 'requesting') return '请求麦克风权限中...'
+  return '建立通话中...'
 })
 
 const renderMarkdown = (value) => {
@@ -695,13 +738,34 @@ const handleRealtimeEvent = (event) => {
       currentAudioInputMode.value = ''
       transcriptSource.value = 'server_asr'
       playbackBlocked.value = false
-      audioPlaybackState.value = 'generating'
+      audioPlaybackState.value = 'idle'
+      audioBackendState.value = 'generating'
+      audioStatusMessage.value = '语音生成中'
       userPartialTranscript.value = ''
       latestUserTranscript.value = event.payload?.text || ''
       assistantDisplayText.value = ''
       reasoningContent.value = ''
       citations.value = []
       assistantAudioQueue.value = []
+      playbackQueue.length = 0
+      break
+    case 'ASSISTANT_AUDIO_GENERATING':
+      playbackBlocked.value = false
+      audioBackendState.value = 'generating'
+      audioStatusMessage.value = event.payload?.message || '语音生成中'
+      break
+    case 'ASSISTANT_AUDIO_READY':
+      audioBackendState.value = 'ready'
+      audioStatusMessage.value = event.payload?.message || '语音已生成'
+      if (audioPlaybackState.value !== 'playing' && audioPlaybackState.value !== 'completed') {
+        audioPlaybackState.value = 'ready'
+      }
+      break
+    case 'ASSISTANT_AUDIO_FAILED':
+      playbackBlocked.value = false
+      audioBackendState.value = 'failed'
+      audioPlaybackState.value = 'error'
+      audioStatusMessage.value = event.payload?.message || '语音生成失败'
       break
     case 'THINKING_DELTA':
       reasoningContent.value = `${reasoningContent.value}${event.payload?.delta || ''}`.trim()
@@ -716,13 +780,16 @@ const handleRealtimeEvent = (event) => {
         assistantAudioQueue.value = [...assistantAudioQueue.value, event.payload]
         playbackQueue.push(event.payload)
         playbackBlocked.value = false
+        audioBackendState.value = 'ready'
         audioPlaybackState.value = 'ready'
         playNextAudio()
       }
       break
     case 'ASSISTANT_AUDIO_END':
       if (!currentAudio && playbackQueue.length === 0) {
-        audioPlaybackState.value = 'completed'
+        if (audioBackendState.value === 'ready') {
+          audioPlaybackState.value = 'completed'
+        }
         scheduleAutoListening(720)
       }
       break
@@ -765,14 +832,30 @@ const handleRealtimeEvent = (event) => {
   }
 }
 
-const playNextAudio = async () => {
+const playNextAudio = async (userInitiated = false) => {
   if (currentAudio || playbackQueue.length === 0) return
+  if (!audioUnlocked.value && !userInitiated) {
+    playbackBlocked.value = true
+    audioPlaybackState.value = 'blocked'
+    return
+  }
   const next = playbackQueue.shift()
   if (!next?.audioUrl) return
+  const audioElement = assistantAudioElement.value
+  if (!audioElement) {
+    playbackBlocked.value = true
+    audioPlaybackState.value = 'error'
+    audioStatusMessage.value = '音频播放器初始化失败'
+    return
+  }
 
-  currentAudio = new Audio(next.audioUrl)
+  currentAudio = audioElement
+  audioElement.pause()
+  audioElement.src = next.audioUrl
+  audioElement.currentTime = 0
+  audioElement.volume = 1
   audioPlaybackState.value = 'playing'
-  currentAudio.onended = () => {
+  audioElement.onended = () => {
     currentAudio = null
     if (playbackQueue.length === 0) {
       audioPlaybackState.value = 'completed'
@@ -780,32 +863,47 @@ const playNextAudio = async () => {
     }
     playNextAudio()
   }
-  currentAudio.onerror = () => {
+  audioElement.onerror = () => {
     currentAudio = null
     playbackBlocked.value = true
     audioPlaybackState.value = 'error'
+    audioStatusMessage.value = '音频资源加载或播放失败'
     if (playbackQueue.length === 0) {
       scheduleAutoListening(720)
     }
     playNextAudio()
   }
   try {
-    await currentAudio.play()
+    await audioElement.play()
+    audioUnlocked.value = true
+    playbackBlocked.value = false
   } catch (error) {
     currentAudio = null
     playbackBlocked.value = true
     audioPlaybackState.value = 'blocked'
-    ElMessage.warning('浏览器阻止了自动播放，可以点击“重播最新音频”手动播放。')
+    audioStatusMessage.value = '浏览器阻止了自动播放，请点击“启用声音并重播”'
+    ElMessage.warning('浏览器阻止了自动播放，请先启用声音再重播。')
   }
 }
 
-const stopPlayback = () => {
+const stopPlayback = ({ clearSegments = false } = {}) => {
   playbackQueue.length = 0
-  assistantAudioQueue.value = []
   if (currentAudio) {
     currentAudio.pause()
     currentAudio.currentTime = 0
+    currentAudio.onended = null
+    currentAudio.onerror = null
     currentAudio = null
+  }
+  if (assistantAudioElement.value) {
+    assistantAudioElement.value.pause()
+    assistantAudioElement.value.removeAttribute('src')
+    assistantAudioElement.value.load()
+    assistantAudioElement.value.onended = null
+    assistantAudioElement.value.onerror = null
+  }
+  if (clearSegments) {
+    assistantAudioQueue.value = []
   }
 }
 
@@ -989,9 +1087,37 @@ const blobToBase64 = async (blob) => {
   return btoa(binary)
 }
 
+const requestMicrophonePermission = async () => {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    microphonePermissionState.value = 'unsupported'
+    return false
+  }
+  microphonePermissionState.value = 'requesting'
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      }
+    })
+    stream.getTracks().forEach(track => track.stop())
+    microphonePermissionState.value = 'granted'
+    return true
+  } catch (error) {
+    microphonePermissionState.value = error?.name === 'NotAllowedError' ? 'denied' : 'unavailable'
+    return false
+  }
+}
+
 const handleStartSession = async () => {
   startingSession.value = true
   try {
+    const microphoneReady = await requestMicrophonePermission()
+    const audioReady = await unlockAudioPlayback(true)
+    handsFreeMode.value = Boolean(speechSupported.value && recognition && microphoneReady)
+
     const response = await startVoiceSession({
       conversationId: route.query.conversationId ? Number(route.query.conversationId) : undefined,
       roleId: route.query.roleId ? Number(route.query.roleId) : undefined,
@@ -1015,10 +1141,22 @@ const handleStartSession = async () => {
     sessionState.value = data.state || 'PREPARING'
     syncRuntimeConfig(data.runtimeConfig)
     connectVoiceSocket(data.realtimeUrl)
+
+    if (audioReady && handsFreeMode.value) {
+      ElMessage.success('语音通话已就绪，可直接开始说话')
+    } else if (audioReady) {
+      ElMessage.warning('通话已建立，但麦克风或浏览器语音识别不可用，请使用录音识别或文本回路')
+    } else {
+      ElMessage.warning('通话已建立，但浏览器尚未放行语音播放，建议先点“启用语音输出”')
+    }
   } catch (error) {
+    handsFreeMode.value = false
     ElMessage.error(error.message || '启动语音会话失败')
   } finally {
     startingSession.value = false
+    if (microphonePermissionState.value === 'requesting') {
+      microphonePermissionState.value = 'unknown'
+    }
   }
 }
 
@@ -1112,7 +1250,7 @@ const cleanupAll = () => {
   if (isRecordingAudio.value) {
     stopRecording()
   }
-  stopPlayback()
+  stopPlayback({ clearSegments: true })
   sessionActive.value = false
   realtimeConnected.value = false
   isListening.value = false
@@ -1126,6 +1264,9 @@ const cleanupAll = () => {
   currentAudioInputMode.value = ''
   playbackBlocked.value = false
   audioPlaybackState.value = 'idle'
+  audioBackendState.value = 'idle'
+  audioStatusMessage.value = ''
+  audioUnlocked.value = false
 }
 
 const replayCurrentAudio = async () => {
@@ -1140,7 +1281,65 @@ const replayCurrentAudio = async () => {
   }
   playbackBlocked.value = false
   audioPlaybackState.value = 'ready'
-  await playNextAudio()
+  await playNextAudio(true)
+}
+
+const unlockAudioPlayback = async (force = false) => {
+  if (audioUnlocked.value && !force) {
+    return true
+  }
+  if (audioUnlocking.value) {
+    return false
+  }
+  audioUnlocking.value = true
+  try {
+    const audioElement = assistantAudioElement.value
+    if (!audioElement) {
+      return false
+    }
+    audioElement.pause()
+    audioElement.src = SILENT_AUDIO_DATA_URI
+    audioElement.currentTime = 0
+    audioElement.volume = 0.01
+    await audioElement.play()
+    audioElement.pause()
+    audioElement.currentTime = 0
+    audioElement.removeAttribute('src')
+    audioElement.load()
+    audioUnlocked.value = true
+    playbackBlocked.value = false
+    if (audioPlaybackState.value === 'blocked') {
+      audioPlaybackState.value = audioBackendState.value === 'ready' ? 'ready' : 'idle'
+    }
+    return true
+  } catch (error) {
+    audioUnlocked.value = false
+    return false
+  } finally {
+    audioUnlocking.value = false
+  }
+}
+
+const handleAudioUnlock = async () => {
+  const unlocked = await unlockAudioPlayback(true)
+  if (!unlocked) {
+    ElMessage.warning('浏览器仍未允许语音输出，请再次点击或检查站点声音权限')
+    return
+  }
+  ElMessage.success('语音输出已启用')
+}
+
+const unlockAndReplayAudio = async () => {
+  if (assistantAudioQueue.value.length) {
+    await replayCurrentAudio()
+    return
+  }
+  const unlocked = await unlockAudioPlayback(true)
+  if (!unlocked) {
+    ElMessage.warning('浏览器仍未允许声音播放，请再次点击或检查站点音频权限')
+    return
+  }
+  ElMessage.success('声音播放已启用')
 }
 
 const toggleHandsFreeMode = () => {
@@ -1267,6 +1466,7 @@ const toggleListening = () => {
     localCaptionDraft.value = ''
     recognition.stop()
   } else {
+    unlockAudioPlayback()
     interruptCurrentPlayback(true)
     recognition.start()
   }
@@ -1283,6 +1483,7 @@ const toggleAudioRecording = async () => {
     return
   }
   try {
+    await unlockAudioPlayback()
     await interruptCurrentPlayback(true)
     liveRecordingMeta.value = {
       filename: `voice-recording-${Date.now()}.webm`,
@@ -1898,6 +2099,10 @@ onBeforeUnmount(() => {
 }
 
 .hidden-audio-input {
+  display: none;
+}
+
+.hidden-audio-player {
   display: none;
 }
 

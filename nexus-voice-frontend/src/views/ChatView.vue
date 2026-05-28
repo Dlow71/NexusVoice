@@ -622,7 +622,11 @@ const toggleRecording = () => {
 const fetchVoiceList = async () => {
   try {
     const response = await characterApi.getVoiceList();
-    voiceList.value = response.data;
+    const voiceTypes = response.data?.data || [];
+    voiceList.value = voiceTypes.map((voiceType) => ({
+      voice_type: voiceType,
+      voice_name: voiceType
+    }));
   } catch (error) {
     console.error("获取声音列表失败:", error);
     ElMessage.error("无法加载声音列表");
@@ -640,7 +644,7 @@ const handleImageUpload = async (event) => {
   try {
     const response = await characterApi.uploadImage(file);
     if (response.data && response.data.success) {
-      const imageUrl = response.data.message;
+      const imageUrl = response.data.data;
       if (roleBrief.value) {
         roleBrief.value.avatarUrl = imageUrl;
       }
@@ -656,17 +660,29 @@ const handleImageUpload = async (event) => {
   }
 };
 
-const previewVoice = () => {
+const previewVoice = async () => {
   if (currentPreviewAudio) {
     currentPreviewAudio.pause();
+    currentPreviewAudio.currentTime = 0;
   }
   if (!roleBrief.value || !roleBrief.value.voiceType) return;
-  const selectedVoice = voiceList.value.find(
-      (voice) => voice.voice_type === roleBrief.value.voiceType
-  );
-  if (selectedVoice && selectedVoice.url) {
-    currentPreviewAudio = new Audio(selectedVoice.url);
-    currentPreviewAudio.play();
+
+  try {
+    const testText = roleBrief.value.greetingMessage || `你好，我是${roleBrief.value.name || '角色'}`;
+    const response = await characterApi.textToSpeech({
+      text: testText,
+      voiceType: roleBrief.value.voiceType
+    });
+
+    if (response.data?.success && response.data?.data?.audioData) {
+      currentPreviewAudio = new Audio(response.data.data.audioData);
+      await currentPreviewAudio.play();
+    } else {
+      throw new Error(response.data?.message || '无法生成试听音频');
+    }
+  } catch (error) {
+    console.error("音频播放失败:", error);
+    ElMessage.error("无法播放此声音预览");
   }
 };
 //ai 生成图片
@@ -682,8 +698,8 @@ const handleImageGeneration=async () => {
 
     const response = await characterApi.generateImage(prompt);
 
-    if (response.data && response.data.success && response.data.data.imageUrls.length > 0) {
-      const imageUrl = response.data.data.imageUrls[0];
+    const imageUrl = response.data?.data?.imageUrls?.[0] || response.data?.data?.url;
+    if (response.data && response.data.success && imageUrl) {
       roleBrief.value.avatarUrl = imageUrl; // 将生成的图片URL赋值给头像
       ElMessage.success("头像生成成功！");
     } else {

@@ -3,7 +3,7 @@
     <div v-if="user" class="user-info-bar">
       <span class="welcome-text">欢迎, {{ user.nickname || '用户' }}</span>
       <button @click="goToLab" class="lab-button">🧪 实验室</button>
-      <button @click="goToRandomVideo" class="video-button">🎬 随机视频</button>
+      <!-- <button @click="goToRandomVideo" class="video-button">🎬 随机视频</button> -->
       <button @click="goToRag" class="rag-button">📚 知识库</button>
       <button @click="goToApiKeys" class="api-key-button">🔑 API密钥</button>
       <button @click="handleLogout" class="logout-button">退出登录</button>
@@ -199,7 +199,11 @@ const totalPages = computed(() => Math.ceil(pagination.value.total / pagination.
 const fetchVoiceList = async () => {
   try {
     const response = await characterApi.getVoiceList();
-    voiceList.value = response.data;
+    const voiceTypes = response.data?.data || [];
+    voiceList.value = voiceTypes.map((voiceType) => ({
+      voice_type: voiceType,
+      voice_name: voiceType
+    }));
   } catch (error) {
     console.error("获取声音列表失败:", error);
     ElMessage.error("加载声音列表失败，可能存在跨域问题，请检查浏览器控制台");
@@ -374,7 +378,7 @@ const handleImageUpload = async (event) => {
   try {
     const response = await characterApi.uploadImage(file);
     if (response.data && response.data.success) {
-      const imageUrl = response.data.message;
+      const imageUrl = response.data.data;
       characterForm.value.avatarUrl = imageUrl;
       ElMessage.success('图片上传成功！');
     } else {
@@ -389,24 +393,33 @@ const handleImageUpload = async (event) => {
   }
 };
 
-const previewVoice = () => {
+const previewVoice = async () => {
   if (currentPreviewAudio) {
     currentPreviewAudio.pause();
     currentPreviewAudio.currentTime = 0;
   }
 
-  const selectedVoice = voiceList.value.find(
-      voice => voice.voice_type === characterForm.value.voiceType
-  );
+  if (!characterForm.value.voiceType) {
+    ElMessage.warning('请先选择声音类型');
+    return;
+  }
 
-  if (selectedVoice && selectedVoice.url) {
-    currentPreviewAudio = new Audio(selectedVoice.url);
-    currentPreviewAudio.play().catch(e => {
-      console.error("音频播放失败:", e);
-      ElMessage.error("无法播放此声音预览");
+  try {
+    const testText = characterForm.value.greetingMessage || `你好，我是${characterForm.value.name || '角色'}`;
+    const response = await characterApi.textToSpeech({
+      text: testText,
+      voiceType: characterForm.value.voiceType
     });
-  } else {
-    ElMessage.warning('当前声音没有可用的试听链接');
+
+    if (response.data?.success && response.data?.data?.audioData) {
+      currentPreviewAudio = new Audio(response.data.data.audioData);
+      await currentPreviewAudio.play();
+    } else {
+      throw new Error(response.data?.message || '无法生成试听音频');
+    }
+  } catch (e) {
+    console.error("音频播放失败:", e);
+    ElMessage.error("无法播放此声音预览");
   }
 };
 

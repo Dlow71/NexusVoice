@@ -78,16 +78,11 @@ export default {
         });
     },
     /**
-     * 直接获取七牛云音频（不走后端服务器）
+     * 获取可用TTS音色列表
      * @returns {Promise<axios.AxiosResponse<any>>}
      */
     getVoiceList() {
-        //访问七牛云音频地址
-        const qiniuUrl = "https://openai.qiniu.com/v1/voice/list";
-
-        // 发送一个不带任何多余配置的纯净 GET 请求
-        // 这个请求能否成功，完全取决于七牛云服务器的CORS策略
-        return axios.get(qiniuUrl);
+        return apiClient.get('/tts/voice-types');
     },
     /**
      * 获取大语言模型的文本回复

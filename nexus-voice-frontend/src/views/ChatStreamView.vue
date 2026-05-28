@@ -1434,6 +1434,46 @@ const uploadImageToCDN = async (file) => {
   return result.data;
 };
 
+const readFileAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.onload = (e) => resolve(e.target.result);
+  reader.onerror = () => reject(reader.error || new Error('读取图片失败'));
+  reader.readAsDataURL(file);
+});
+
+const createModelImageDataUrl = (sourceDataUrl) => new Promise((resolve, reject) => {
+  const image = new Image();
+  image.onload = () => {
+    const maxDimension = 1600;
+    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+    const width = Math.max(1, Math.round(image.width * scale));
+    const height = Math.max(1, Math.round(image.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0, width, height);
+    resolve(canvas.toDataURL('image/jpeg', 0.9));
+  };
+  image.onerror = () => reject(new Error('处理图片失败'));
+  image.src = sourceDataUrl;
+});
+
+const prepareModelImageData = async (file, localPreview) => {
+  const maxInlineBytes = 2.5 * 1024 * 1024;
+  if (file.size <= maxInlineBytes && localPreview.length <= maxInlineBytes * 1.4) {
+    return localPreview;
+  }
+
+  try {
+    return await createModelImageDataUrl(localPreview);
+  } catch (error) {
+    console.warn('压缩模型图片失败，使用原图data URL:', error);
+    return localPreview;
+  }
+};
+
 /**
  * 处理图片选择：验证并立即上传到CDN
  */
@@ -1464,17 +1504,15 @@ const handleImageSelect = async (event) => {
     }
     
     // 创建本地预览
-    const reader = new FileReader();
-    const localPreview = await new Promise((resolve) => {
-      reader.onload = (e) => resolve(e.target.result);
-      reader.readAsDataURL(file);
-    });
+    const localPreview = await readFileAsDataUrl(file);
+    const modelImageData = await prepareModelImageData(file, localPreview);
     
     // 添加到列表（标记为上传中）
     const imageIndex = selectedImages.value.length;
     selectedImages.value.push({
       file,
       preview: localPreview,
+      modelImageData,
       uploading: true,
       url: null,
       name: file.name,
@@ -1493,6 +1531,7 @@ const handleImageSelect = async (event) => {
         uploading: false,
         url: uploadResult.url,
         preview: uploadResult.url, // 使用CDN URL作为预览
+        modelImageData,
         name: uploadResult.name || file.name,
         size: Number(uploadResult.size) || file.size, // 确保size是数字类型
         mimeType: uploadResult.mimeType || file.type
@@ -2079,17 +2118,10 @@ const handleErrorMessage = (data) => {
       timestamp: new Date()
     });
     
-    // 关闭旧连接并重新连接
-    if (ws.value) {
-      ws.value.close();
-      ws.value = null;
-    }
-    
-    // 延迟500ms后重连
-    setTimeout(() => {
-      initWebSocket();
-      ElMessage.success('已重新连接，可以继续对话了');
-    }, 500);
+      // 当前实现已统一收敛到 transport 层，不再保留旧 ws/initWebSocket 分支。
+      // 这里仅提示并让用户重新发送，避免混用两套连接状态机。
+      connectionError.value = '连接状态已恢复，请重新发送上一条消息';
+      ElMessage.warning(connectionError.value);
   } else {
     messages.value.push({
       id: `msg-${Date.now()}`,
@@ -2247,6 +2279,14 @@ const sendMessage = async () => {
   // 添加附件URL（JSON字符串数组格式）
   if (attachments.length > 0) {
     requestData.attachmentUrls = attachments.map(att => JSON.stringify(att));
+
+    const modelImageUrls = imagesToSend
+      .map(img => img.modelImageData)
+      .filter(url => typeof url === 'string' && url.startsWith('data:image/'));
+
+    if (modelImageUrls.length > 0) {
+      requestData.imageUrls = modelImageUrls;
+    }
   }
   
   // 日志输出
@@ -2307,6 +2347,42 @@ const startAudioPlayback = (message) => {
   playNextSegment();
 };
 
+const diagnoseAudioUrl = async (audioUrl) => {
+  if (!audioUrl) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(audioUrl, {
+      method: 'HEAD',
+      mode: 'cors'
+    });
+    const contentType = response.headers.get('content-type') || '';
+
+    if (!response.ok) {
+      return `音频资源不可用（HTTP ${response.status}）`;
+    }
+
+    if (contentType && !contentType.startsWith('audio/')) {
+      return `音频资源格式异常（${contentType}）`;
+    }
+
+    return null;
+  } catch (error) {
+    console.warn('音频资源探测失败:', error);
+    return null;
+  }
+};
+
+const buildAudioPlaybackFailureMessage = async (segment) => {
+  const diagnosis = await diagnoseAudioUrl(segment.audioUrl);
+  if (diagnosis) {
+    return diagnosis;
+  }
+
+  return `音频片段 ${segment.index + 1} 播放失败，已跳过`;
+};
+
 const playNextSegment = () => {
   if (audioQueue.value.length === 0) {
     currentPlayingMessageId.value = null;
@@ -2325,6 +2401,30 @@ const playNextSegment = () => {
   
   const audio = new Audio(segment.audioUrl);
   currentAudio.value = audio;
+  let playbackFailed = false;
+
+  const handlePlaybackFailure = async (error) => {
+    if (playbackFailed) {
+      return;
+    }
+
+    playbackFailed = true;
+    console.warn('音频播放失败:', {
+      error,
+      audioUrl: segment.audioUrl,
+      segment
+    });
+
+    const message = await buildAudioPlaybackFailureMessage(segment);
+    if (segment.groupId !== 'greeting') {
+      ElMessage.warning(message);
+    } else {
+      systemMessage.value = message;
+    }
+
+    currentPlayingIndex.value++;
+    playNextSegment();
+  };
   
   audio.addEventListener('ended', () => {
     currentPlayingIndex.value++;
@@ -2332,18 +2432,11 @@ const playNextSegment = () => {
   });
   
   audio.addEventListener('error', (e) => {
-    console.warn('音频播放失败:', e);
-    if (segment.groupId !== 'greeting') {
-      ElMessage.warning(`音频片段 ${segment.index + 1} 播放失败，跳过`);
-    }
-    currentPlayingIndex.value++;
-    playNextSegment();
+    void handlePlaybackFailure(e);
   });
   
   audio.play().catch(e => {
-    console.warn('播放音频出错:', e);
-    currentPlayingIndex.value++;
-    playNextSegment();
+    void handlePlaybackFailure(e);
   });
 };
 
@@ -2512,7 +2605,7 @@ const handleSwitchConversation = async (convId) => {
     const response = await characterApi.getMessagesByConversationId(convId);
     console.log('=== API返回的原始数据:', response.data);
     if (response.data.success) {
-      const data = response.data.data;
+      const data = response.data.data || [];
       console.log('=== 历史消息数据:', data);
 
       if (!currentCharacter.value) {
@@ -2522,7 +2615,7 @@ const handleSwitchConversation = async (convId) => {
         }
       }
       
-      if (!data || data.length === 0) {
+      if (!Array.isArray(data) || data.length === 0) {
         // 显示开场白
         showCharacterGreeting();
       } else {
@@ -2566,8 +2659,13 @@ const handleSwitchConversation = async (convId) => {
     }
   } catch (error) {
     console.error('加载对话消息失败:', error);
-    ElMessage.error('加载对话消息失败');
+    const message = error?.response?.data?.message || error?.message || '加载对话消息失败';
+    ElMessage.error(message);
     systemMessage.value = '加载失败';
+    // 降级：不要阻断整条自动创建角色流程，至少允许继续在当前会话上操作
+    if (messages.value.length === 0) {
+      showCharacterGreeting();
+    }
   }
 };
 
@@ -2900,7 +2998,15 @@ const loadVoiceList = async () => {
   try {
     const response = await characterApi.getVoiceList();
     if (response.data.success) {
-      voiceList.value = response.data.data || [];
+      const voiceTypes = response.data.data || [];
+      voiceList.value = voiceTypes.map((voiceType) => ({
+        voice_type: voiceType,
+        voice_name: voiceType
+      }));
+
+      if (roleBrief.value && !roleBrief.value.voiceType && voiceList.value.length > 0) {
+        roleBrief.value.voiceType = voiceList.value[0].voice_type;
+      }
     }
   } catch (error) {
     console.error('加载声音列表失败:', error);
@@ -3150,10 +3256,74 @@ const openAssistantPanel = () => {
   assistantStep.value = 'initial';
 };
 
+const extractRoleBriefFromMessageContent = (content) => {
+  if (!content || (!content.includes('角色草稿Brief') && !content.includes('角色草稿 (Brief)'))) {
+    return null;
+  }
+
+  const pickField = (fieldName) => {
+    const match = content.match(
+      new RegExp(`(?:-|\\*)\\s*\\*\\*${fieldName}\\*\\*:?([\\s\\S]*?)(?=\\n(?:-|\\*)\\s*\\*\\*|\\n\\s*\\*\\*请确认|\\n\\s*###|$)`, 'i')
+    );
+    return match ? match[1].trim() : '';
+  };
+
+  const name = pickField('name');
+  const description = pickField('description');
+  const personaPrompt = pickField('personaPrompt');
+  const greetingMessage = pickField('greetingMessage');
+  const avatarUrl = pickField('avatarUrl');
+  const voiceType = pickField('voiceType');
+  const disclaimers = pickField('disclaimers');
+
+  if (!name || !description || !personaPrompt || !greetingMessage) {
+    return null;
+  }
+
+  const normalizedAvatarUrl = avatarUrl && !avatarUrl.includes('暂空') ? avatarUrl : '';
+  const normalizedVoiceType = voiceType && !voiceType.includes('建议使用') ? voiceType : '';
+
+  return {
+    name,
+    description,
+    personaPrompt,
+    greetingMessage,
+    avatarUrl: normalizedAvatarUrl,
+    voiceType: normalizedVoiceType,
+    sources: [],
+    disclaimers: disclaimers ? [disclaimers] : []
+  };
+};
+
+const getLatestGeneratedRoleBriefFromMessages = () => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    const message = messages.value[i];
+    if (message?.type !== 'assistant' || message?.isStreaming) {
+      continue;
+    }
+
+    const brief = extractRoleBriefFromMessageContent(message.content);
+    if (brief) {
+      return brief;
+    }
+  }
+
+  return null;
+};
+
 // 生成角色草稿
 const handleGenerateBrief = async () => {
   if (!conversationId.value) {
     ElMessage.error('没有找到对话ID');
+    return;
+  }
+
+  const existingBrief = getLatestGeneratedRoleBriefFromMessages();
+  if (existingBrief) {
+    roleBrief.value = existingBrief;
+    assistantStep.value = 'brief_generated';
+    ElMessage.success('已复用当前对话中的角色草稿');
+    console.log('[角色助手] 复用聊天中已有草稿:', roleBrief.value);
     return;
   }
   
@@ -3164,6 +3334,9 @@ const handleGenerateBrief = async () => {
     
     if (response.data.code === 200 && response.data.data) {
       roleBrief.value = response.data.data;
+      if (!roleBrief.value.voiceType && voiceList.value.length > 0) {
+        roleBrief.value.voiceType = voiceList.value[0].voice_type;
+      }
       assistantStep.value = 'brief_generated';
       ElMessage.success('草稿生成成功');
       console.log('[角色助手] 草稿生成成功:', roleBrief.value);
@@ -3233,6 +3406,9 @@ const handleConfirmCreation = async (withResearch) => {
       voiceType: roleBrief.value.voiceType,
       avatarUrl: roleBrief.value.avatarUrl,
       overrideName: roleBrief.value.name,
+      description: roleBrief.value.description,
+      personaPrompt: roleBrief.value.personaPrompt,
+      greetingMessage: roleBrief.value.greetingMessage,
       deepResearch: withResearch,  // 修正字段名：executeResearch -> deepResearch
       researchLimit: 12,
       researchQueries: withResearch ? researchTasks.value.filter(t => t.enabled).map(t => t.query) : []
@@ -3292,7 +3468,7 @@ const handleImageUpload = async (event) => {
     const response = await characterApi.uploadImage(file);
     
     if (response.data.success && response.data.data) {
-      roleBrief.value.avatarUrl = response.data.data.url;
+      roleBrief.value.avatarUrl = response.data.data;
       ElMessage.success('图片上传成功');
     } else {
       throw new Error(response.data.message || '上传失败');
@@ -3364,8 +3540,8 @@ const previewVoice = async () => {
       voiceType: roleBrief.value.voiceType
     });
     
-    if (response.data.success && response.data.data) {
-      const audioUrl = response.data.data.audioUrl;
+    if (response.data.success && response.data.data?.audioData) {
+      const audioUrl = response.data.data.audioData;
       currentPreviewAudio = new Audio(audioUrl);
       
       currentPreviewAudio.addEventListener('ended', () => {
