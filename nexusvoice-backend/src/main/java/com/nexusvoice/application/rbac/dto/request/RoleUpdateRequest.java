@@ -2,7 +2,6 @@ package com.nexusvoice.application.rbac.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -18,7 +17,6 @@ import java.util.List;
 @Schema(description = "角色更新请求")
 public class RoleUpdateRequest {
 
-    @NotNull(message = "角色ID不能为空")
     @Schema(description = "角色ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long id;
 

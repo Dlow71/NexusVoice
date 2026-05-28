@@ -12,6 +12,7 @@ import com.nexusvoice.application.role.dto.RoleCreateRequest;
 import com.nexusvoice.application.role.dto.RoleDTO;
 import com.nexusvoice.application.role.dto.RoleAssistantConfirmRequest;
 import com.nexusvoice.application.role.dto.RoleResearchApplyRequest;
+import com.nexusvoice.domain.config.service.SystemConfigService;
 import com.nexusvoice.domain.agent.enums.AgentType;
 import com.nexusvoice.domain.conversation.model.ConversationMessage;
 import com.nexusvoice.domain.conversation.repository.ConversationMessageRepository;
@@ -19,6 +20,7 @@ import com.nexusvoice.domain.conversation.repository.ConversationRepository;
 import com.nexusvoice.domain.conversation.service.ConversationDomainService;
 import com.nexusvoice.enums.ErrorCodeEnum;
 import com.nexusvoice.exception.BizException;
+import com.nexusvoice.infrastructure.ai.manager.DynamicAiModelBeanManager;
 import com.nexusvoice.infrastructure.ai.model.ChatMessage;
 import com.nexusvoice.infrastructure.ai.model.ChatRequest;
 import com.nexusvoice.infrastructure.ai.model.ChatResponse;
@@ -48,20 +50,27 @@ import java.util.stream.Collectors;
 @Service
 public class RoleAssistantService {
 
+    private static final int BRIEF_GENERATION_MAX_ATTEMPTS = 3;
+    private static final long BRIEF_GENERATION_RETRY_DELAY_MS = 1200L;
+    private static final String DEFAULT_BRIEF_MODEL_KEY = "openai:gpt-oss-20b";
     private final ConversationRepository conversationRepository;
     private final ConversationMessageRepository messageRepository;
     private final ConversationDomainService conversationDomainService;
-    private final AiChatService aiChatService;
+    private final DynamicAiModelBeanManager modelBeanManager;
+    private final SystemConfigService systemConfigService;
     private final RoleApplicationService roleApplicationService;
     private final com.nexusvoice.application.tts.service.TTSService ttsService;
     private final SearchRepository searchRepository;
     private final ObjectMapper objectMapper;
     private final AgentApplicationService agentApplicationService;  // 新增：Agent服务
 
+    private record ResolvedBriefChat(AiChatService chatService, String modelKey) {}
+
     public RoleAssistantService(ConversationRepository conversationRepository,
                                 ConversationMessageRepository messageRepository,
                                 ConversationDomainService conversationDomainService,
-                                AiChatService aiChatService,
+                                DynamicAiModelBeanManager modelBeanManager,
+                                SystemConfigService systemConfigService,
                                 RoleApplicationService roleApplicationService,
                                 com.nexusvoice.application.tts.service.TTSService ttsService,
                                 SearchRepository searchRepository,
@@ -70,7 +79,8 @@ public class RoleAssistantService {
         this.conversationRepository = conversationRepository;
         this.messageRepository = messageRepository;
         this.conversationDomainService = conversationDomainService;
-        this.aiChatService = aiChatService;
+        this.modelBeanManager = modelBeanManager;
+        this.systemConfigService = systemConfigService;
         this.roleApplicationService = roleApplicationService;
         this.ttsService = ttsService;
         this.searchRepository = searchRepository;
@@ -101,9 +111,11 @@ public class RoleAssistantService {
 
         List<ChatMessage> messages = List.of(ChatMessage.system(system), ChatMessage.user(user));
 
+        ResolvedBriefChat resolvedBriefChat = resolveRoleBriefChat();
+
         ChatRequest request = ChatRequest.builder()
                 .messages(messages)
-                .model(aiChatService.getModelName())
+                .model(resolvedBriefChat.modelKey())
                 .temperature(0.5)
                 .maxTokens(1200)
                 .userId(userId)
@@ -111,7 +123,7 @@ public class RoleAssistantService {
                 .enableWebSearch(enableWebSearch)
                 .build();
 
-        ChatResponse response = aiChatService.chat(request);
+        ChatResponse response = executeBriefChatWithRetry(resolvedBriefChat.chatService(), request, conversationId, userId);
         if (!response.getSuccess()) {
             throw BizException.of(ErrorCodeEnum.AI_REQUEST_FAILED, "生成角色草稿失败：" + response.getErrorMessage());
         }
@@ -172,6 +184,15 @@ public class RoleAssistantService {
         // 覆盖字段（如用户最后调整）
         if (request.getOverrideName() != null && !request.getOverrideName().isEmpty()) {
             draft.setName(request.getOverrideName());
+        }
+        if (request.getDescription() != null && !request.getDescription().isEmpty()) {
+            draft.setDescription(request.getDescription());
+        }
+        if (request.getPersonaPrompt() != null && !request.getPersonaPrompt().isEmpty()) {
+            draft.setPersonaPrompt(request.getPersonaPrompt());
+        }
+        if (request.getGreetingMessage() != null && !request.getGreetingMessage().isEmpty()) {
+            draft.setGreetingMessage(request.getGreetingMessage());
         }
         // 新参数：voiceType（前端直传，优先级最高）
         if (request.getVoiceType() != null && !request.getVoiceType().isEmpty()) {
@@ -266,6 +287,87 @@ public class RoleAssistantService {
             lines.add(role + "：" + content);
         }
         return lines;
+    }
+
+    private ChatResponse executeBriefChatWithRetry(AiChatService chatService,
+                                                   ChatRequest request,
+                                                   Long conversationId,
+                                                   Long userId) {
+        ChatResponse lastResponse = null;
+
+        for (int attempt = 1; attempt <= BRIEF_GENERATION_MAX_ATTEMPTS; attempt++) {
+            lastResponse = chatService.chat(request);
+
+            if (lastResponse.getSuccess()) {
+                if (attempt > 1) {
+                    log.info("角色草稿生成重试成功，conversationId={}，userId={}，attempt={}",
+                            conversationId, userId, attempt);
+                }
+                return lastResponse;
+            }
+
+            String errorMessage = lastResponse.getErrorMessage();
+            if (!isRetryableBriefGenerationError(errorMessage) || attempt >= BRIEF_GENERATION_MAX_ATTEMPTS) {
+                return lastResponse;
+            }
+
+            log.warn("角色草稿生成遇到可重试错误，准备重试。conversationId={}，userId={}，attempt={}，error={}",
+                    conversationId, userId, attempt, errorMessage);
+            sleepBeforeBriefRetry(attempt);
+        }
+
+        return lastResponse != null ? lastResponse : ChatResponse.error("角色草稿生成失败");
+    }
+
+    private String resolveRoleBriefModelKey() {
+        String modelKey = systemConfigService.getDefaultAiModel();
+        if (modelKey == null || modelKey.isBlank()) {
+            return DEFAULT_BRIEF_MODEL_KEY;
+        }
+        if (!modelKey.contains(":")) {
+            String provider = systemConfigService.getDefaultAiModelProvider();
+            if (provider == null || provider.isBlank()) {
+                provider = "openai";
+            }
+            modelKey = provider + ":" + modelKey;
+        }
+        return modelKey;
+    }
+
+    private ResolvedBriefChat resolveRoleBriefChat() {
+        String modelKey = resolveRoleBriefModelKey();
+        try {
+            return new ResolvedBriefChat(modelBeanManager.getServiceByModelKey(modelKey), modelKey);
+        } catch (Exception e) {
+            if (!DEFAULT_BRIEF_MODEL_KEY.equals(modelKey)) {
+                log.warn("角色草稿模型不可用，回退到默认模型：{} -> {}", modelKey, DEFAULT_BRIEF_MODEL_KEY, e);
+                return new ResolvedBriefChat(modelBeanManager.getServiceByModelKey(DEFAULT_BRIEF_MODEL_KEY), DEFAULT_BRIEF_MODEL_KEY);
+            }
+            throw e;
+        }
+    }
+
+    private boolean isRetryableBriefGenerationError(String errorMessage) {
+        if (errorMessage == null || errorMessage.isEmpty()) {
+            return false;
+        }
+
+        String normalized = errorMessage.toLowerCase();
+        return normalized.contains("service temporarily unavailable")
+                || normalized.contains("upstream_error")
+                || normalized.contains("rate limit")
+                || normalized.contains("rate_limit")
+                || normalized.contains("timeout")
+                || normalized.contains("temporarily unavailable");
+    }
+
+    private void sleepBeforeBriefRetry(int attempt) {
+        try {
+            Thread.sleep(BRIEF_GENERATION_RETRY_DELAY_MS * attempt);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw BizException.of(ErrorCodeEnum.SYSTEM_ERROR, "生成角色草稿时重试被中断");
+        }
     }
 
     private RoleBriefDto parseBriefJson(String text) {
@@ -582,9 +684,11 @@ public class RoleAssistantService {
                 "name, description, personaPrompt, greetingMessage, avatarUrl, voiceType, sources, disclaimers。";
         String user = "原始草稿：\n" + toJson(draft) + "\n\n参考资料：\n" + src;
 
+        ResolvedBriefChat resolvedBriefChat = resolveRoleBriefChat();
+
         ChatRequest enhanceReq = ChatRequest.builder()
                 .messages(List.of(ChatMessage.system(system), ChatMessage.user(user)))
-                .model(aiChatService.getModelName())
+                .model(resolvedBriefChat.modelKey())
                 .temperature(0.4)
                 .maxTokens(1400)
                 .userId(userId)
@@ -592,7 +696,7 @@ public class RoleAssistantService {
                 .enableWebSearch(false) // 已提供来源摘要，无需再联网
                 .build();
 
-        ChatResponse enhanced = aiChatService.chat(enhanceReq);
+        ChatResponse enhanced = resolvedBriefChat.chatService().chat(enhanceReq);
         if (!enhanced.getSuccess()) {
             log.warn("深研增强失败，降级使用原草稿：{}", enhanced.getErrorMessage());
             return draft;

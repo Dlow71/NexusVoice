@@ -26,6 +26,8 @@ import java.util.Map;
 @Slf4j
 @Component
 public class RoleDraftGeneratorTool implements BaseTool {
+
+    private static final String ROLE_BRIEF_MODEL_NAME = "deepseek:deepseek-v3.2-251201";
     
     @Autowired
     private AiChatService aiChatService;
@@ -108,7 +110,7 @@ public class RoleDraftGeneratorTool implements BaseTool {
             );
             
             // 调用AI生成草稿（默认使用DeepSeek V3.1）
-            String modelName = "deepseek:deepseek-v3.1";
+            String modelName = ROLE_BRIEF_MODEL_NAME;
             
             ChatRequest request = ChatRequest.builder()
                 .messages(List.of(
@@ -205,4 +207,3 @@ public class RoleDraftGeneratorTool implements BaseTool {
         return 3;
     }
 }
-

@@ -25,6 +25,15 @@ public class RoleAssistantConfirmRequest {
     @Schema(description = "可选：覆盖草稿中的名称")
     private String overrideName;
 
+    @Schema(description = "可选：覆盖草稿中的角色描述")
+    private String description;
+
+    @Schema(description = "可选：覆盖草稿中的人设提示词")
+    private String personaPrompt;
+
+    @Schema(description = "可选：覆盖草稿中的开场白")
+    private String greetingMessage;
+
     @Schema(description = "可选：覆盖草稿中的TTS声音（即将废弃，建议直接使用voiceType字段）")
     private String overrideVoiceType;
 
