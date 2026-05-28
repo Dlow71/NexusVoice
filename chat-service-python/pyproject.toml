@@ -1,0 +1,48 @@
+[project]
+name = "chat-service"
+version = "0.1.0"
+description = "基于 FastAPI + LangChain + PostgreSQL 的聊天服务"
+requires-python = ">=3.11,<4.0"
+
+dependencies = [
+    # Web框架
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.35.0",
+    
+    # 数据验证
+    "pydantic>=2.11.0",
+    "pydantic-settings>=2.0.0",
+    
+    # 数据库ORM（PostgreSQL支持）
+    "sqlmodel>=0.0.24",
+    "asyncpg>=0.30.0",  # 异步PostgreSQL驱动
+    "psycopg2-binary>=2.9.0",  # PostgreSQL驱动（同步，用于初始化）
+    
+    # 流式响应
+    "sse-starlette>=2.4.0",
+    
+    # 日志
+    "loguru>=0.7.0",
+    
+    # LangChain核心库（Python版）
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langchain-community>=0.3.0",
+    
+    # OpenAI API
+    "openai>=1.93.0",
+    
+    # 环境变量
+    "python-dotenv>=1.0.0",
+    
+    # 工具库
+    "python-multipart>=0.0.20",  # 文件上传
+    "jinja2>=3.1.0",             # 模板引擎
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["chat_service"]

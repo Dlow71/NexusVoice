@@ -1,0 +1,36 @@
+# Web框架
+fastapi>=0.115.0
+uvicorn[standard]>=0.35.0
+
+# 数据验证
+pydantic>=2.11.0
+pydantic-settings>=2.0.0
+
+# 数据库ORM（PostgreSQL支持）
+sqlmodel>=0.0.24
+asyncpg>=0.30.0
+psycopg2-binary>=2.9.0
+
+# 流式响应
+sse-starlette>=2.4.0
+
+# 日志
+loguru>=0.7.0
+
+# LangChain核心库
+langchain>=0.3.0
+langchain-openai>=0.2.0
+langchain-community>=0.3.0
+
+# OpenAI API
+openai>=1.93.0
+
+# 环境变量
+python-dotenv>=1.0.0
+
+# 工具库
+python-multipart>=0.0.20
+jinja2>=3.1.0
+
+# HTTP客户端（用于测试）
+httpx>=0.27.0
