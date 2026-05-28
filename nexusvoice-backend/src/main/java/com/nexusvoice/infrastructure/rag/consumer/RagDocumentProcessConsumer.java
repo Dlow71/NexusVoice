@@ -20,6 +20,7 @@ import com.nexusvoice.infrastructure.rag.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -35,6 +36,12 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+        prefix = "rocketmq.listeners.rag-document-process",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 @RocketMQMessageListener(
         topic = MQTopicConstants.TOPIC_RAG_DOCUMENT_PROCESS,
         consumerGroup = "rag_document_process_consumer_group",

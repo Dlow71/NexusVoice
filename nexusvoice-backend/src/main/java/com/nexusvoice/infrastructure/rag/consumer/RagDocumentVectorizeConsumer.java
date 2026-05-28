@@ -12,6 +12,7 @@ import com.nexusvoice.infrastructure.rag.service.DocumentVectorizationServiceImp
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
@@ -23,6 +24,12 @@ import java.util.Map;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(
+        prefix = "rocketmq.listeners.rag-document-vectorize",
+        name = "enabled",
+        havingValue = "true",
+        matchIfMissing = true
+)
 @RocketMQMessageListener(
         topic = MQTopicConstants.TOPIC_RAG_DOCUMENT_VECTORIZE,
         consumerGroup = "rag_document_vectorize_consumer_group",
@@ -78,4 +85,3 @@ public class RagDocumentVectorizeConsumer extends AbstractMessageListener<Map<St
         }
     }
 }
-
