@@ -247,7 +247,7 @@ public class Menu extends BaseDomainEntity {
      * @return true-可以, false-不可以
      */
     public boolean canBeParent() {
-        return isDirectory();
+        return !isButton();
     }
 
     /**

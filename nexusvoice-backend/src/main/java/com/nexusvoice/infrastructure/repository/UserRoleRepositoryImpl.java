@@ -63,12 +63,12 @@ public class UserRoleRepositoryImpl implements UserRoleRepository {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void saveBatch(Long userId, List<Long> roleIds) {
+        // 先删除用户的所有角色关联
+        deleteByUserId(userId);
+
         if (roleIds == null || roleIds.isEmpty()) {
             return;
         }
-        
-        // 先删除用户的所有角色关联
-        deleteByUserId(userId);
         
         // 批量插入新的关联
         for (Long roleId : roleIds) {

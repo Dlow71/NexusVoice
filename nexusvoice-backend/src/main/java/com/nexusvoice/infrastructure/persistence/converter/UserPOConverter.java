@@ -51,7 +51,7 @@ public class UserPOConverter {
         
         // OAuth相关字段
         if (user.getOauthProvider() != null) {
-            po.setOauthProvider(user.getOauthProvider().name());
+            po.setOauthProvider(user.getOauthProvider().getCode());
         }
         po.setOauthId(user.getOauthId());
         po.setOauthUsername(user.getOauthUsername());
@@ -155,7 +155,7 @@ public class UserPOConverter {
         
         // OAuth相关字段
         if (user.getOauthProvider() != null) {
-            po.setOauthProvider(user.getOauthProvider().name());
+            po.setOauthProvider(user.getOauthProvider().getCode());
         }
         po.setOauthId(user.getOauthId());
         po.setOauthUsername(user.getOauthUsername());

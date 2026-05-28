@@ -54,7 +54,7 @@ public class SysRolePO {
     /**
      * 是否系统内置：0-否 1-是
      */
-    private Boolean isSystem;
+    private Integer isSystem;
 
     /**
      * 创建时间

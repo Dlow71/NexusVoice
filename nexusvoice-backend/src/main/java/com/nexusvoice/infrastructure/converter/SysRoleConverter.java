@@ -30,7 +30,7 @@ public class SysRoleConverter {
         sysRole.setDescription(po.getDescription());
         sysRole.setSortOrder(po.getSortOrder());
         sysRole.setStatus(po.getStatus());
-        sysRole.setIsSystem(po.getIsSystem());
+        sysRole.setIsSystem(Integer.valueOf(1).equals(po.getIsSystem()));
         sysRole.setCreatedAt(po.getCreatedAt());
         sysRole.setUpdatedAt(po.getUpdatedAt());
 
@@ -55,7 +55,7 @@ public class SysRoleConverter {
         po.setDescription(sysRole.getDescription());
         po.setSortOrder(sysRole.getSortOrder());
         po.setStatus(sysRole.getStatus());
-        po.setIsSystem(sysRole.getIsSystem());
+        po.setIsSystem(Boolean.TRUE.equals(sysRole.getIsSystem()) ? 1 : 0);
         po.setCreatedAt(sysRole.getCreatedAt());
         po.setUpdatedAt(sysRole.getUpdatedAt());
 
