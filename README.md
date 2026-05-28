@@ -17,18 +17,26 @@ NexusVoice 是一个**生产级的多模态AI对话平台**，采用严格的DDD
 <table>
   <tr>
     <td width="50%">
-      <img src="images/index.png" alt="首页" />
+      <img src="images/characters.png" alt="角色选择" />
     </td>
     <td width="50%">
-      <img src="images/chat.png" alt="对话界面" />
+      <img src="images/chat.png" alt="流式对话" />
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="images/createRole.png" alt="Agent角色生成" />
+      <img src="images/rag.png" alt="知识库管理" />
     </td>
     <td width="50%">
-      <img src="images/sk.png" alt="密钥管理" />
+      <img src="images/voice-call.png" alt="语音通话" />
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="images/lab.png" alt="实验室" />
+    </td>
+    <td width="50%">
+      <img src="images/api-keys.png" alt="API密钥管理" />
     </td>
   </tr>
 </table>
@@ -360,8 +368,17 @@ users                  # 用户信息（JWT认证）
 - **V18__create_developer_api_keys_table.sql** - 开发者API密钥管理表
 - **V19__extend_roles_to_agent_capabilities.sql** - 角色表扩展Agent能力字段
 
-#### WebRTC实时通信（V20）
+#### WebRTC与语音会话（V20-V28）
 - **V20__create_rtc_tables.sql** - WebRTC会话表、信令表、统计表（测试阶段）
+- **V26__add_qiniu_deepseek_thinking_model.sql** - 新增七牛云DeepSeek思考模型
+- **V27__create_voice_session_tables.sql** - 语音会话持久化表
+- **V28__add_voice_asr_model.sql** - ASR语音识别模型配置
+
+#### AI服务商与管理员功能（V29-V32）
+- **V29__remove_unused_monitor_menus.sql** - 清理无用监控菜单
+- **V30__backfill_ai_provider_relations.sql** - 回填AI服务商关联关系
+- **V31__add_ai_provider_admin_menu.sql** - 添加AI服务商管理菜单
+- **V32__normalize_oauth_provider_values.sql** - 规范化OAuth provider值
 
 > 📌 **PostgreSQL特性使用**：
 > - UUID类型、JSONB字段
@@ -375,8 +392,9 @@ users                  # 用户信息（JWT认证）
 ### 💬 流式对话
 - **双协议支持**：SSE/WebSocket灵活切换，满足不同场景需求
 - **实时流式输出**：逐字显示AI回复，打字机效果
-- **多模型支持**：OpenAI GPT-4/GPT-4o-mini、Grok、DeepSeek V3等
+- **多模型支持**：OpenAI GPT-4/GPT-4o-mini、Grok、DeepSeek V3、豆包等
 - **智能联网搜索**：AI自动判断何时需要搜索，获取最新信息
+- **RAG知识库增强** ⭐ - 文档上传、向量检索、语义重排序，对话自动注入知识库内容
 - **上下文管理**：自动管理对话历史，支持多轮对话
 - **模型热切换**：数据库配置，无需重启服务
 
@@ -486,13 +504,12 @@ users                  # 用户信息（JWT认证）
   - [ ] 手势操作（滑动删除、下拉刷新）
 
 #### RAG与文档处理
-- [ ] **RAG知识库系统**
-  - [ ] 文档解析（PDF、Word、Markdown、TXT）
-  - [ ] 文本分块（智能切分、重叠策略）
-  - [ ] 向量化存储（pgvector / Milvus）
-  - [ ] 语义检索（Embedding模型、相似度计算）
-  - [ ] 知识库管理（文档上传、索引构建、版本控制）
-  - [ ] RAG增强器（检索 + 重排序 + 上下文注入）
+- [x] **RAG知识库系统** ✅ 已实现
+  - [x] 文档上传管理（PDF、Word、Markdown、TXT）
+  - [x] 智能文本分块与向量化存储（pgvector）
+  - [x] 语义检索与重排序
+  - [x] 知识库管理界面（文档索引、版本控制）
+  - [x] RAG增强器（检索结果注入对话上下文）
 
 - [ ] **文档智能处理**
   - [ ] 文档问答（基于知识库的智能问答）
@@ -502,8 +519,8 @@ users                  # 用户信息（JWT认证）
   - [ ] 表格提取（结构化数据解析）
 
 #### 数据分析能力
-- [ ] **Python数据分析服务**
-  - [ ] Python微服务搭建（FastAPI / Flask）
+- [x] **Python数据分析服务** ✅ 基础服务已搭建
+  - [x] FastAPI 聊天服务框架（chat-service-python）
   - [ ] Jupyter Notebook集成（代码执行沙箱）
   - [ ] 数据可视化（Matplotlib / Plotly）
   - [ ] 统计分析（Pandas / NumPy / SciPy）
