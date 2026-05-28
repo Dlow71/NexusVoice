@@ -115,6 +115,7 @@ public class VoiceStreamHandler extends TextWebSocketHandler {
                 .ts(System.currentTimeMillis())
                 .payload(Map.of("text", text.trim()))
                 .build());
+        sendAssistantAudioStatus(session, voiceSessionId, null, "ASSISTANT_AUDIO_GENERATING", "语音生成中", null);
         sendStateChanged(session, voiceSessionId, "READY", "UNDERSTANDING", null);
 
         VoiceTurnResultDto result = voiceSessionApplicationService.processTextUtterance(voiceSessionId, text, userId);
@@ -157,6 +158,7 @@ public class VoiceStreamHandler extends TextWebSocketHandler {
                 .ts(System.currentTimeMillis())
                 .payload(Map.of("text", result.getUserTranscript()))
                 .build());
+        sendAssistantAudioStatus(session, voiceSessionId, result.getTurnNo(), "ASSISTANT_AUDIO_GENERATING", "语音生成中", null);
 
         publishTurnResult(session, voiceSessionId, result);
         sendContextStatus(session, voiceSessionId, voiceSessionApplicationService.getRuntimeConfig(voiceSessionId, userId));
@@ -206,7 +208,27 @@ public class VoiceStreamHandler extends TextWebSocketHandler {
                 ))
                 .build());
 
-        if (result.getAudioSegments() != null) {
+        if ("GENERATED".equalsIgnoreCase(result.getAudioStatus())) {
+            sendAssistantAudioStatus(
+                    session,
+                    voiceSessionId,
+                    result.getTurnNo(),
+                    "ASSISTANT_AUDIO_READY",
+                    result.getAudioStatusMessage(),
+                    result.getAudioSegments() != null ? result.getAudioSegments().size() : 0
+            );
+        } else {
+            sendAssistantAudioStatus(
+                    session,
+                    voiceSessionId,
+                    result.getTurnNo(),
+                    "ASSISTANT_AUDIO_FAILED",
+                    result.getAudioStatusMessage(),
+                    0
+            );
+        }
+
+        if (result.getAudioSegments() != null && !result.getAudioSegments().isEmpty()) {
             for (VoiceTurnResultDto.AudioSegmentDto segment : result.getAudioSegments()) {
                 sendEvent(session, VoiceRealtimeEventDto.builder()
                         .type("ASSISTANT_AUDIO_SEGMENT")
@@ -232,6 +254,29 @@ public class VoiceStreamHandler extends TextWebSocketHandler {
                     .payload(Map.of("turnNo", result.getTurnNo()))
                     .build());
         }
+    }
+
+    private void sendAssistantAudioStatus(WebSocketSession session,
+                                          String voiceSessionId,
+                                          Integer turnNo,
+                                          String type,
+                                          String message,
+                                          Integer segmentCount) {
+        java.util.Map<String, Object> payload = new java.util.LinkedHashMap<>();
+        if (message != null && !message.isBlank()) {
+            payload.put("message", message);
+        }
+        if (segmentCount != null) {
+            payload.put("segmentCount", segmentCount);
+        }
+        sendEvent(session, VoiceRealtimeEventDto.builder()
+                .type(type)
+                .voiceSessionId(voiceSessionId)
+                .turnNo(turnNo)
+                .seq(nextSeq())
+                .ts(System.currentTimeMillis())
+                .payload(payload)
+                .build());
     }
 
     private void handleUpdateConfig(WebSocketSession session,

@@ -30,6 +30,19 @@ public class VoiceTurnResultDto {
 
     private ConversationContextSnapshotDto contextSnapshot;
 
+    /**
+     * 当前轮次的音频生成状态。
+     * GENERATED: 已生成音频
+     * FAILED: 生成失败
+     * SKIPPED: 未生成
+     */
+    private String audioStatus;
+
+    /**
+     * 音频状态补充信息，用于前端展示和调试。
+     */
+    private String audioStatusMessage;
+
     @Data
     @Builder
     public static class AudioSegmentDto {

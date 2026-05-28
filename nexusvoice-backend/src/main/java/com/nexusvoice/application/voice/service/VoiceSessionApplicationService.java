@@ -231,7 +231,12 @@ public class VoiceSessionApplicationService {
         }
 
         String spokenText = MarkdownTextUtils.cleanForTTS(response.getContent());
-        List<VoiceTurnResultDto.AudioSegmentDto> audioSegments = generateVoiceAudioSegments(voiceSession, response.getContent(), spokenText);
+        VoiceAudioGenerationResult audioResult = generateVoiceAudioSegments(
+                voiceSession,
+                response.getContent(),
+                spokenText
+        );
+        List<VoiceTurnResultDto.AudioSegmentDto> audioSegments = audioResult.audioSegments();
 
         voiceSession.transitionTo(audioSegments.isEmpty() ? VoiceSessionState.READY : VoiceSessionState.RESPONDING_AUDIO);
         voiceSession.transitionTo(VoiceSessionState.READY);
@@ -247,6 +252,8 @@ public class VoiceSessionApplicationService {
                 .citations(response.getCitations())
                 .audioSegments(audioSegments)
                 .contextSnapshot(response.getContextSnapshot())
+                .audioStatus(audioResult.status())
+                .audioStatusMessage(audioResult.message())
                 .build();
     }
 
@@ -432,13 +439,13 @@ public class VoiceSessionApplicationService {
         return asrModelKey.trim();
     }
 
-    private List<VoiceTurnResultDto.AudioSegmentDto> generateVoiceAudioSegments(VoiceSession voiceSession,
-                                                                                String content,
-                                                                                String spokenText) {
+    private VoiceAudioGenerationResult generateVoiceAudioSegments(VoiceSession voiceSession,
+                                                                  String content,
+                                                                  String spokenText) {
         TTSResponseDTO fallbackTts = generateFallbackTts(voiceSession, content);
         List<VoiceTurnResultDto.AudioSegmentDto> audioSegments = new ArrayList<>();
         if (fallbackTts == null) {
-            return audioSegments;
+            return new VoiceAudioGenerationResult(audioSegments, "FAILED", "TTS 服务未返回可播放音频");
         }
         if (fallbackTts.getSegments() != null && !fallbackTts.getSegments().isEmpty()) {
             for (int i = 0; i < fallbackTts.getSegments().size(); i++) {
@@ -451,6 +458,11 @@ public class VoiceSessionApplicationService {
                         .isLast(i == fallbackTts.getSegments().size() - 1)
                         .build());
             }
+            return new VoiceAudioGenerationResult(
+                    audioSegments,
+                    "GENERATED",
+                    "已生成 " + audioSegments.size() + " 段语音"
+            );
         } else if (fallbackTts.getAudioData() != null && !fallbackTts.getAudioData().isBlank()) {
             audioSegments.add(VoiceTurnResultDto.AudioSegmentDto.builder()
                     .segmentIndex(0)
@@ -459,8 +471,9 @@ public class VoiceSessionApplicationService {
                     .audioUrl(fallbackTts.getAudioData())
                     .isLast(true)
                     .build());
+            return new VoiceAudioGenerationResult(audioSegments, "GENERATED", "已生成 1 段语音");
         }
-        return audioSegments;
+        return new VoiceAudioGenerationResult(audioSegments, "FAILED", "TTS 响应存在，但未包含可播放音频");
     }
 
     private TTSResponseDTO generateFallbackTts(VoiceSession voiceSession, String content) {
@@ -485,6 +498,11 @@ public class VoiceSessionApplicationService {
             log.warn("语音会话TTS兜底失败: sessionId={}, error={}", voiceSession.getVoiceSessionId(), ex.getMessage());
             return null;
         }
+    }
+
+    private record VoiceAudioGenerationResult(List<VoiceTurnResultDto.AudioSegmentDto> audioSegments,
+                                              String status,
+                                              String message) {
     }
 
     private static final class VoiceAudioUploadBuffer {
