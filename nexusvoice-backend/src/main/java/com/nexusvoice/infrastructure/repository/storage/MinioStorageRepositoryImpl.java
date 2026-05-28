@@ -72,6 +72,11 @@ public class MinioStorageRepositoryImpl extends AbstractStorageRepository<MinioS
             if (!bucketExists) {
                 throw new RuntimeException("MinIO存储桶不存在：" + config.getBucket());
             }
+
+            // 兼容已有 bucket：即使桶早已存在，也要确保公开读策略被正确下发。
+            if ("public-read".equals(config.getBucketPolicy())) {
+                setPublicReadPolicy();
+            }
             
             log.info("MinIO存储服务初始化成功：{}", config.getDescription());
             

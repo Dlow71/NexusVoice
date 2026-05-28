@@ -276,8 +276,12 @@ public class StorageStrategyManager {
         if (systemConfigService.getBoolean("storage.qiniu.enabled", false)) {
             QiniuStorageConfig qiniuConfig = loadQiniuConfig();
             if (qiniuConfig.isValid()) {
-                registerRepository(StorageProvider.QINIU, new QiniuStorageRepositoryImpl(qiniuConfig));
-                log.info("七牛云存储初始化成功");
+                try {
+                    registerRepository(StorageProvider.QINIU, new QiniuStorageRepositoryImpl(qiniuConfig));
+                    log.info("七牛云存储初始化成功");
+                } catch (Exception e) {
+                    log.error("七牛云存储初始化异常，已跳过该存储：{}", e.getMessage(), e);
+                }
             } else {
                 log.error("七牛云存储配置无效，跳过初始化！请检查数据库配置：");
                 log.error("  - storage.qiniu.access_key: {}", 
@@ -295,8 +299,12 @@ public class StorageStrategyManager {
         if (systemConfigService.getBoolean("storage.minio.enabled", false)) {
             MinioStorageConfig minioConfig = loadMinioConfig();
             if (minioConfig.isValid()) {
-                registerRepository(StorageProvider.MINIO, new MinioStorageRepositoryImpl(minioConfig));
-                log.info("MinIO存储初始化成功");
+                try {
+                    registerRepository(StorageProvider.MINIO, new MinioStorageRepositoryImpl(minioConfig));
+                    log.info("MinIO存储初始化成功");
+                } catch (Exception e) {
+                    log.error("MinIO存储初始化异常，已跳过该存储：{}", e.getMessage(), e);
+                }
             } else {
                 log.error("MinIO存储配置无效，跳过初始化！请检查数据库配置：");
                 log.error("  - storage.minio.domain: {}", minioConfig.getDomain());
