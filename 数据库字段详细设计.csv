@@ -1,0 +1,10 @@
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,用户ID（雪花算法生成）,20
+username,VARCHAR,否,用户名,50
+email,VARCHAR,否,邮箱地址,100
+password,VARCHAR,否,密码（加密存储）,255
+avatar_url,VARCHAR,否,头像URL,500
+status,INT,否,用户状态（1-正常，0-禁用）,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+deleted_at,TIMESTAMP,否,删除时间（逻辑删除）,

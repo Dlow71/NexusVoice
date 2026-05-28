@@ -1,0 +1,162 @@
+表名,字段名,数据类型,约束,说明
+users,id,BIGINT,PK,用户ID（雪花算法生成）
+users,username,VARCHAR(50),UK NOT NULL,用户名
+users,email,VARCHAR(100),UK NOT NULL,邮箱地址
+users,password,VARCHAR(255),NOT NULL,密码（加密存储）
+users,avatar_url,VARCHAR(500),,头像URL
+users,status,INT,DEFAULT 1,用户状态（1-正常，0-禁用）
+users,created_at,TIMESTAMP,NOT NULL,创建时间
+users,updated_at,TIMESTAMP,NOT NULL,更新时间
+users,deleted_at,TIMESTAMP,,删除时间（逻辑删除）
+conversations,id,BIGINT,PK,会话ID
+conversations,user_id,BIGINT,FK NOT NULL,用户ID
+conversations,role_id,BIGINT,FK,角色ID
+conversations,model_code,VARCHAR(50),NOT NULL,模型代码
+conversations,title,VARCHAR(200),,会话标题
+conversations,system_prompt,TEXT,,系统提示词
+conversations,message_count,INT,DEFAULT 0,消息数量
+conversations,enable_search,BOOLEAN,DEFAULT 0,是否启用搜索
+conversations,created_at,TIMESTAMP,NOT NULL,创建时间
+conversations,updated_at,TIMESTAMP,NOT NULL,更新时间
+conversations,deleted_at,TIMESTAMP,,删除时间
+conversation_messages,id,BIGINT,PK,消息ID
+conversation_messages,conversation_id,BIGINT,FK NOT NULL,会话ID
+conversation_messages,role,VARCHAR(20),NOT NULL,角色（user/assistant）
+conversation_messages,content,TEXT,NOT NULL,消息内容
+conversation_messages,tokens_used,INT,,使用的token数
+conversation_messages,audio_url,VARCHAR(500),,音频URL（TTS生成）
+conversation_messages,status,INT,DEFAULT 1,消息状态（1-正常，0-撤回）
+conversation_messages,created_at,TIMESTAMP,NOT NULL,创建时间
+conversation_messages,updated_at,TIMESTAMP,NOT NULL,更新时间
+roles,id,BIGINT,PK,角色ID
+roles,user_id,BIGINT,FK NOT NULL,用户ID
+roles,name,VARCHAR(100),NOT NULL,角色名称
+roles,description,TEXT,,角色描述
+roles,personality,TEXT,,角色人设
+roles,voice_type,VARCHAR(50),,语音类型
+roles,opening_speech,TEXT,,开场白
+roles,opening_speech_url,VARCHAR(500),,开场白音频URL
+roles,is_public,BOOLEAN,DEFAULT 0,是否公开
+roles,created_at,TIMESTAMP,NOT NULL,创建时间
+roles,updated_at,TIMESTAMP,NOT NULL,更新时间
+ai_models,id,BIGINT,PK,模型ID
+ai_models,provider_code,VARCHAR(50),NOT NULL,提供商代码（openai/grok/deepseek）
+ai_models,model_code,VARCHAR(50),UK NOT NULL,模型代码
+ai_models,model_name,VARCHAR(100),NOT NULL,模型名称
+ai_models,model_type,VARCHAR(50),,模型类型（chat/image/tts/asr）
+ai_models,input_price,DECIMAL(10,6),,输入价格（每1K tokens）
+ai_models,output_price,DECIMAL(10,6),,输出价格（每1K tokens）
+ai_models,max_tokens,INT,,最大token数
+ai_models,status,INT,DEFAULT 1,状态（1-启用，0-禁用）
+ai_models,created_at,TIMESTAMP,NOT NULL,创建时间
+ai_api_keys,id,BIGINT,PK,密钥ID
+ai_api_keys,model_code,VARCHAR(50),FK NOT NULL,模型代码
+ai_api_keys,api_key,VARCHAR(500),NOT NULL,API密钥
+ai_api_keys,base_url,VARCHAR(500),,基础URL
+ai_api_keys,weight,INT,DEFAULT 1,权重（用于轮询）
+ai_api_keys,status,INT,DEFAULT 1,状态（1-正常，0-禁用）
+ai_api_keys,health_check_time,TIMESTAMP,,最后健康检查时间
+ai_api_keys,created_at,TIMESTAMP,NOT NULL,创建时间
+ai_api_call_logs,id,BIGINT,PK,日志ID
+ai_api_call_logs,model_code,VARCHAR(50),NOT NULL,模型代码
+ai_api_call_logs,user_id,BIGINT,FK NOT NULL,用户ID
+ai_api_call_logs,input_tokens,INT,,输入token数
+ai_api_call_logs,output_tokens,INT,,输出token数
+ai_api_call_logs,total_tokens,INT,,总token数
+ai_api_call_logs,cost,DECIMAL(10,6),,费用
+ai_api_call_logs,response_time,INT,,响应时间（毫秒）
+ai_api_call_logs,status,INT,DEFAULT 1,状态（1-成功，0-失败）
+ai_api_call_logs,created_at,TIMESTAMP,NOT NULL,创建时间
+system_config,id,BIGINT,PK,配置ID
+system_config,config_key,VARCHAR(100),UK NOT NULL,配置键
+system_config,config_value,TEXT,NOT NULL,配置值
+system_config,description,VARCHAR(500),,配置描述
+system_config,config_type,VARCHAR(50),,配置类型（string/int/boolean）
+system_config,updated_at,TIMESTAMP,NOT NULL,更新时间
+image_generation,id,BIGINT,PK,记录ID
+image_generation,conversation_id,BIGINT,FK,会话ID
+image_generation,user_id,BIGINT,FK NOT NULL,用户ID
+image_generation,model_code,VARCHAR(50),NOT NULL,模型代码
+image_generation,prompt,TEXT,NOT NULL,提示词
+image_generation,image_url,VARCHAR(500),,图片URL
+image_generation,width,INT,,图片宽度
+image_generation,height,INT,,图片高度
+image_generation,status,INT,DEFAULT 1,状态（1-成功，0-失败）
+image_generation,created_at,TIMESTAMP,NOT NULL,创建时间
+tts_records,id,BIGINT,PK,记录ID
+tts_records,message_id,BIGINT,FK NOT NULL,消息ID
+tts_records,audio_url,VARCHAR(500),NOT NULL,音频URL
+tts_records,duration,INT,,音频时长（秒）
+tts_records,file_size,INT,,文件大小（字节）
+tts_records,status,INT,DEFAULT 1,状态（1-成功，0-失败）
+tts_records,created_at,TIMESTAMP,NOT NULL,创建时间
+search_cache,id,BIGINT,PK,缓存ID
+search_cache,query_hash,VARCHAR(64),UK NOT NULL,查询哈希值
+search_cache,query_text,VARCHAR(500),NOT NULL,查询文本
+search_cache,search_results,JSON,,搜索结果（JSON格式）
+search_cache,expire_time,TIMESTAMP,NOT NULL,过期时间
+search_cache,created_at,TIMESTAMP,NOT NULL,创建时间
+rag_documents,id,BIGINT,PK,文档ID
+rag_documents,knowledge_base_id,BIGINT,FK NOT NULL,知识库ID
+rag_documents,document_name,VARCHAR(200),NOT NULL,文档名称
+rag_documents,document_type,VARCHAR(50),,文档类型（pdf/word/md/txt）
+rag_documents,content,LONGTEXT,,文档内容
+rag_documents,file_url,VARCHAR(500),,文件URL
+rag_documents,version,INT,DEFAULT 1,版本号
+rag_documents,status,INT,DEFAULT 1,状态（1-已发布，0-草稿）
+rag_documents,created_at,TIMESTAMP,NOT NULL,创建时间
+rag_documents,updated_at,TIMESTAMP,NOT NULL,更新时间
+rag_chunks,id,BIGINT,PK,分片ID
+rag_chunks,document_id,BIGINT,FK NOT NULL,文档ID
+rag_chunks,chunk_index,INT,NOT NULL,分片索引
+rag_chunks,chunk_content,TEXT,NOT NULL,分片内容
+rag_chunks,chunk_size,INT,,分片大小
+rag_chunks,created_at,TIMESTAMP,NOT NULL,创建时间
+rag_embeddings,id,BIGINT,PK,向量ID
+rag_embeddings,chunk_id,BIGINT,FK NOT NULL,分片ID
+rag_embeddings,embedding,vector(1536),NOT NULL,向量数据（pgvector）
+rag_embeddings,similarity_score,DECIMAL(5,4),,相似度分数
+rag_embeddings,created_at,TIMESTAMP,NOT NULL,创建时间
+rag_knowledge_base,id,BIGINT,PK,知识库ID
+rag_knowledge_base,user_id,BIGINT,FK NOT NULL,用户ID
+rag_knowledge_base,kb_name,VARCHAR(100),NOT NULL,知识库名称
+rag_knowledge_base,description,TEXT,,知识库描述
+rag_knowledge_base,document_count,INT,DEFAULT 0,文档数量
+rag_knowledge_base,chunk_count,INT,DEFAULT 0,分片数量
+rag_knowledge_base,status,INT,DEFAULT 1,状态（1-启用，0-禁用）
+rag_knowledge_base,created_at,TIMESTAMP,NOT NULL,创建时间
+rag_knowledge_base,updated_at,TIMESTAMP,NOT NULL,更新时间
+file_uploads,id,BIGINT,PK,文件ID
+file_uploads,user_id,BIGINT,FK NOT NULL,用户ID
+file_uploads,file_name,VARCHAR(200),NOT NULL,文件名
+file_uploads,file_url,VARCHAR(500),NOT NULL,文件URL
+file_uploads,file_size,INT,,文件大小（字节）
+file_uploads,file_type,VARCHAR(50),,文件类型
+file_uploads,storage_type,VARCHAR(50),,存储类型（qiniu/minio）
+file_uploads,created_at,TIMESTAMP,NOT NULL,创建时间
+message_attachments,id,BIGINT,PK,附件ID
+message_attachments,message_id,BIGINT,FK NOT NULL,消息ID
+message_attachments,file_id,BIGINT,FK NOT NULL,文件ID
+message_attachments,attachment_type,VARCHAR(50),,附件类型（image/file/video）
+message_attachments,created_at,TIMESTAMP,NOT NULL,创建时间
+user_api_keys,id,BIGINT,PK,密钥ID
+user_api_keys,user_id,BIGINT,FK NOT NULL,用户ID
+user_api_keys,api_key,VARCHAR(500),UK NOT NULL,API密钥
+user_api_keys,key_name,VARCHAR(100),,密钥名称
+user_api_keys,permissions,JSON,,权限列表（JSON格式）
+user_api_keys,status,INT,DEFAULT 1,状态（1-启用，0-禁用）
+user_api_keys,last_used_at,TIMESTAMP,,最后使用时间
+user_api_keys,created_at,TIMESTAMP,NOT NULL,创建时间
+rbac_roles,id,BIGINT,PK,角色ID
+rbac_roles,role_name,VARCHAR(50),UK NOT NULL,角色名称
+rbac_roles,description,VARCHAR(500),,角色描述
+rbac_roles,permissions,JSON,,权限列表（JSON格式）
+rbac_roles,status,INT,DEFAULT 1,状态（1-启用，0-禁用）
+rbac_roles,created_at,TIMESTAMP,NOT NULL,创建时间
+rbac_permissions,id,BIGINT,PK,权限ID
+rbac_permissions,permission_code,VARCHAR(100),UK NOT NULL,权限代码
+rbac_permissions,permission_name,VARCHAR(100),NOT NULL,权限名称
+rbac_permissions,resource,VARCHAR(100),,资源
+rbac_permissions,operation,VARCHAR(50),,操作（read/write/delete）
+rbac_permissions,description,VARCHAR(500),,权限描述
+rbac_permissions,created_at,TIMESTAMP,NOT NULL,创建时间

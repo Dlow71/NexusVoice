@@ -1,0 +1,220 @@
+表4.1 users用户表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,用户ID（雪花算法生成）,20
+username,VARCHAR,否,用户名,50
+email,VARCHAR,否,邮箱地址,100
+password,VARCHAR,否,密码（加密存储）,255
+avatar_url,VARCHAR,否,头像URL,500
+status,INT,否,用户状态（1-正常，0-禁用）,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+deleted_at,TIMESTAMP,否,删除时间（逻辑删除）,
+
+表4.2 conversations对话会话表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,会话ID,20
+user_id,BIGINT,否,用户ID,20
+role_id,BIGINT,否,角色ID,20
+model_code,VARCHAR,否,模型代码,50
+title,VARCHAR,否,会话标题,200
+system_prompt,TEXT,否,系统提示词,
+message_count,INT,否,消息数量,
+enable_search,BOOLEAN,否,是否启用搜索,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+deleted_at,TIMESTAMP,否,删除时间,
+
+表4.3 conversation_messages对话消息表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,消息ID,20
+conversation_id,BIGINT,否,会话ID,20
+role,VARCHAR,否,角色（user/assistant）,20
+content,TEXT,否,消息内容,
+tokens_used,INT,否,使用的token数,
+audio_url,VARCHAR,否,音频URL（TTS生成）,500
+status,INT,否,消息状态（1-正常，0-撤回）,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+
+表4.4 roles角色表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,角色ID,20
+user_id,BIGINT,否,用户ID,20
+name,VARCHAR,否,角色名称,100
+description,TEXT,否,角色描述,
+personality,TEXT,否,角色人设,
+voice_type,VARCHAR,否,语音类型,50
+opening_speech,TEXT,否,开场白,
+opening_speech_url,VARCHAR,否,开场白音频URL,500
+is_public,BOOLEAN,否,是否公开,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+
+表4.5 ai_models AI模型表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,模型ID,20
+provider_code,VARCHAR,否,提供商代码（openai/grok/deepseek）,50
+model_code,VARCHAR,否,模型代码,50
+model_name,VARCHAR,否,模型名称,100
+model_type,VARCHAR,否,模型类型（chat/image/tts/asr）,50
+input_price,DECIMAL,否,输入价格（每1K tokens）,
+output_price,DECIMAL,否,输出价格（每1K tokens）,
+max_tokens,INT,否,最大token数,
+status,INT,否,状态（1-启用，0-禁用）,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.6 ai_api_keys API密钥表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,密钥ID,20
+model_code,VARCHAR,否,模型代码,50
+api_key,VARCHAR,否,API密钥,500
+base_url,VARCHAR,否,基础URL,500
+weight,INT,否,权重（用于轮询）,
+status,INT,否,状态（1-正常，0-禁用）,
+health_check_time,TIMESTAMP,否,最后健康检查时间,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.7 ai_api_call_logs API调用日志表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,日志ID,20
+model_code,VARCHAR,否,模型代码,50
+user_id,BIGINT,否,用户ID,20
+input_tokens,INT,否,输入token数,
+output_tokens,INT,否,输出token数,
+total_tokens,INT,否,总token数,
+cost,DECIMAL,否,费用,
+response_time,INT,否,响应时间（毫秒）,
+status,INT,否,状态（1-成功，0-失败）,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.8 system_config系统配置表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,配置ID,20
+config_key,VARCHAR,否,配置键,100
+config_value,TEXT,否,配置值,
+description,VARCHAR,否,配置描述,500
+config_type,VARCHAR,否,配置类型（string/int/boolean）,50
+updated_at,TIMESTAMP,否,更新时间,
+
+表4.9 image_generation图像生成记录表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,记录ID,20
+conversation_id,BIGINT,否,会话ID,20
+user_id,BIGINT,否,用户ID,20
+model_code,VARCHAR,否,模型代码,50
+prompt,TEXT,否,提示词,
+image_url,VARCHAR,否,图片URL,500
+width,INT,否,图片宽度,
+height,INT,否,图片高度,
+status,INT,否,状态（1-成功，0-失败）,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.10 tts_records TTS语音记录表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,记录ID,20
+message_id,BIGINT,否,消息ID,20
+audio_url,VARCHAR,否,音频URL,500
+duration,INT,否,音频时长（秒）,
+file_size,INT,否,文件大小（字节）,
+status,INT,否,状态（1-成功，0-失败）,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.11 search_cache搜索缓存表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,缓存ID,20
+query_hash,VARCHAR,否,查询哈希值,64
+query_text,VARCHAR,否,查询文本,500
+search_results,JSON,否,搜索结果（JSON格式）,
+expire_time,TIMESTAMP,否,过期时间,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.12 rag_documents RAG文档表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,文档ID,20
+knowledge_base_id,BIGINT,否,知识库ID,20
+document_name,VARCHAR,否,文档名称,200
+document_type,VARCHAR,否,文档类型（pdf/word/md/txt）,50
+content,LONGTEXT,否,文档内容,
+file_url,VARCHAR,否,文件URL,500
+version,INT,否,版本号,
+status,INT,否,状态（1-已发布，0-草稿）,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+
+表4.13 rag_chunks RAG分片表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,分片ID,20
+document_id,BIGINT,否,文档ID,20
+chunk_index,INT,否,分片索引,
+chunk_content,TEXT,否,分片内容,
+chunk_size,INT,否,分片大小,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.14 rag_embeddings RAG向量表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,向量ID,20
+chunk_id,BIGINT,否,分片ID,20
+embedding,VECTOR,否,向量数据（pgvector）,1536
+similarity_score,DECIMAL,否,相似度分数,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.15 rag_knowledge_base RAG知识库表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,知识库ID,20
+user_id,BIGINT,否,用户ID,20
+kb_name,VARCHAR,否,知识库名称,100
+description,TEXT,否,知识库描述,
+document_count,INT,否,文档数量,
+chunk_count,INT,否,分片数量,
+status,INT,否,状态（1-启用，0-禁用）,
+created_at,TIMESTAMP,否,创建时间,
+updated_at,TIMESTAMP,否,更新时间,
+
+表4.16 file_uploads文件上传表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,文件ID,20
+user_id,BIGINT,否,用户ID,20
+file_name,VARCHAR,否,文件名,200
+file_url,VARCHAR,否,文件URL,500
+file_size,INT,否,文件大小（字节）,
+file_type,VARCHAR,否,文件类型,50
+storage_type,VARCHAR,否,存储类型（qiniu/minio）,50
+created_at,TIMESTAMP,否,创建时间,
+
+表4.17 message_attachments消息附件表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,附件ID,20
+message_id,BIGINT,否,消息ID,20
+file_id,BIGINT,否,文件ID,20
+attachment_type,VARCHAR,否,附件类型（image/file/video）,50
+created_at,TIMESTAMP,否,创建时间,
+
+表4.18 user_api_keys用户API密钥表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,密钥ID,20
+user_id,BIGINT,否,用户ID,20
+api_key,VARCHAR,否,API密钥,500
+key_name,VARCHAR,否,密钥名称,100
+permissions,JSON,否,权限列表（JSON格式）,
+status,INT,否,状态（1-启用，0-禁用）,
+last_used_at,TIMESTAMP,否,最后使用时间,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.19 rbac_roles RBAC角色表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,角色ID,20
+role_name,VARCHAR,否,角色名称,50
+description,VARCHAR,否,角色描述,500
+permissions,JSON,否,权限列表（JSON格式）,
+status,INT,否,状态（1-启用，0-禁用）,
+created_at,TIMESTAMP,否,创建时间,
+
+表4.20 rbac_permissions RBAC权限表
+学段名,数据类型,主键,描述,长度
+id,BIGINT,是,权限ID,20
+permission_code,VARCHAR,否,权限代码,100
+permission_name,VARCHAR,否,权限名称,100
+resource,VARCHAR,否,资源,100
+operation,VARCHAR,否,操作（read/write/delete）,50
+description,VARCHAR,否,权限描述,500
+created_at,TIMESTAMP,否,创建时间,
