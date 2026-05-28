@@ -914,9 +914,10 @@ public class DynamicAiModelBeanManager {
                         messages.add(SystemMessage.from(msg.getContent()));
                         break;
                     case USER:
-                        // 检查是否是最后一条USER消息且有图像URL
+                        // 检查是否是最后一条USER消息且有图像输入
                         boolean isLastUserMessage = i == lastUserMessageIndex;
-                        if (isLastUserMessage && request.getImageUrls() != null && !request.getImageUrls().isEmpty()) {
+                        List<String> imageInputs = collectImageInputs(request);
+                        if (isLastUserMessage && !imageInputs.isEmpty()) {
                             // 创建多模态消息（文本+图像）
                             List<Content> contents = new ArrayList<>();
                             
@@ -926,18 +927,18 @@ public class DynamicAiModelBeanManager {
                             }
                             
                             // 添加图像内容（Base64格式或URL）
-                            for (int imgIdx = 0; imgIdx < request.getImageUrls().size(); imgIdx++) {
-                                String imageUrl = request.getImageUrls().get(imgIdx);
+                            for (int imgIdx = 0; imgIdx < imageInputs.size(); imgIdx++) {
+                                String imageUrl = imageInputs.get(imgIdx);
                                 // 记录图片URL的前缀信息（不记录完整Base64以避免日志过大）
                                 String prefix = imageUrl.length() > 50 ? imageUrl.substring(0, 50) + "..." : imageUrl;
                                 log.debug("添加图像{}，格式：{}", imgIdx + 1, prefix);
-                                contents.add(ImageContent.from(imageUrl));
+                                contents.add(toImageContent(imageUrl));
                             }
                             
                             messages.add(UserMessage.from(contents));
                             log.info("✅ 创建多模态用户消息成功 - 文本内容：{}，图像数量：{}", 
                                 msg.getContent() != null && !msg.getContent().isEmpty() ? "有" : "无",
-                                request.getImageUrls().size());
+                                imageInputs.size());
                         } else {
                             // 纯文本消息
                             messages.add(UserMessage.from(msg.getContent()));
@@ -952,6 +953,33 @@ public class DynamicAiModelBeanManager {
             }
             
             return messages;
+        }
+
+        private List<String> collectImageInputs(ChatRequest request) {
+            List<String> imageInputs = new ArrayList<>();
+            if (request.getImageUrls() != null) {
+                imageInputs.addAll(request.getImageUrls().stream()
+                        .filter(input -> input != null && !input.isBlank())
+                        .toList());
+            }
+            if (request.getImageBase64() != null && !request.getImageBase64().isBlank()) {
+                imageInputs.add(request.getImageBase64());
+            }
+            return imageInputs;
+        }
+
+        private ImageContent toImageContent(String imageInput) {
+            if (imageInput != null && imageInput.startsWith("data:image/")) {
+                int separatorIndex = imageInput.indexOf(";base64,");
+                if (separatorIndex > "data:".length()) {
+                    String mimeType = imageInput.substring("data:".length(), separatorIndex);
+                    String base64Data = imageInput.substring(separatorIndex + ";base64,".length());
+                    if (!base64Data.isBlank()) {
+                        return ImageContent.from(base64Data, mimeType);
+                    }
+                }
+            }
+            return ImageContent.from(imageInput);
         }
     }
     

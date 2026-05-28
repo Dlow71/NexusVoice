@@ -363,10 +363,14 @@ public class ChatStreamHandler implements WebSocketHandler {
             conversationDomainService.addMessageToConversation(conversation.getId(), userMessage);
             
             // 4.2 提取图片URL用于多模态识别（符合DDD：调用应用服务）
-            List<String> imageUrls = conversationApplicationService.extractImageUrlsFromMessage(userMessage);
-            if (!imageUrls.isEmpty()) {
+            if (requestDto.getImageUrls() == null || requestDto.getImageUrls().isEmpty()) {
+                List<String> imageUrls = conversationApplicationService.extractImageUrlsFromMessage(userMessage);
                 requestDto.setImageUrls(imageUrls);
-                log.info("从附件中提取了 {} 张图片用于多模态识别", imageUrls.size());
+                if (!imageUrls.isEmpty()) {
+                    log.info("从附件中提取了 {} 张图片用于多模态识别", imageUrls.size());
+                }
+            } else {
+                log.info("使用请求中的 {} 张图片数据用于多模态识别", requestDto.getImageUrls().size());
             }
             
             // 5. 构建AI请求
