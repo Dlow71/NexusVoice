@@ -472,7 +472,7 @@
           <target>${java.version}</target>
           <showWarnings>true</showWarnings>
           <showDeprecation>true</showDeprecation>
-          <fork>true</fork>
+          <fork>false</fork>
           <compilerArgs>
             <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
             <arg>-J--add-opens=jdk.compiler/com.sun.tools.javac.comp=ALL-UNNAMED</arg>
