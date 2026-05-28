@@ -2,6 +2,7 @@ package com.nexusvoice.infrastructure.persistence.po;
 
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.nexusvoice.infrastructure.persistence.typehandler.PGTextArrayTypeHandler;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -137,18 +138,18 @@ public class AiModelPO extends BasePO {
     /**
      * 模型支持的能力列表（数组）
      */
-    @TableField("capabilities")
+    @TableField(value = "capabilities", typeHandler = PGTextArrayTypeHandler.class)
     private String[] capabilities;
 
     /**
      * 支持的输入类型（数组）
      */
-    @TableField("input_types")
+    @TableField(value = "input_types", typeHandler = PGTextArrayTypeHandler.class)
     private String[] inputTypes;
 
     /**
      * 支持的输出类型（数组）
      */
-    @TableField("output_types")
+    @TableField(value = "output_types", typeHandler = PGTextArrayTypeHandler.class)
     private String[] outputTypes;
 }

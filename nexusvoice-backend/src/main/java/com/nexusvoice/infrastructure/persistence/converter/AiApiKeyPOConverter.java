@@ -27,6 +27,7 @@ public class AiApiKeyPOConverter {
         po.setDeleted(apiKey.getDeleted());
         
         // 业务字段
+        po.setProviderId(apiKey.getProviderId());
         po.setProviderCode(apiKey.getProviderCode());
         po.setModelCode(apiKey.getModelCode());
         po.setApiKey(apiKey.getApiKey());
@@ -70,6 +71,7 @@ public class AiApiKeyPOConverter {
         apiKey.setDeleted(po.getDeleted());
         
         // 业务字段
+        apiKey.setProviderId(po.getProviderId());
         apiKey.setProviderCode(po.getProviderCode());
         apiKey.setModelCode(po.getModelCode());
         apiKey.setApiKey(po.getApiKey());

@@ -45,6 +45,16 @@ public class AiProviderApplicationService {
         List<AiProvider> providers = providerRepository.findAllEnabled();
         return assembler.toDTOList(providers);
     }
+
+    /**
+     * 查询所有服务商
+     *
+     * @return 服务商DTO列表
+     */
+    public List<AiProviderDTO> getAllProviders() {
+        List<AiProvider> providers = providerRepository.findAll();
+        return assembler.toDTOList(providers);
+    }
     
     /**
      * 查询所有官方服务商

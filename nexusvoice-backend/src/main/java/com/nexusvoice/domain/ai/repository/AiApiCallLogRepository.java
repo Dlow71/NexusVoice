@@ -1,5 +1,7 @@
 package com.nexusvoice.domain.ai.repository;
 
+import com.nexusvoice.application.ai.dto.log.AdminAiApiCallLogStatsDTO;
+import com.nexusvoice.application.user.dto.PageResult;
 import com.nexusvoice.domain.ai.model.AiApiCallLog;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -43,6 +45,23 @@ public interface AiApiCallLogRepository {
      * 查询指定时间段的调用记录
      */
     List<AiApiCallLog> findByTimeRange(LocalDateTime startTime, LocalDateTime endTime);
+
+    /**
+     * 管理端分页查询调用日志
+     */
+    PageResult<AiApiCallLog> pageAdminLogs(Integer page, Integer size,
+                                           String providerCode, String modelCode,
+                                           Long apiKeyId, Long userId, Integer status,
+                                           LocalDateTime startTime, LocalDateTime endTime,
+                                           String keyword);
+
+    /**
+     * 管理端统计调用日志
+     */
+    AdminAiApiCallLogStatsDTO summarizeAdminLogs(String providerCode, String modelCode,
+                                                 Long apiKeyId, Long userId, Integer status,
+                                                 LocalDateTime startTime, LocalDateTime endTime,
+                                                 String keyword);
     
     /**
      * 统计指定时间段的调用次数

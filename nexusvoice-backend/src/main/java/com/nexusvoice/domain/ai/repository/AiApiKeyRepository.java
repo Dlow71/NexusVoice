@@ -1,6 +1,7 @@
 package com.nexusvoice.domain.ai.repository;
 
 import com.nexusvoice.domain.ai.model.AiApiKey;
+import com.nexusvoice.application.user.dto.PageResult;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,6 +29,12 @@ public interface AiApiKeyRepository {
      * 查询指定模型的所有密钥（包括不可用的）
      */
     List<AiApiKey> findAllByModel(String providerCode, String modelCode);
+
+    /**
+     * 分页查询所有密钥
+     */
+    PageResult<AiApiKey> pageAll(Integer page, Integer size, String keyword,
+                                 String providerCode, String modelCode, Integer status);
     
     /**
      * 保存密钥

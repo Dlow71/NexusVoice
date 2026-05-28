@@ -1,6 +1,7 @@
 package com.nexusvoice.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.nexusvoice.domain.ai.model.AiModel;
 import com.nexusvoice.domain.ai.repository.AiModelRepository;
 import com.nexusvoice.infrastructure.persistence.converter.AiModelPOConverter;
@@ -58,6 +59,18 @@ public class AiModelRepositoryImpl implements AiModelRepository {
         
         String[] parts = modelKey.split(":", 2);
         return findByProviderAndModel(parts[0], parts[1]);
+    }
+
+    @Override
+    public List<AiModel> findAll() {
+        LambdaQueryWrapper<AiModelPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiModelPO::getDeleted, 0)
+                .orderByAsc(AiModelPO::getPriority)
+                .orderByAsc(AiModelPO::getId);
+
+        return mapper.selectList(wrapper).stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
     }
     
     @Override
@@ -133,12 +146,12 @@ public class AiModelRepositoryImpl implements AiModelRepository {
     
     @Override
     public void delete(Long id) {
-        AiModelPO po = new AiModelPO();
-        po.setId(id);
-        po.setDeleted(1);
-        po.setUpdatedAt(LocalDateTime.now());
-        mapper.updateById(po);
-        
+        LambdaUpdateWrapper<AiModelPO> wrapper = new LambdaUpdateWrapper<>();
+        wrapper.eq(AiModelPO::getId, id)
+                .eq(AiModelPO::getDeleted, 0)
+                .set(AiModelPO::getDeleted, 1)
+                .set(AiModelPO::getUpdatedAt, LocalDateTime.now());
+        mapper.update(null, wrapper);
         log.info("逻辑删除AI模型，ID：{}", id);
     }
     

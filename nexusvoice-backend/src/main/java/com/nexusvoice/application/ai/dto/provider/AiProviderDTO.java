@@ -47,6 +47,11 @@ public class AiProviderDTO {
      * 默认API端点
      */
     private String defaultBaseUrl;
+
+    /**
+     * 服务商配置JSON
+     */
+    private String configJson;
     
     /**
      * 是否官方
@@ -141,6 +146,14 @@ public class AiProviderDTO {
     
     public void setDefaultBaseUrl(String defaultBaseUrl) {
         this.defaultBaseUrl = defaultBaseUrl;
+    }
+
+    public String getConfigJson() {
+        return configJson;
+    }
+
+    public void setConfigJson(String configJson) {
+        this.configJson = configJson;
     }
     
     public Boolean getIsOfficial() {

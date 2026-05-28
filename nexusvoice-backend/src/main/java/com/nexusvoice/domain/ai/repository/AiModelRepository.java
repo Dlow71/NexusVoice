@@ -28,6 +28,11 @@ public interface AiModelRepository {
     Optional<AiModel> findByModelKey(String modelKey);
     
     /**
+     * 查询所有模型
+     */
+    List<AiModel> findAll();
+
+    /**
      * 查询所有启用的模型
      */
     List<AiModel> findAllEnabled();

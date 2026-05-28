@@ -21,6 +21,9 @@ import java.time.LocalDateTime;
 @TableName("ai_api_keys")
 public class AiApiKeyPO extends BasePO {
 
+    @TableField("provider_id")
+    private Long providerId;
+
     @TableField("provider_code")
     private String providerCode;
 

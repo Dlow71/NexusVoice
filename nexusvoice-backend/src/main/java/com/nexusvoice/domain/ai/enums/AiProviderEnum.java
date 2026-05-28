@@ -11,11 +11,15 @@ public enum AiProviderEnum {
     
     OPENAI("openai", "OpenAI", "OpenAI GPT系列模型"),
     DEEPSEEK("deepseek", "DeepSeek", "DeepSeek深度求索系列模型"),
+    GROK("grok", "xAI Grok", "xAI Grok系列模型"),
+    DOUBAO("doubao", "豆包", "字节跳动豆包系列模型"),
+    SILICONFLOW("siliconflow", "硅基流动", "硅基流动模型服务"),
     CLAUDE("claude", "Anthropic Claude", "Anthropic Claude系列模型"),
     GEMINI("gemini", "Google Gemini", "Google Gemini系列模型"),
     WENXIN("wenxin", "百度文心", "百度文心一言系列模型"),
     QWEN("qwen", "阿里通义千问", "阿里通义千问系列模型"),
-    ZHIPU("zhipu", "智谱AI", "智谱GLM系列模型");
+    ZHIPU("zhipu", "智谱AI", "智谱GLM系列模型"),
+    QINIU("qiniu", "七牛云", "七牛云平台代理与服务");
     
     private final String code;
     private final String name;

@@ -38,6 +38,7 @@ public class AiProviderAssembler {
         dto.setProtocolName(provider.getProtocolEnum().getName());
         dto.setDescription(provider.getDescription());
         dto.setDefaultBaseUrl(provider.getDefaultBaseUrl());
+        dto.setConfigJson(provider.getConfigJson());
         dto.setIsOfficial(provider.getIsOfficial());
         dto.setStatus(provider.getStatus());
         dto.setStatusName(getStatusName(provider.getStatus()));

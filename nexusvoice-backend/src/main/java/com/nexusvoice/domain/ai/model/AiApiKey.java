@@ -17,6 +17,11 @@ import java.time.LocalDateTime;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class AiApiKey extends BaseDomainEntity {
+
+    /**
+     * 服务商ID（外键关联ai_providers.id）
+     */
+    private Long providerId;
     
     /**
      * 厂商代码

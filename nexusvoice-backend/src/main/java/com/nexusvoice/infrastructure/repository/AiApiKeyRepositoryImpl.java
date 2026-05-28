@@ -2,6 +2,8 @@ package com.nexusvoice.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.nexusvoice.application.user.dto.PageResult;
 import com.nexusvoice.domain.ai.model.AiApiKey;
 import com.nexusvoice.domain.ai.repository.AiApiKeyRepository;
 import com.nexusvoice.infrastructure.persistence.converter.AiApiKeyPOConverter;
@@ -73,6 +75,42 @@ public class AiApiKeyRepositoryImpl implements AiApiKeyRepository {
         return mapper.selectList(wrapper).stream()
                 .map(converter::toDomain)
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public PageResult<AiApiKey> pageAll(Integer page, Integer size, String keyword,
+                                        String providerCode, String modelCode, Integer status) {
+        LambdaQueryWrapper<AiApiKeyPO> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(AiApiKeyPO::getDeleted, 0);
+
+        if (providerCode != null && !providerCode.isBlank()) {
+            wrapper.eq(AiApiKeyPO::getProviderCode, providerCode.trim());
+        }
+        if (modelCode != null && !modelCode.isBlank()) {
+            wrapper.eq(AiApiKeyPO::getModelCode, modelCode.trim());
+        }
+        if (status != null) {
+            wrapper.eq(AiApiKeyPO::getStatus, status);
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String term = keyword.trim();
+            wrapper.and(w -> w.like(AiApiKeyPO::getProviderCode, term)
+                    .or()
+                    .like(AiApiKeyPO::getModelCode, term)
+                    .or()
+                    .like(AiApiKeyPO::getApiKey, term)
+                    .or()
+                    .like(AiApiKeyPO::getBaseUrl, term));
+        }
+
+        wrapper.orderByDesc(AiApiKeyPO::getCreatedAt)
+                .orderByDesc(AiApiKeyPO::getId);
+
+        Page<AiApiKeyPO> mpPage = mapper.selectPage(new Page<>(page, size), wrapper);
+        List<AiApiKey> records = mpPage.getRecords().stream()
+                .map(converter::toDomain)
+                .collect(Collectors.toList());
+        return new PageResult<>(records, mpPage.getTotal(), page, size);
     }
     
     @Override
