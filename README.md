@@ -31,14 +31,6 @@ NexusVoice 是一个**生产级的多模态AI对话平台**，采用严格的DDD
       <img src="images/voice-call.png" alt="语音通话" />
     </td>
   </tr>
-  <tr>
-    <td width="50%">
-      <img src="images/lab.png" alt="实验室" />
-    </td>
-    <td width="50%">
-      <img src="images/api-keys.png" alt="API密钥管理" />
-    </td>
-  </tr>
 </table>
 
 
